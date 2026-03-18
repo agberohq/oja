@@ -1,12 +1,14 @@
 /**
  * oja/ui.js
- * DOM interaction helpers — loading states, element utilities.
+ * DOM interaction helpers — loading states, element utilities, themes, and widgets.
  * Makes the most common patterns zero-boilerplate.
  *
  * ─── The problem ──────────────────────────────────────────────────────────────
  *
  *   Every app needs buttons and links to show a loading state.
  *   Without Oja you write 10 lines per button. With Oja, it's one.
+ *   Similarly, initializing 3rd party pickers usually requires manual JS
+ *   per-page. Oja centralizes this.
  *
  * ─── Attribute-driven (zero JS) ──────────────────────────────────────────────
  *
@@ -24,7 +26,18 @@
  *     → original content restored
  *     → .oja-loading removed
  *
- * ─── JS API for custom actions ────────────────────────────────────────────────
+ * ─── Widgets and Pickers ─────────────────────────────────────────────────────
+ *
+ *   JS developer registers the widget logic once in app.js.
+ *   UI developer simply adds the data-ui attribute to the HTML.
+ *
+ *   // app.js
+ *   ui.widget.register('datepicker', (el) => new Flatpickr(el));
+ *
+ *   // page.html
+ *   <input data-ui="datepicker" type="text">
+ *
+ * ─── JS API for custom actions (Fluent Chain) ────────────────────────────────
  *
  *   import { ui } from '../oja/ui.js';
  *
@@ -60,7 +73,7 @@
  *   Style these in your app CSS — Oja never sets colors or layout here.
  */
 
-import { listen } from './events.js';
+import { listen, emit } from './events.js';
 
 // ─── Spinner SVG ──────────────────────────────────────────────────────────────
 
@@ -70,6 +83,10 @@ const SPINNER = `<svg class="oja-loading-spinner" viewBox="0 0 24 24" fill="none
              M2 12H6M18 12H22M4.93 19.07L7.76 16.24M16.24 7.76L19.07 4.93"
           stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
+
+// ─── Registries ───────────────────────────────────────────────────────────────
+
+const _widgets = new Map(); // name -> init function
 
 // ─── Element wrapper ──────────────────────────────────────────────────────────
 
@@ -83,9 +100,7 @@ class UiElement {
 
     /**
      * Show loading state — disables element, shows spinner + message.
-     *
-     *   ui(btn).loading('Saving...');
-     *   ui(btn).loading(); // uses data-loading attribute value, or spinner only
+     * Returns `this` for fluent chaining.
      */
     loading(message) {
         const msg = message
@@ -106,8 +121,7 @@ class UiElement {
 
     /**
      * Show brief success state, then restore after 2 seconds.
-     *
-     *   ui(btn).done('Saved ✓');
+     * Returns `this` for fluent chaining.
      */
     done(message = '✓') {
         clearTimeout(this._timer);
@@ -123,8 +137,7 @@ class UiElement {
 
     /**
      * Show brief error state, then restore after 3 seconds.
-     *
-     *   ui(btn).error('Failed — retry?');
+     * Returns `this` for fluent chaining.
      */
     error(message = '✗ Error') {
         clearTimeout(this._timer);
@@ -140,8 +153,7 @@ class UiElement {
 
     /**
      * Restore the element to its original state immediately.
-     *
-     *   ui(btn).reset();
+     * Returns `this` for fluent chaining.
      */
     reset() {
         clearTimeout(this._timer);
@@ -163,14 +175,6 @@ class UiElement {
 
 /**
  * Create a UiElement wrapper for the given element.
- *
- *   const btn = ui('#save-btn');
- *   btn.loading('Saving...');
- *   // later:
- *   btn.done('Saved ✓');
- *
- *   // Or one-shot:
- *   ui(el).loading('Processing...');
  */
 export function ui(target) {
     const el = typeof target === 'string'
@@ -180,23 +184,77 @@ export function ui(target) {
     if (!el) {
         console.warn(`[oja/ui] element not found: ${target}`);
         // Return a no-op wrapper so callers don't need to null-check
-        return { loading: () => {}, done: () => {}, error: () => {}, reset: () => {} };
+        return {
+            loading: function() { return this; },
+            done:    function() { return this; },
+            error:   function() { return this; },
+            reset:   function() { return this; }
+        };
     }
 
     return new UiElement(el);
 }
 
-// ─── Auto-wire ────────────────────────────────────────────────────────────────
-// Scan DOM for elements with data-loading and wire them automatically.
-// Called on DOMContentLoaded and can be called again after dynamic content.
+/**
+ * Theme Management
+ */
+ui.theme = {
+    /** Set the theme name (applied as data-theme attribute on <html>) */
+    set(name) {
+        document.documentElement.setAttribute('data-theme', name);
+        try {
+            // Guard against Private Mode exceptions
+            localStorage.setItem('oja-theme', name);
+        } catch (e) {}
+        emit('ui:theme:changed', { theme: name });
+    },
+
+    /** Get current theme name */
+    get() {
+        let saved = 'dark';
+        try {
+            // Guard against Private Mode exceptions
+            saved = localStorage.getItem('oja-theme') || 'dark';
+        } catch (e) {}
+        return document.documentElement.getAttribute('data-theme') || saved;
+    },
+
+    /** Toggle between two theme names */
+    toggle(a = 'dark', b = 'light') {
+        this.set(this.get() === a ? b : a);
+    }
+};
 
 /**
- * Wire all [data-loading] elements in a container.
- * Called automatically on DOMContentLoaded for the full document.
- * Call manually after mounting dynamic content.
- *
- *   ui.wire('#dynamicSection');
- *   ui.wire(container);
+ * Widget Management (Pickers, Selects, etc)
+ */
+ui.widget = {
+    /** Register a widget initializer */
+    register(name, initFn) {
+        _widgets.set(name, initFn);
+        return this;
+    },
+
+    /** Wire widgets in a specific container */
+    wire(scope) {
+        const root = scope
+            ? (typeof scope === 'string' ? document.querySelector(scope) : scope)
+            : document.body;
+
+        if (!root) return;
+
+        _widgets.forEach((initFn, name) => {
+            root.querySelectorAll(`[data-ui="${name}"]`).forEach(el => {
+                if (el._ojaWired) return;
+                initFn(el);
+                el._ojaWired = true;
+            });
+        });
+    }
+};
+
+/**
+ * Wire all Oja-enhanced elements in a container.
  */
 ui.wire = function(scope) {
     const root = scope
@@ -205,42 +263,46 @@ ui.wire = function(scope) {
 
     if (!root) return;
 
-    // Wire navigation links — restore on navigate:end
-    root.querySelectorAll('[data-page][data-loading], [href][data-loading]').forEach(el => {
+    // 1. Wire data-loading logic for clicks
+    root.querySelectorAll('[data-loading]').forEach(el => {
         if (el._ojaUiWired) return;
         el._ojaUiWired = true;
 
         el.addEventListener('click', () => {
             const wrapper = ui(el);
-            wrapper.loading();
 
-            // Restore when navigation completes
-            const unsub = listen('oja:navigate:end', () => {
-                wrapper.reset();
-                unsub();
-            });
-
-            // Safety net — restore after 10s if navigation never completes
-            setTimeout(() => { wrapper.reset(); unsub(); }, 10000);
+            // If it's a navigation link, auto-restore on navigation end
+            if (el.hasAttribute('data-page') || el.hasAttribute('href')) {
+                wrapper.loading();
+                const unsub = listen('oja:navigate:end', () => {
+                    wrapper.reset();
+                    unsub();
+                });
+                // Safety net
+                setTimeout(() => { wrapper.reset(); unsub(); }, 10000);
+            }
         });
     });
+
+    // 2. Wire widgets (pickers, etc)
+    this.widget.wire(root);
 };
 
-// ─── Router loading state ─────────────────────────────────────────────────────
-// Track active navigation element so we can restore it on navigate:end
+// ─── Listeners ────────────────────────────────────────────────────────────────
 
 listen('oja:navigate:start', ({ path }) => {
-    // Mark all nav elements pointing to this path as loading
     document.querySelectorAll(`[data-page="${path}"][data-loading]`).forEach(el => {
         ui(el).loading();
     });
 });
 
 listen('oja:navigate:end', () => {
-    // Restore all loading nav elements
+    // Restore nav buttons
     document.querySelectorAll('[data-page].oja-loading').forEach(el => {
         ui(el).reset();
     });
+    // Auto-wire new widgets on new page content
+    ui.widget.wire(document.body);
 });
 
 // Auto-wire on DOM ready

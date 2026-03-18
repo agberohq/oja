@@ -1,17 +1,18 @@
 <!--
   pages/settings.html
   Demonstrates: store (sync + async encrypted), form.on(), form.image(),
-                component.update(), notify, auth.hasRole(), adapter
+                component.update(), auth.hasRole(), context() for theme,
+                container scope throughout
 -->
 <div class="page" data-title="Settings">
     <div class="page-header">
         <h1>Settings</h1>
     </div>
 
-    <!-- Server info — read only, from store -->
+    <!-- Server identity — read only -->
     <div class="settings-section">
         <h2>Server Identity</h2>
-        <div class="detail-grid" id="serverInfo">
+        <div class="detail-grid">
             <div class="detail-card">
                 <div class="detail-label">Node ID</div>
                 <div class="detail-value" id="cfg-nodeId">—</div>
@@ -28,25 +29,36 @@
                 <div class="detail-label">Started</div>
                 <div class="detail-value" id="cfg-startTime">—</div>
             </div>
+            <div class="detail-card">
+                <div class="detail-label">HTTP Port</div>
+                <div class="detail-value" id="cfg-httpPort">—</div>
+            </div>
+            <div class="detail-card">
+                <div class="detail-label">Log Level</div>
+                <div class="detail-value" id="cfg-logLevel">—</div>
+            </div>
         </div>
     </div>
 
-    <!-- Profile — demonstrates form.image() + encrypted store -->
+    <!-- Profile — form.image() + encrypted store -->
     <div class="settings-section">
-        <h2>Profile</h2>
-        <form id="profileForm" class="form-card">
+        <h2>Profile
+            <span class="badge" style="font-size:9px;vertical-align:middle">Encrypted store demo</span>
+        </h2>
+        <form id="profileForm" class="form-card" style="border:none;padding:0">
             <div class="avatar-row">
-                <img id="avatarPreview" src="https://via.placeholder.com/80"
+                <img id="avatarPreview"
+                     src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Ccircle cx='36' cy='36' r='36' fill='%23333'/%3E%3Ccircle cx='36' cy='28' r='12' fill='%23666'/%3E%3Cpath d='M10 64 Q36 48 62 64' fill='%23666'/%3E%3C/svg%3E"
                      alt="Avatar" class="avatar-img">
                 <div>
-                    <label class="btn-sm" for="avatarInput">Change Photo</label>
+                    <label class="btn-sm" for="avatarInput" style="cursor:pointer;display:inline-block">Change Photo</label>
                     <input type="file" id="avatarInput" accept="image/*" style="display:none">
-                    <p class="muted hint">Max 2MB · JPEG, PNG, WebP</p>
+                    <p class="hint muted">Max 2MB · JPEG, PNG, WebP</p>
                 </div>
             </div>
             <div class="field">
                 <label>Display Name</label>
-                <input name="displayName" type="text" id="displayName" placeholder="Your name">
+                <input name="displayName" id="displayName" type="text" placeholder="Your name">
             </div>
             <div class="field">
                 <label>Theme</label>
@@ -55,37 +67,43 @@
                     <option value="light">Light</option>
                 </select>
             </div>
-            <button type="submit" class="btn-primary">Save Profile</button>
+            <div class="form-actions" style="margin-top:4px">
+                <button type="submit" class="btn-primary">Save Profile</button>
+            </div>
         </form>
     </div>
 
-    <!-- Admin-only section — auth.hasRole() demo -->
+    <!-- Admin-only section -->
     <div class="settings-section" id="adminSection">
         <h2>Administration
             <span class="badge badge-danger">Admin Only</span>
         </h2>
-        <div class="form-card">
-            <div class="field">
+        <div class="form-card" style="border:none;padding:0">
+            <div class="field" style="max-width:200px">
                 <label>Log Level</label>
                 <select id="logLevelSelect">
                     <option value="debug">debug</option>
-                    <option value="info">info</option>
+                    <option value="info" selected>info</option>
                     <option value="warn">warn</option>
                     <option value="error">error</option>
                 </select>
             </div>
-            <button id="save-log-level" class="btn-primary">Apply</button>
+            <div class="form-actions">
+                <button id="save-log-level" class="btn-primary">Apply</button>
+            </div>
         </div>
     </div>
 
-    <!-- Store demo — shows what's in the store -->
+    <!-- Store inspector -->
     <div class="settings-section">
         <h2>Session Store
-            <span class="badge">store.js demo</span>
+            <span class="badge" style="font-size:9px;vertical-align:middle">store.js demo</span>
         </h2>
         <div id="storeContents" class="code-block"></div>
-        <button id="refresh-store" class="btn-sm">Refresh</button>
-        <button id="clear-store"   class="btn-sm danger">Clear Store</button>
+        <div class="form-actions" style="margin-top:10px">
+            <button id="refresh-store" class="btn-sm">Refresh</button>
+            <button id="clear-store"   class="btn-sm danger">Clear Store</button>
+        </div>
     </div>
 </div>
 
@@ -95,57 +113,62 @@
     import { notify }  from '../../src/js/notify.js';
     import { auth }    from '../../src/js/auth.js';
     import { logger }  from '../../src/js/logger.js';
-    import { on }      from '../../src/js/events.js';
     import { api }     from '../app.js';
 
-    // Two stores — one plain, one encrypted
-    const appStore  = new Store('oja-example');
-    const secStore  = new Store('oja-example-secure', { encrypt: true });
+    // container is scoped to this page — use container.querySelector throughout
+    const appStore = new Store('oja-example');
+    const secStore = new Store('oja-example-secure', { encrypt: true });
 
-    // ── Load server settings ──────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const $  = (id) => container.querySelector('#' + id);
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+
+    // ── Server settings ───────────────────────────────────────────────────────
     const settings = await api.get('/api/settings');
     if (settings) {
-        document.getElementById('cfg-nodeId').textContent    = settings.nodeId;
-        document.getElementById('cfg-hostname').textContent  = settings.hostname;
-        document.getElementById('cfg-pid').textContent       = settings.pid;
-        document.getElementById('cfg-startTime').textContent =
-            new Date(settings.startTime).toLocaleString();
+        set('cfg-nodeId',    settings.nodeId);
+        set('cfg-hostname',  settings.hostname);
+        set('cfg-pid',       settings.pid);
+        set('cfg-startTime', new Date(settings.startTime).toLocaleString());
+        set('cfg-httpPort',  settings.httpPort);
+        set('cfg-logLevel',  settings.logLevel?.toUpperCase());
     }
 
-    // ── Load saved profile from encrypted store ───────────────────────────────────
+    // ── Load saved profile from encrypted store ───────────────────────────────
     const savedProfile = await secStore.getAsync('profile');
     if (savedProfile) {
-        const nameEl = document.getElementById('displayName');
-        if (nameEl) nameEl.value = savedProfile.displayName || '';
-
-        const themeEl = document.getElementById('themeSelect');
+        const nameEl  = $('displayName');
+        const themeEl = $('themeSelect');
+        if (nameEl)  nameEl.value  = savedProfile.displayName || '';
         if (themeEl) themeEl.value = savedProfile.theme || 'dark';
     }
 
-    // ── Apply saved theme ─────────────────────────────────────────────────────────
+    // Apply saved theme
     const savedTheme = appStore.get('theme', 'dark');
     document.documentElement.setAttribute('data-theme', savedTheme);
-    const themeEl = document.getElementById('themeSelect');
+    const themeEl = $('themeSelect');
     if (themeEl) themeEl.value = savedTheme;
 
-    // Theme change — reactive via store.onChange
     appStore.onChange('theme', (newTheme) => {
         document.documentElement.setAttribute('data-theme', newTheme);
         notify.info(`Theme: ${newTheme}`);
     });
 
-    // ── Image upload + preview (form.image) ───────────────────────────────────────
-    form.image('#avatarInput', '#avatarPreview', {
-        maxSizeMb : 2,
-        accept    : ['image/jpeg', 'image/png', 'image/webp'],
-        onError   : (msg) => notify.error(msg),
-        onSelect  : (file) => notify.info(`Photo selected: ${file.name}`),
-    });
+    // ── Image upload — uses container-scoped selectors ────────────────────────
+    form.image(
+        container.querySelector('#avatarInput'),
+        container.querySelector('#avatarPreview'),
+        {
+            maxSizeMb : 2,
+            accept    : ['image/jpeg', 'image/png', 'image/webp'],
+            onError   : (msg) => notify.error(msg),
+            onSelect  : (file) => notify.info(`Photo selected: ${file.name}`),
+        }
+    );
 
-    // ── Profile form ──────────────────────────────────────────────────────────────
-    form.on('#profileForm', {
+    // ── Profile form ──────────────────────────────────────────────────────────
+    form.on(container.querySelector('#profileForm'), {
         submit: async (data) => {
-            // Store encrypted — demonstrates setAsync
             await secStore.setAsync('profile', data);
             appStore.set('theme', data.theme);
             return data;
@@ -157,36 +180,37 @@
         error: (err) => notify.error(err.message),
     });
 
-    // ── Admin-only section ────────────────────────────────────────────────────────
-    const adminSection = document.getElementById('adminSection');
+    // ── Admin section ─────────────────────────────────────────────────────────
+    const adminEl = $('adminSection');
     if (!auth.hasRole('admin')) {
-        adminSection.innerHTML = `
-        <h2>Administration</h2>
-        <p class="muted">You need the <strong>admin</strong> role to access this section.</p>
-    `;
+        adminEl.innerHTML = `
+            <h2>Administration</h2>
+            <p class="muted" style="margin-top:8px">
+                You need the <strong>admin</strong> role to access this section.
+            </p>`;
     } else {
         const saved = appStore.get('logLevel', 'info');
-        const sel   = document.getElementById('logLevelSelect');
+        const sel   = $('logLevelSelect');
         if (sel) sel.value = saved;
 
-        on('#save-log-level', 'click', () => {
-            const level = document.getElementById('logLevelSelect')?.value;
+        $('save-log-level')?.addEventListener('click', () => {
+            const level = $('logLevelSelect')?.value;
+            if (!level) return;
             appStore.set('logLevel', level);
             logger.setLevel(level.toUpperCase());
-            notify.success(`Log level set to: ${level}`);
+            notify.success(`Log level → ${level}`);
         });
     }
 
-    // ── Store inspector ───────────────────────────────────────────────────────────
+    // ── Store inspector ───────────────────────────────────────────────────────
     function showStore() {
-        const contents = appStore.all();
-        const el = document.getElementById('storeContents');
-        if (el) el.textContent = JSON.stringify(contents, null, 2);
+        const el = $('storeContents');
+        if (el) el.textContent = JSON.stringify(appStore.all(), null, 2);
     }
     showStore();
 
-    on('#refresh-store', 'click', showStore);
-    on('#clear-store',   'click', async () => {
+    $('refresh-store')?.addEventListener('click', showStore);
+    $('clear-store')?.addEventListener('click', async () => {
         appStore.clear();
         await secStore.clear('profile');
         showStore();

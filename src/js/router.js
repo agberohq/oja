@@ -1,6 +1,6 @@
 /**
  * oja/router.js
- * SPA navigation — Go-style middleware, groups, and Responder-based rendering.
+ * SPA navigation — Go-style middleware, groups, and Race-Safe rendering.
  *
  * The power of this router is Use() and Group():
  *   Use()   → middleware applied to all routes below it
@@ -120,6 +120,7 @@ export class Router {
         this._current          = null;
         this._params           = {};
         this._started          = false;
+        this._navId            = 0;
         this._beforeEach       = [];
         this._afterEach        = [];
     }
@@ -169,10 +170,6 @@ export class Router {
     /**
      * Create a scoped sub-router at a path prefix.
      * The group inherits parent middleware and can add its own.
-     *
-     *   const app = r.Group('/');
-     *   app.Use(auth.middleware('protected', '/login'));
-     *   app.Get('dashboard', Responder.component('pages/dashboard.html'));
      */
     Group(prefix, fn) {
         const groupRoot = this._findOrCreate(prefix);
@@ -187,11 +184,6 @@ export class Router {
 
     /**
      * Register a nested route block — used for URL param segments.
-     *
-     *   app.Route('hosts/{id}', host => {
-     *       host.Use(loadHost);
-     *       host.Get('/', Responder.component('pages/host-detail.html'));
-     *   });
      */
     Route(pattern, fn) {
         const node = this._findOrCreate(pattern);
@@ -209,82 +201,25 @@ export class Router {
     /**
      * Update URL query params without triggering a full navigation.
      * Use to sync reactive filter/sort state to the URL so links are shareable.
-     *
-     *   // When filter state changes, update the URL
-     *   effect(() => router.setQuery({ filter: filter(), sort: sort() }));
-     *
-     *   // On page load, restore from URL
-     *   const { filter = 'ALL', sort = 'name' } = router.params();
      */
     setQuery(params = {}) {
         if (!this._current) return this;
+
+        // Ensure current path is stripped of existing query strings before appending
+        const cleanPath = this._current.split('?')[0];
         const qs  = _buildQuery(params);
-        const url = this._mode === 'hash'
-            ? '#' + this._current + (qs ? '?' + qs : '')
-            : this._current + (qs ? '?' + qs : '');
-        window.history.replaceState({ path: this._current, params }, '', url);
+
+        const url = (this._mode === 'hash' ? '#' : '') + cleanPath + (qs ? '?' + qs : '');
+
+        window.history.replaceState({ path: cleanPath, params }, '', url);
         this._params = { ...this._params, ...params };
         return this;
-    }
-
-    // ─── Trie operations ──────────────────────────────────────────────────────
-
-    _addRoute(pattern, responder, routeMiddleware = []) {
-        const node = this._findOrCreate(pattern);
-        node.responder  = responder;
-        node.middleware = [...this._globalMiddleware, ...routeMiddleware];
-    }
-
-    _findOrCreate(pattern) {
-        const segments = _segments(pattern);
-        let   node     = this._root;
-
-        for (const seg of segments) {
-            if (seg.startsWith('{') && seg.endsWith('}')) {
-                if (!node.paramChild) {
-                    node.paramChild           = new _RouteNode(seg);
-                    node.paramChild.paramName = seg.slice(1, -1);
-                }
-                node = node.paramChild;
-            } else {
-                if (!node.children.has(seg)) {
-                    node.children.set(seg, new _RouteNode(seg));
-                }
-                node = node.children.get(seg);
-            }
-        }
-        return node;
-    }
-
-    // ─── Route matching ───────────────────────────────────────────────────────
-
-    _match(pathname) {
-        const parts      = _segments(pathname);
-        const params     = {};
-        let   node       = this._root;
-        const middleware = [];
-
-        for (const part of parts) {
-            if (node.children.has(part)) {
-                node = node.children.get(part);
-            } else if (node.paramChild) {
-                node = node.paramChild;
-                params[node.paramName] = decodeURIComponent(part);
-            } else {
-                return null;
-            }
-            if (node.middleware.length) middleware.push(...node.middleware);
-        }
-
-        if (!node.responder) return null;
-        return { responder: node.responder, params, middleware };
     }
 
     // ─── Start ────────────────────────────────────────────────────────────────
 
     /**
      * Start the router — reads current URL, sets up history listeners.
-     * @param {string} defaultPath — navigate here if URL has no path
      */
     async start(defaultPath = '/') {
         if (this._started) return;
@@ -305,31 +240,31 @@ export class Router {
 
     /**
      * Navigate to a path — updates URL, runs middleware chain, renders Responder.
-     * Automatically runs onUnmount hooks for the outgoing page and
-     * onMount hooks for the incoming page.
+     * Race-safe: only the most recent navigate() call is allowed to complete.
      */
     async navigate(path, options = {}) {
+        const currentNavId = ++this._navId; // Capture current navigation version
         const [pathname, qs] = path.split('?');
         const query          = { ...options.query, ..._parseQuery(qs || '') };
+        const container      = document.querySelector(this._outlet);
 
         if (!options._replace) this._pushURL(pathname, query);
 
-        // Emit navigate:start — ui.js and app code listen to this
+        // Emit navigate:start — ui.js uses this to show loading indicators
         document.dispatchEvent(new CustomEvent('oja:navigate:start', {
             detail: { path: pathname }
         }));
 
-        // Show loading Responder immediately — replaces blank gap
-        if (this._loadingResponder) {
-            const container = document.querySelector(this._outlet);
-            if (container) {
-                container.innerHTML = '';
-                await this._loadingResponder.render(container, {});
-            }
+        // Show loading Responder immediately if provided
+        if (this._loadingResponder && container) {
+            container.innerHTML = '';
+            await this._loadingResponder.render(container, {});
         }
 
-        const match = this._match(pathname);
+        // RACE CHECK: Stop if user navigated elsewhere during initial phase
+        if (currentNavId !== this._navId) return;
 
+        const match = this._match(pathname);
         const ctx = {
             path:     pathname,
             params:   {},
@@ -339,14 +274,14 @@ export class Router {
             replace:  (to, opts) => this.navigate(to, { ...opts, _replace: true }),
         };
 
-        // Run outgoing page teardown before anything renders
-        await component._runUnmount();
+        // SCOPED LIFECYCLE: Teardown outgoing page before rendering new one
+        if (container) await component._runUnmount(container);
 
         if (!match) {
             for (const fn of this._beforeEach) await fn(ctx);
             await this._render(this._notFound, ctx);
             for (const fn of this._afterEach) await fn(ctx);
-            await component._runMount();
+            if (container) await component._runMount(container); // Mount 404
             return;
         }
 
@@ -357,7 +292,7 @@ export class Router {
             if (stop === false) return;
         }
 
-        // Build deduplicated middleware chain
+        // Build and deduplicate middleware chain
         const allMiddleware = [...this._globalMiddleware, ...match.middleware];
         const seen  = new Set();
         const chain = allMiddleware.filter(mw => {
@@ -369,7 +304,7 @@ export class Router {
         let stopped = false;
 
         const runChain = async (index) => {
-            if (index >= chain.length) return;
+            if (index >= chain.length || currentNavId !== this._navId) return;
             const mw = chain[index];
             let nextCalled = false;
 
@@ -379,6 +314,9 @@ export class Router {
             };
 
             const result = await mw(ctx, next);
+
+            // RACE CHECK: middleware often hits network — check lock again
+            if (currentNavId !== this._navId) return;
 
             if (result === false) { stopped = true; return; }
 
@@ -402,7 +340,7 @@ export class Router {
             return;
         }
 
-        if (stopped) return;
+        if (stopped || currentNavId !== this._navId) return;
 
         this._current = pathname;
         this._params  = ctx.params;
@@ -421,27 +359,25 @@ export class Router {
 
         for (const fn of this._afterEach) await fn(ctx);
 
-        // Run incoming page mount hooks after everything has rendered
-        await component._runMount();
+        // SCOPED LIFECYCLE: Initialize incoming page after render
+        if (container) await component._runMount(container);
 
-        // oja:navigate — legacy event, kept for compatibility
-        document.dispatchEvent(new CustomEvent('oja:navigate', {
+        // Notify final completion
+        document.dispatchEvent(new CustomEvent('oja:navigate:end', {
             detail: { path: pathname, params: ctx.params }
         }));
 
-        // oja:navigate:end — used by ui.js to restore loading states
-        document.dispatchEvent(new CustomEvent('oja:navigate:end', {
+        // Legacy event kept for compatibility
+        document.dispatchEvent(new CustomEvent('oja:navigate', {
             detail: { path: pathname, params: ctx.params }
         }));
     }
 
     async _render(responder, ctx) {
         const container = document.querySelector(this._outlet);
-        if (!container) {
-            console.error(`[oja/router] outlet not found: ${this._outlet}`);
-            return;
-        }
+        if (!container) return;
 
+        // Transitions
         container.classList.add('oja-leaving');
         await _wait(150);
         container.classList.remove('oja-leaving');
@@ -505,6 +441,55 @@ export class Router {
         document.querySelectorAll('[data-href]').forEach(el => {
             el.classList.toggle('active', el.dataset.href === path);
         });
+    }
+
+    _addRoute(pattern, responder, routeMiddleware = []) {
+        const node = this._findOrCreate(pattern);
+        node.responder  = responder;
+        node.middleware = [...this._globalMiddleware, ...routeMiddleware];
+    }
+
+    _findOrCreate(pattern) {
+        const segments = _segments(pattern);
+        let   node     = this._root;
+
+        for (const seg of segments) {
+            if (seg.startsWith('{') && seg.endsWith('}')) {
+                if (!node.paramChild) {
+                    node.paramChild           = new _RouteNode(seg);
+                    node.paramChild.paramName = seg.slice(1, -1);
+                }
+                node = node.paramChild;
+            } else {
+                if (!node.children.has(seg)) {
+                    node.children.set(seg, new _RouteNode(seg));
+                }
+                node = node.children.get(seg);
+            }
+        }
+        return node;
+    }
+
+    _match(pathname) {
+        const parts      = _segments(pathname);
+        const params     = {};
+        let   node       = this._root;
+        const middleware = [];
+
+        for (const part of parts) {
+            if (node.children.has(part)) {
+                node = node.children.get(part);
+            } else if (node.paramChild) {
+                node = node.paramChild;
+                params[node.paramName] = decodeURIComponent(part);
+            } else {
+                return null;
+            }
+            if (node.middleware.length) middleware.push(...node.middleware);
+        }
+
+        if (!node.responder) return null;
+        return { responder: node.responder, params, middleware };
     }
 }
 

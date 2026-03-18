@@ -1,16 +1,27 @@
 <!--
   pages/dashboard.html
-  Demonstrates: reactive state/effect/derived, adapter (chart),
-                OjaSocket simulation, notify.on(), store
+  Demonstrates: reactive state/effect/derived, context() global state,
+                component.interval(), adapter (SVG chart), each()
 -->
 <div class="page" data-title="Dashboard">
 
-    <div class="page-header">
-        <h1>Dashboard</h1>
-        <span id="dash-updated" class="muted"></span>
+    <div class="hero">
+        <h1 id="hero-title">System Status</h1>
+        <p>Monitoring <span id="hero-hosts">0</span> hosts · <span id="hero-routes">0</span> routes</p>
+        <div class="health-bar-wrap">
+            <div class="health-bar">
+                <div class="hb-ok" id="hb-ok"  style="width:100%"></div>
+                <div class="hb-err" id="hb-err" style="width:0%"></div>
+            </div>
+            <div class="health-legend">
+                <span>Success</span>
+                <span class="error-rate" id="hero-errrate">0% errors</span>
+            </div>
+        </div>
+        <div class="last-updated" id="dash-updated">Updated just now</div>
     </div>
 
-    <!-- Live stat cards — updated by reactive effects -->
+    <!-- Live stat cards -->
     <div class="stat-grid">
         <div class="stat-card">
             <div class="stat-label">Requests / sec</div>
@@ -30,7 +41,7 @@
         </div>
         <div class="stat-card">
             <div class="stat-label">Error Rate</div>
-            <div class="stat-value danger" id="stat-errors">—</div>
+            <div class="stat-value danger" id="stat-errrate">—</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">CPU</div>
@@ -38,13 +49,13 @@
         </div>
     </div>
 
-    <!-- p99 chart — rendered by adapter.use('chart') -->
+    <!-- p99 sparkline chart -->
     <div class="chart-card">
         <div class="chart-header">
-            <span>p99 Latency (last 30 polls)</span>
-            <span id="chart-max" class="muted"></span>
+            <span>p99 Latency — last 30 polls</span>
+            <span id="chart-peak" class="muted"></span>
         </div>
-        <canvas id="p99Chart" width="800" height="120"></canvas>
+        <div id="p99Chart" style="height:120px"></div>
     </div>
 
     <!-- Host health summary -->
@@ -52,17 +63,17 @@
         <h2>Host Health</h2>
         <button id="refresh-dash" class="btn-sm">Refresh</button>
     </div>
+
     <div id="hostHealthList">
         <div data-loading="hosts" class="loading-row">Loading hosts...</div>
         <template data-each="hosts" data-as="h">
             <div class="health-row {{if .h.alive}}alive{{else}}dead{{end}}">
-                <span class="health-dot" data-if-class="h.alive:dot-green"></span>
+                <span class="dot" data-if-class="h.alive:dot-green"></span>
                 <span class="health-name">{{h.hostname}}</span>
-                <span class="health-reqs muted">{{h.totalReqs | bytes}} reqs</span>
-                <span class="health-p99">p99: {{h.p99Ms}}ms</span>
-                {{if .h.tlsDaysLeft}}
-                <span class="badge {{if .h.tlsDaysLeft}}badge-ok{{end}}"
-                      data-if-class="h.tlsDaysLeft:badge-warn">
+                <span class="health-reqs muted">{{h.totalReqs}} reqs</span>
+                <span class="health-p99 muted">p99: {{h.p99Ms}}ms</span>
+                {{if .h.tls}}
+                <span class="badge {{if .h.tlsDaysLeft}}badge-ok{{end}}">
                     TLS {{h.tlsDaysLeft}}d
                 </span>
                 {{end}}
@@ -74,73 +85,79 @@
 </div>
 
 <script type="module">
-    import { state, effect, derived, batch } from '../../src/js/reactive.js';
-    import { each, template }                from '../../src/js/template.js';
-    import { adapter }                       from '../../src/js/adapter.js';
-    import { notify }                        from '../../src/js/notify.js';
-    import { on }                            from '../../src/js/events.js';
-    import { api }                           from '../app.js';
+    import { state, effect, derived, batch, context } from '../../src/js/reactive.js';
+    import { each }      from '../../src/js/template.js';
+    import { adapter }   from '../../src/js/adapter.js';
+    import { notify }    from '../../src/js/notify.js';
+    import { component } from '../../src/js/component.js';
+    import { on }        from '../../src/js/events.js';
+    import { api, setRps, setAvgP99, setTotalReqs, setErrors, setActiveBackends } from '../app.js';
 
-    // ── Register custom filter for this page ──────────────────────────────────────
-    template.filter('bytes', n => {
-        if (!n) return '0';
-        if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-        if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
-        return String(n);
-    });
+    // ── Local state ───────────────────────────────────────────────────────────
+    const [metrics,    setMetrics]  = state(null);
+    const [p99History, setHistory]  = state([]);
 
-    // ── Reactive state ────────────────────────────────────────────────────────────
-    const [metrics, setMetrics] = state(null);
-    const [p99History, setP99]  = state([]);
-
-    // Derived — error rate computed automatically when metrics changes
     const errorRate = derived(() => {
         const m = metrics();
-        if (!m || !m.totalReqs) return '0%';
+        if (!m || !m.totalReqs) return '0.00%';
         return ((m.totalErrors / m.totalReqs) * 100).toFixed(2) + '%';
     });
 
-    // ── Effects — update DOM when state changes ───────────────────────────────────
+    // ── Effects — surgical DOM updates ───────────────────────────────────────
     effect(() => {
         const m = metrics();
         if (!m) return;
 
-        const set = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = val;
-        };
+        const set = (id, v) => { const el = container.querySelector('#' + id) || document.getElementById(id); if (el) el.textContent = v; };
 
         batch(() => {
-            set('stat-rps',      m.rps + ' req/s');
-            set('stat-total',    fmtNum(m.totalReqs));
+            set('stat-rps',      m.rps.toFixed(1) + ' req/s');
+            set('stat-total',    _fmt(m.totalReqs));
             set('stat-backends', m.activeBackends);
             set('stat-p99',      m.avgP99Ms + 'ms');
-            set('stat-errors',   errorRate());
-            set('stat-cpu',      m.cpuPercent + '%');
+            set('stat-errrate',  errorRate());
+            set('stat-cpu',      m.cpuPercent.toFixed(1) + '%');
             set('dash-updated',  'Updated ' + new Date().toLocaleTimeString());
+            set('hero-errrate',  errorRate() + ' errors');
         });
+
+        // Health bar
+        const total  = m.totalReqs || 1;
+        const errPct = Math.min(100, (m.totalErrors / total) * 100);
+        const okEl   = document.getElementById('hb-ok');
+        const errEl  = document.getElementById('hb-err');
+        if (okEl)  okEl.style.width  = (100 - errPct) + '%';
+        if (errEl) errEl.style.width = errPct + '%';
+
+        // Push to global context — updates footer stats bar
+        setRps(m.rps);
+        setAvgP99(m.avgP99Ms);
+        setTotalReqs(m.totalReqs);
+        setErrors(m.totalErrors);
+        setActiveBackends(m.activeBackends);
     });
 
     effect(() => {
         const hist = p99History();
         if (!hist.length) return;
 
-        // Draw chart using registered adapter
-        const canvas = document.getElementById('p99Chart');
-        const chart  = adapter.use('chart');
-        chart.draw(canvas, hist, { label: 'p99 ms' });
+        const chart = adapter.use('chart');
+        chart.draw(
+            document.getElementById('p99Chart'),
+            hist,
+            { color: 'var(--accent)', unit: 'ms', label: 'p99 latency' }
+        );
 
-        const max = document.getElementById('chart-max');
-        if (max) max.textContent = 'max: ' + Math.max(...hist) + 'ms';
+        const peakEl = document.getElementById('chart-peak');
+        if (peakEl) peakEl.textContent = 'peak: ' + Math.max(...hist) + 'ms';
     });
 
-    // ── Fetch and poll ────────────────────────────────────────────────────────────
+    // ── Data fetching ─────────────────────────────────────────────────────────
     async function refresh() {
         const data = await api.get('/api/metrics');
         if (!data) return;
-
         setMetrics(data);
-        setP99(prev => {
+        setHistory(prev => {
             const next = [...prev, data.avgP99Ms];
             return next.length > 30 ? next.slice(-30) : next;
         });
@@ -150,33 +167,35 @@
         const hosts = await api.get('/api/hosts');
         if (!hosts) return;
 
-        const container = document.getElementById('hostHealthList');
-        each(container, 'hosts', hosts, {
+        const listEl = document.getElementById('hostHealthList');
+        each(listEl, 'hosts', hosts, {
             sort: (a, b) => (b.alive - a.alive) || a.hostname.localeCompare(b.hostname),
         });
+
+        const hostCount  = hosts.length;
+        const routeCount = hosts.reduce((n, h) => n + (h.routes?.length || 0), 0);
+        const hEl = document.getElementById('hero-hosts');
+        const rEl = document.getElementById('hero-routes');
+        if (hEl) hEl.textContent = hostCount;
+        if (rEl) rEl.textContent = routeCount;
     }
 
     // Initial load
     await refresh();
     await loadHosts();
 
-    // Poll every 3 seconds — simulating live dashboard
-    const _poll = setInterval(refresh, 3000);
+    // Poll — using component.interval() so it auto-clears on navigate
+    component.interval(refresh, 3000);
 
-    // Cleanup on page leave
-    document.addEventListener('oja:navigate', () => clearInterval(_poll), { once: true });
-
-    // Manual refresh
     on('#refresh-dash', 'click', async () => {
         await refresh();
         await loadHosts();
         notify.success('Dashboard refreshed');
     });
 
-    // ── Helpers ───────────────────────────────────────────────────────────────────
-    function fmtNum(n) {
+    function _fmt(n) {
         if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
         if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
-        return String(n);
+        return String(n || 0);
     }
 </script>

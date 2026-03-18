@@ -3,64 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oja Example App</title>
+    <title>Oja · Agbero</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../src/css/oja.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<!-- NAVBAR — always visible, router updates .active on [data-page] links -->
+<!-- NAVBAR ─────────────────────────────────────────────────────────────────── -->
 <nav class="navbar" id="navbar" style="display:none">
-    <div class="brand">
-        <span class="brand-oja">Oja</span>
-        <span class="brand-example">Example</span>
-    </div>
+    <div class="brand">OJA <span>ADMIN</span></div>
     <div class="nav-links">
-        <a href="#/dashboard" data-page="/dashboard">Dashboard</a>
-        <a href="#/hosts"     data-page="/hosts">Hosts</a>
-        <a href="#/firewall"  data-page="/firewall">Firewall</a>
-        <a href="#/logs"      data-page="/logs">Logs</a>
-        <a href="#/settings"  data-page="/settings">Settings</a>
+        <a href="#/dashboard" data-page="/dashboard" data-loading="">Dashboard</a>
+        <a href="#/hosts"     data-page="/hosts"     data-loading="">Hosts</a>
+        <a href="#/firewall"  data-page="/firewall"  data-loading="">Firewall</a>
+        <a href="#/logs"      data-page="/logs"      data-loading="">Logs</a>
+        <a href="#/settings"  data-page="/settings"  data-loading="">Settings</a>
     </div>
     <div class="nav-right">
         <span id="nav-user" class="nav-user"></span>
-        <button id="debug-btn" class="btn-sm" title="Dump Oja debug timeline">Debug</button>
-        <button id="logout-btn" class="btn-sm danger">Logout</button>
+        <button id="debug-btn" class="btn-sm" title="Dump debug timeline">Debug</button>
+        <button id="logout-btn" class="btn-sm">Logout</button>
     </div>
 </nav>
 
-<!-- OFFLINE BANNER — notify.banner() injects above this -->
-
-<!-- PAGE OUTLET — router renders every page here -->
+<!-- PAGE OUTLET ─────────────────────────────────────────────────────────────── -->
 <main id="app">
-    <!-- Initial loading state — replaced on first navigation -->
     <div class="splash">
-        <div class="splash-logo">Oja</div>
+        <div class="splash-logo">OJA</div>
         <div class="splash-sub">Loading...</div>
     </div>
 </main>
 
-<!-- MODAL OVERLAYS — modal.js manages these -->
+<!-- SYS BAR — live system stats ─────────────────────────────────────────────── -->
+<div class="sys-bar" id="sysBar" style="display:none">
+    <div class="sys-bar-left">
+        <span class="sys-item">rss <span id="sys-mem">—</span></span>
+        <span class="sys-item hide-mobile">alloc <span id="sys-alloc">—</span></span>
+        <span class="sys-divider">·</span>
+        <span class="sys-item hide-mobile">goroutines <span id="sys-goroutines">—</span></span>
+        <span class="sys-divider">·</span>
+        <span class="sys-item" id="conn-indicator" title="Connection quality">○</span>
+    </div>
+    <div class="sys-bar-right">
+        <span class="sys-item">cpu <span id="sys-cpu">—</span></span>
+        <span class="sys-item hide-mobile"><span id="sys-cores">—</span> cores</span>
+        <span class="sys-divider">·</span>
+        <span class="sys-item" id="sys-version">v—</span>
+    </div>
+</div>
 
+<!-- STATS FOOTER — key metrics bar ─────────────────────────────────────────── -->
+<div class="stats-footer" id="statsFooter" style="display:none">
+    <div class="stat-item">
+        <label>Req / sec</label>
+        <span id="footer-rps">0.0</span>
+    </div>
+    <div class="stat-item">
+        <label>Total Reqs</label>
+        <span id="footer-total">0</span>
+    </div>
+    <div class="stat-item">
+        <label>p99 Latency</label>
+        <span id="footer-p99">0ms</span>
+    </div>
+    <div class="stat-item hide-mobile">
+        <label>Errors</label>
+        <span id="footer-errors" class="danger">0</span>
+    </div>
+    <div class="stat-item hide-mobile">
+        <label>Backends</label>
+        <span id="footer-backends">0</span>
+    </div>
+</div>
+
+<!-- CONFIRM MODAL ───────────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="confirmModal">
     <div class="modal-box">
-        <p id="confirmText" class="modal-msg"></p>
+        <p id="confirmText" class="modal-msg" data-modal-field="message">Are you sure?</p>
         <div class="modal-actions">
-            <button data-confirm-ok   class="btn danger">Confirm</button>
+            <button data-confirm-ok    class="btn danger">Confirm</button>
             <button data-confirm-cancel class="btn">Cancel</button>
         </div>
     </div>
 </div>
 
+<!-- PERF MODAL ──────────────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="perfModal">
-    <div class="modal-box modal-large">
+    <div class="modal-box modal-perf">
         <button data-action="modal-close" class="modal-close">&times;</button>
-        <h3 id="perfModalTitle">Performance</h3>
-        <div data-modal-body id="perfModalBody"></div>
+        <div class="perf-header">
+            <div>
+                <h3 id="perfModalTitle">Performance History</h3>
+                <span id="perfModalHost" class="muted mono"></span>
+            </div>
+            <select id="perfRangeSelect" class="select-sm">
+                <option value="30m">Last 30 min</option>
+                <option value="1h" selected>Last 1 hour</option>
+                <option value="6h">Last 6 hours</option>
+                <option value="24h">Last 24 hours</option>
+            </select>
+        </div>
+        <div class="perf-charts">
+            <div class="perf-chart-cell">
+                <div class="perf-chart-label">Requests / sec</div>
+                <div class="perf-chart-area" id="perfChartRps"></div>
+            </div>
+            <div class="perf-chart-cell">
+                <div class="perf-chart-label">p99 Latency (ms)</div>
+                <div class="perf-chart-area" id="perfChartP99"></div>
+            </div>
+            <div class="perf-chart-cell">
+                <div class="perf-chart-label">Error Rate (%)</div>
+                <div class="perf-chart-area" id="perfChartErrors"></div>
+            </div>
+            <div class="perf-chart-cell">
+                <div class="perf-chart-label">Active Backends</div>
+                <div class="perf-chart-area" id="perfChartBE"></div>
+            </div>
+        </div>
+        <div class="perf-footer muted">
+            <span id="perf-data-range"></span>
+            <span>Sampled every 60s · 24h max</span>
+        </div>
     </div>
 </div>
 
-<!-- APP BOOTSTRAP -->
+<!-- BOOTSTRAP ───────────────────────────────────────────────────────────────── -->
 <script type="module" src="app.js"></script>
+<script type="module">
+    // Show sys-bar and footer once auth completes
+    import { listen } from '../src/js/events.js';
+    listen('auth:start', () => {
+        document.getElementById('sysBar').style.display = '';
+        document.getElementById('statsFooter').style.display = '';
+    });
+    listen('auth:end', () => {
+        document.getElementById('sysBar').style.display = 'none';
+        document.getElementById('statsFooter').style.display = 'none';
+    });
+
+    // Connection quality indicator
+    let _lastLatency = null;
+    async function _checkConn() {
+        const start = Date.now();
+        try {
+            await fetch('/api/metrics', { method: 'HEAD', cache: 'no-cache' }).catch(() => {});
+            const ms = Date.now() - start;
+            _lastLatency = ms;
+            const el = document.getElementById('conn-indicator');
+            if (!el) return;
+            if (ms < 100)      { el.textContent = `⚡ ${ms}ms`; el.style.color = 'var(--success)'; }
+            else if (ms < 300) { el.textContent = `✓ ${ms}ms`;  el.style.color = 'var(--info)'; }
+            else               { el.textContent = `⚠ ${ms}ms`;  el.style.color = 'var(--warning)'; }
+            el.title = `Latency: ${ms}ms`;
+        } catch {
+            const el = document.getElementById('conn-indicator');
+            if (el) { el.textContent = '✕ offline'; el.style.color = 'var(--danger)'; }
+        }
+    }
+    listen('auth:start', () => {
+        _checkConn();
+        setInterval(_checkConn, 30000);
+    });
+</script>
 
 </body>
 </html>

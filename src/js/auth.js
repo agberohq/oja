@@ -3,6 +3,10 @@
  * Session management, token security, and route protection.
  * Works unchanged across web and mobile — storage cascade handles environment.
  *
+ * NOTE ON SECURITY: _decodeJWT() extracts payload for UI convenience (names, roles).
+ * It does NOT cryptographically verify the signature. Final security verification
+ * must always be performed by your server.
+ *
  * ─── Setup (once in app.js) ───────────────────────────────────────────────────
  *
  *   import { auth } from '../oja/auth.js';
@@ -232,20 +236,16 @@ export const auth = {
         /**
          * Is a session currently active?
          * Checks that a session was started (exp exists in meta) and has not expired.
-         *
-         * Uses _metaStore (unencrypted) rather than reading the encrypted token
-         * directly — this avoids checking ciphertext that is always truthy.
          */
         isActive() {
             const exp = _metaStore.get('exp');
-            if (!exp) return false;                   // no session was ever started
-            if (Date.now() >= exp) return false;      // session has expired
+            if (!exp) return false;                   // no session started
+            if (Date.now() >= exp) return false;      // expired
             return true;
         },
 
         /**
          * Retrieve the raw token string (async, decrypted).
-         * Use this when you need the actual JWT value, e.g. for api.setToken().
          */
         async token() {
             return _tokenStore.getAsync('token');
@@ -253,7 +253,6 @@ export const auth = {
 
         /**
          * Decoded JWT payload — claims, roles, user info.
-         * Reads from the unencrypted metadata cache set during session.start().
          * Returns null if no active session.
          */
         user() {
@@ -273,7 +272,6 @@ export const auth = {
 
         /**
          * The path the user was trying to reach before being redirected to login.
-         * Call this inside OnStart to resume navigation after login.
          */
         intendedPath() {
             return _metaStore.get('intendedPath') || null;
@@ -285,7 +283,6 @@ export const auth = {
         },
 
         // ── Lifecycle hooks ────────────────────────────────────────────────────
-
         /**
          * Called after session.start() — use to set api token, navigate.
          *
@@ -296,20 +293,15 @@ export const auth = {
          *       router.navigate(dest);
          *   });
          */
-        OnStart(fn) {
-            _onStartHooks.push(fn);
-            return auth; // chainable
-        },
+        OnStart(fn) { _onStartHooks.push(fn); return auth; },
 
         /**
          * Called after session.renew() — use to update api token.
          *
          *   auth.session.OnRenew((newToken) => api.setToken(newToken));
          */
-        OnRenew(fn) {
-            _onRenewHooks.push(fn);
-            return auth;
-        },
+        OnRenew(fn) { _onRenewHooks.push(fn); return auth; },
+
 
         /**
          * Called when session expires — use to redirect and notify.
@@ -319,10 +311,7 @@ export const auth = {
          *       router.navigate('/login');
          *   });
          */
-        OnExpiry(fn) {
-            _onExpiryHooks.push(fn);
-            return auth;
-        }
+        OnExpiry(fn) { _onExpiryHooks.push(fn); return auth; }
     }
 };
 
@@ -340,7 +329,6 @@ function _startExpiryWatch(expMs) {
         return;
     }
 
-    // Warning timer — fires 5 min before expiry
     const warnAt = msLeft - warnBefore;
     if (warnAt > 0) {
         _warningTimer = setTimeout(() => {
@@ -348,7 +336,6 @@ function _startExpiryWatch(expMs) {
         }, warnAt);
     }
 
-    // Expiry timer
     _expiryTimer = setTimeout(_handleExpiry, msLeft);
 }
 
@@ -370,8 +357,6 @@ async function _handleExpiry() {
 }
 
 // ─── JWT decode ───────────────────────────────────────────────────────────────
-// Handles URL-safe base64 (replaces - and _), missing padding, and UTF-8
-// characters (accented letters, emoji) that atob() alone cannot decode.
 
 function _decodeJWT(token) {
     if (!token || typeof token !== 'string') return null;
@@ -379,15 +364,12 @@ function _decodeJWT(token) {
         const parts = token.split('.');
         if (parts.length !== 3) return null;
 
-        // Convert URL-safe base64 → standard base64, re-add stripped padding
         const b64    = parts[1].replace(/-/g, '+').replace(/_/g, '/');
         const padded = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
 
-        // Decode as bytes then UTF-8 — handles any Unicode in claims
         const bytes   = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
         const payload = JSON.parse(new TextDecoder().decode(bytes));
 
-        // Cache decoded payload for synchronous user() calls
         _metaStore.set('payload', payload);
         return payload;
     } catch {
@@ -396,7 +378,6 @@ function _decodeJWT(token) {
 }
 
 // ─── Listen for api:unauthorized ─────────────────────────────────────────────
-// api.js emits this when a 401 is received — end the session automatically
 
 listen('api:unauthorized', async () => {
     if (auth.session.isActive()) {

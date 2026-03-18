@@ -3,12 +3,26 @@
  * Fake API — intercepts fetch calls so the example works without a server.
  * Wraps window.fetch and matches paths to mock handlers.
  *
- * Demonstrates: api.js usage, realistic latency, error simulation
+ * Endpoints:
+ *   POST /login                  → JWT token
+ *   GET  /api/hosts              → host list
+ *   GET  /api/hosts/:id          → single host
+ *   GET  /api/metrics            → live metrics
+ *   GET  /api/system             → system stats (cpu, mem, goroutines)
+ *   GET  /api/telemetry?host=&range=  → time-series history for perf modal
+ *   GET  /api/firewall           → firewall rules
+ *   POST /api/firewall           → add rule
+ *   DELETE /api/firewall?ip=     → remove rule
+ *   GET  /api/logs               → log entries
+ *   GET  /api/settings           → server settings
+ *   POST /api/settings           → save settings
  */
 
-import { HOSTS, FIREWALL_RULES, LOGS, METRICS, SETTINGS, getLiveMetrics } from './data.js';
+import {
+    HOSTS, FIREWALL_RULES, LOGS, SETTINGS,
+    getLiveMetrics, getLiveSystem, getTelemetryHistory
+} from './data.js';
 
-// Simulated network delay range (ms)
 const DELAY_MIN = 40;
 const DELAY_MAX = 180;
 
@@ -16,30 +30,29 @@ const _delay = (ms = null) =>
     new Promise(r => setTimeout(r, ms ?? DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN)));
 
 const _json = (data, status = 200) => ({
-    ok: status >= 200 && status < 300,
+    ok     : status >= 200 && status < 300,
     status,
     headers: { get: (h) => h === 'content-type' ? 'application/json' : null },
-    text: async () => JSON.stringify(data),
-    json: async () => data,
+    text   : async () => JSON.stringify(data),
+    json   : async () => data,
     arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(data)).buffer,
 });
 
-// Route table: [method, pattern, handler]
+let _firewallRules = [...FIREWALL_RULES];
+
 const ROUTES = [
 
     // ── Auth ──────────────────────────────────────────────────────────────────
     ['POST', '/login', async (body) => {
         await _delay(300);
         if (body?.username === 'admin' && body?.password === 'admin') {
-            // Real JWT payload structure — auth.js will decode this
             const payload = {
-                sub: '1',
-                name: 'Admin User',
+                sub  : '1',
+                name : 'Admin User',
                 roles: ['admin', 'auditor'],
-                exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+                exp  : Math.floor(Date.now() / 1000) + 3600,
             };
-            const token = _fakeJWT(payload);
-            return _json({ token });
+            return _json({ token: _fakeJWT(payload) });
         }
         return _json({ error: 'Invalid credentials' }, 401);
     }],
@@ -62,6 +75,21 @@ const ROUTES = [
         return _json(getLiveMetrics());
     }],
 
+    // ── System stats (cpu, mem, goroutines) ───────────────────────────────────
+    ['GET', '/api/system', async () => {
+        await _delay(20);
+        return _json(getLiveSystem());
+    }],
+
+    // ── Telemetry history (perf modal) ────────────────────────────────────────
+    ['GET', '/api/telemetry', async (_, __, url) => {
+        await _delay(80);
+        const params   = new URL('http://x' + url).searchParams;
+        const hostname = params.get('host')  || 'api.example.com';
+        const range    = params.get('range') || '1h';
+        return _json(getTelemetryHistory(hostname, range));
+    }],
+
     // ── Firewall ──────────────────────────────────────────────────────────────
     ['GET', '/api/firewall', async () => {
         await _delay();
@@ -75,7 +103,7 @@ const ROUTES = [
         return _json({ ok: true, rule });
     }],
 
-    ['DELETE', '/api/firewall', async (_, params, url) => {
+    ['DELETE', '/api/firewall', async (_, __, url) => {
         await _delay(150);
         const ip = new URL('http://x' + url).searchParams.get('ip');
         _firewallRules = _firewallRules.filter(r => r.ip !== ip);
@@ -101,9 +129,6 @@ const ROUTES = [
     }],
 ];
 
-// Mutable copy of firewall rules
-let _firewallRules = [...FIREWALL_RULES];
-
 // ─── Fetch interceptor ────────────────────────────────────────────────────────
 
 const _realFetch = window.fetch.bind(window);
@@ -112,7 +137,6 @@ window.fetch = async function(url, opts = {}) {
     const path   = typeof url === 'string' ? url : url.toString();
     const method = (opts.method || 'GET').toUpperCase();
 
-    // Only intercept /api/* and /login
     if (!path.startsWith('/api/') && path !== '/login') {
         return _realFetch(url, opts);
     }
@@ -156,12 +180,12 @@ function _matchPath(pattern, path) {
     return params;
 }
 
-// ─── Fake JWT (NOT cryptographically valid — demo only) ───────────────────────
+// ─── Fake JWT ─────────────────────────────────────────────────────────────────
 
 function _fakeJWT(payload) {
-    const header  = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const body    = btoa(JSON.stringify(payload));
-    const sig     = btoa('demo-signature');
+    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const body   = btoa(JSON.stringify(payload));
+    const sig    = btoa('demo-signature');
     return `${header}.${body}.${sig}`;
 }
 

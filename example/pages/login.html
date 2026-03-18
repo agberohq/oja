@@ -1,12 +1,12 @@
 <!--
   pages/login.html
-  Demonstrates: form.on(), form.showError(), auth.session.start(),
-                notify.error(), Responder implicit via router
+  Demonstrates: form.on(), form.showError(), form.validate(),
+                auth.session.start(), notify
 -->
 <div class="page-login" data-title="Sign In">
     <div class="login-card">
-        <div class="login-logo">Oja</div>
-        <p class="login-sub">Example Application</p>
+        <div class="login-logo">OJA</div>
+        <p class="login-sub">Agbero Admin Panel</p>
 
         <form id="loginForm" autocomplete="off">
             <div class="field">
@@ -16,10 +16,10 @@
             </div>
             <div class="field">
                 <label>Password</label>
-                <input name="password" type="password" placeholder="admin" required>
+                <input name="password" type="password" placeholder="••••••••" required>
                 <span class="field-error" data-field="password"></span>
             </div>
-            <button type="submit" class="btn-primary full-width">Sign In</button>
+            <button type="submit" class="btn-primary full-width" style="margin-top:4px">Sign In</button>
         </form>
 
         <p class="login-hint">Hint: <code>admin / admin</code></p>
@@ -32,19 +32,30 @@
     import { notify } from '../../src/js/notify.js';
     import { api }    from '../app.js';
 
-    form.on('#loginForm', {
+    // container is injected by _exec.js — scoped to this page
+    const loginForm = container.querySelector('#loginForm');
+
+    form.on(loginForm, {
         submit: async (data) => {
+            const ok = await form.validate(loginForm, {
+                username: (v) => v.trim().length > 0 || 'Username is required',
+                password: (v) => v.length > 0 || 'Password is required',
+            });
+            if (!ok) throw new Error('Please fill in all fields');
+
             const res = await api.post('/login', data);
             if (!res?.token) throw new Error('Invalid username or password');
             return res;
         },
         success: async (res) => {
-            // auth.session.start() fires OnStart hook → sets token, navigates
+            // auth.session.start() fires OnStart → sets token, shows navbar, navigates
             await auth.session.start(res.token);
         },
         error: (err) => {
-            form.showError('#loginForm', 'password', err.message);
-            notify.error(err.message);
+            if (err.message !== 'Please fill in all fields') {
+                form.showError(loginForm, 'password', err.message);
+                notify.error(err.message);
+            }
         }
     });
 </script>

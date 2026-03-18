@@ -81,12 +81,18 @@ async function _load(url) {
 }
 
 // ─── Lifecycle registry ───────────────────────────────────────────────────────
-// Reset on every navigation by the router calling component._reset().
+// associated with a specific container element via WeakMap to prevent pollution.
 
-let _mountHooks   = [];  // fns to run after page mounts
-let _unmountHooks = [];  // fns to run before page leaves
-let _intervals    = [];  // interval ids — auto-cleared on navigate
-let _timeouts     = [];  // timeout ids  — auto-cleared on navigate
+const _scopes = new WeakMap(); // Element → { mount: [], unmount: [], intervals: [], timeouts: [] }
+export let _activeElement = null; // Exported for responder.js to set scope
+
+function _getScope(el) {
+    if (!el) return null;
+    if (!_scopes.has(el)) {
+        _scopes.set(el, { mount: [], unmount: [], intervals: [], timeouts: [] });
+    }
+    return _scopes.get(el);
+}
 
 // ─── Animation hooks (overrideable transitions) ───────────────────────────────
 
@@ -137,6 +143,9 @@ export const component = {
         const container = _resolve(target);
         if (!container) return;
 
+        // Teardown previous content in this specific container
+        await this._runUnmount(container);
+
         const loadingEl = container.querySelector('[data-loading]');
         const errorEl   = container.querySelector('[data-error]');
         if (loadingEl) loadingEl.style.display = '';
@@ -154,7 +163,14 @@ export const component = {
 
             // Execute scripts — passes container so component scripts have
             // a scoped reference to their own DOM element.
-            execScripts(container, url);
+            // Stack pattern ensures nested mounts don't lose parent context.
+            const prev = _activeElement;
+            _activeElement = container;
+            try {
+                execScripts(container, url);
+            } finally {
+                _activeElement = prev;
+            }
 
         } catch (e) {
             console.error(`[oja/component] failed to mount "${url}":`, e);
@@ -183,7 +199,14 @@ export const component = {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = render(html, data);
         fill(wrapper, data);
-        execScripts(wrapper, url);
+
+        const prev = _activeElement;
+        _activeElement = wrapper;
+        try {
+            execScripts(wrapper, url);
+        } finally {
+            _activeElement = prev;
+        }
 
         const el = wrapper.firstElementChild || wrapper;
         container.appendChild(el);
@@ -198,6 +221,10 @@ export const component = {
     async remove(target) {
         const el = _resolve(target);
         if (!el) return;
+
+        // Teardown scoped hooks for this subtree
+        await this._runUnmount(el);
+
         await _leave(el);
         el.remove();
     },
@@ -234,7 +261,8 @@ export const component = {
      *   });
      */
     onMount(fn) {
-        _mountHooks.push(fn);
+        const scope = _getScope(_activeElement);
+        if (scope) scope.mount.push(fn);
         return this;
     },
 
@@ -249,7 +277,8 @@ export const component = {
      *   });
      */
     onUnmount(fn) {
-        _unmountHooks.push(fn);
+        const scope = _getScope(_activeElement);
+        if (scope) scope.unmount.push(fn);
         return this;
     },
 
@@ -265,7 +294,8 @@ export const component = {
      */
     interval(fn, ms) {
         const id = setInterval(fn, ms);
-        _intervals.push(id);
+        const scope = _getScope(_activeElement);
+        if (scope) scope.intervals.push(id);
         return id;
     },
 
@@ -279,7 +309,8 @@ export const component = {
      */
     timeout(fn, ms) {
         const id = setTimeout(fn, ms);
-        _timeouts.push(id);
+        const scope = _getScope(_activeElement);
+        if (scope) scope.timeouts.push(id);
         return id;
     },
 
@@ -311,36 +342,36 @@ export const component = {
     // ─── Internal — called by router.js ──────────────────────────────────────
 
     /**
-     * Run all onUnmount hooks and clear all registered intervals/timeouts.
-     * Called by the router before rendering the next page.
+     * Run all onUnmount hooks and clear all registered intervals/timeouts for a scope.
      * @internal
      */
-    async _runUnmount() {
-        // Clear timers first — stops any in-flight work
-        for (const id of _intervals) clearInterval(id);
-        for (const id of _timeouts)  clearTimeout(id);
+    async _runUnmount(el) {
+        const scope = _scopes.get(el);
+        if (!scope) return;
+
+        // Clear timers first
+        for (const id of scope.intervals) clearInterval(id);
+        for (const id of scope.timeouts)  clearTimeout(id);
 
         // Run user-registered teardown hooks
-        for (const fn of _unmountHooks) {
+        for (const fn of scope.unmount) {
             try { await fn(); } catch (e) {
                 console.warn('[oja/component] onUnmount hook error:', e);
             }
         }
 
-        // Reset registry for the incoming page
-        _mountHooks   = [];
-        _unmountHooks = [];
-        _intervals    = [];
-        _timeouts     = [];
+        // Clean up the WeakMap
+        _scopes.delete(el);
     },
 
     /**
-     * Run all onMount hooks.
-     * Called by the router after the new page finishes rendering.
+     * Run all onMount hooks for a specific container.
      * @internal
      */
-    async _runMount() {
-        for (const fn of _mountHooks) {
+    async _runMount(el) {
+        const scope = _scopes.get(el);
+        if (!scope) return;
+        for (const fn of scope.mount) {
             try { await fn(); } catch (e) {
                 console.warn('[oja/component] onMount hook error:', e);
             }

@@ -272,9 +272,11 @@ export class OjaWasm {
                 if (arg instanceof Uint8Array) return { __type: 'Uint8Array', buffer: arg.buffer };
                 return arg;
             });
-            const transfers = args
-                .filter(a => a instanceof ArrayBuffer || a instanceof Uint8Array)
-                .map(a => a instanceof Uint8Array ? a.buffer : a);
+
+            // ransfers must be deduplicated to prevent detached buffer errors
+            const transfers = [...new Set(args
+                .filter(a => a instanceof ArrayBuffer || (a && a.buffer instanceof ArrayBuffer))
+                .map(a => a instanceof ArrayBuffer ? a : a.buffer))];
 
             return this._worker.call('__call__', { fn, args: serialized }, transfers);
         }

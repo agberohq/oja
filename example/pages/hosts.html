@@ -1,14 +1,13 @@
 <!--
   pages/hosts.html
-  Demonstrates: template.each() with filter/sort/chunk,
-                Responder empty state, Go-style {{if}}/{{range}},
-                data-if, data-if-class, data-bind
+  Demonstrates: each() with filter/sort/chunk, debounce, Go-style templates,
+                data-if-class, data-bind, nested each() after chunk render
 -->
 <div class="page" data-title="Hosts">
     <div class="page-header">
         <h1>Hosts</h1>
         <div class="header-actions">
-            <input id="host-search" type="text" placeholder="Filter hosts..." class="search-input">
+            <input id="host-search" type="text" placeholder="Filter hosts..." class="search-input" autocomplete="off">
             <select id="host-sort" class="select-sm">
                 <option value="name">Sort: Name</option>
                 <option value="reqs">Sort: Requests</option>
@@ -26,49 +25,62 @@
         <div data-empty="hosts"   style="display:none"></div>
 
         <template data-each="hosts" data-as="h">
-            <div class="host-card" data-if-class="h.alive:host-alive,h.tls:host-tls"
-                 data-bind="data-id:h.id">
-
+            <div class="host-row">
                 <div class="host-header">
-                    <div class="host-info">
-                        <span class="host-dot" data-if-class="h.alive:dot-green"></span>
-                        <strong class="host-name">{{h.hostname}}</strong>
-                        <!-- Go-style inline conditional -->
-                        <span class="badge {{if .h.tls}}badge-tls{{else}}badge-no-tls{{end}}">
+                    <div class="host-name">
+                        <span class="dot" data-if-class="h.alive:dot-green"></span>
+                        <strong>{{h.hostname}}</strong>
+                        <span class="badge {{if .h.tls}}badge-ok{{else}}badge-no-tls{{end}}">
                             {{if .h.tls}}🔒 {{h.tlsMode}}{{else}}No TLS{{end}}
                         </span>
                         {{if .h.tlsDaysLeft}}
-                        <span class="badge badge-expiry" data-if-class="h.tlsDaysLeft:badge-warn">
+                        <span class="badge {{if .h.tlsExpiring}}badge-warn{{else}}badge-ok{{end}}">
                             {{h.tlsDaysLeft}}d left
                         </span>
                         {{end}}
                     </div>
-                    <div class="host-actions">
-                        <a data-bind="href:h.detailUrl" class="btn-sm">Detail</a>
+                    <a data-bind="href:h.detailUrl" class="btn-sm">Detail →</a>
+                </div>
+
+                <div class="host-meta muted" style="margin-bottom:8px">
+                    {{range .h.domains}}<span class="domain-badge">{{.}}</span> {{end}}
+                </div>
+
+                <div class="host-stats" style="display:flex;gap:20px;font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:12px">
+                    <span><strong style="color:var(--fg)">{{h.totalReqs}}</strong> reqs</span>
+                    <span><strong style="color:var(--fg)">{{h.errors}}</strong> errors</span>
+                    <span><strong style="color:var(--fg)">{{h.p99Ms}}ms</strong> p99</span>
+                    <span><strong style="color:var(--fg)">{{h.activeBackends}}</strong> backends</span>
+                </div>
+
+                <!-- Routes for this host — filled after chunk render -->
+                <div class="routes-for-{{h.id}}">
+                    <div data-loading="routes" style="display:none"></div>
+                    <template data-each="routes" data-as="route">
+                        <div class="route-block">
+                            <div class="route-header">
+                                <span class="route-path">{{route.path}}</span>
+                                <span class="badge">{{route.method}}</span>
+                                <span class="muted" style="font-size:11px;font-family:var(--mono)">{{route.backendCount}} backend{{route.backendCount != 1}}s{{end}}</span>
+                            </div>
+                            <div class="backend-list">
+                                <template data-each="backends" data-as="be">
+                                    <div class="backend-row {{if .be.alive}}{{else}}down{{end}}">
+                                        <span class="dot" data-if-class="be.alive:dot-green"></span>
+                                        <span class="be-url">{{be.url}}</span>
+                                        <span class="be-stat">{{be.reqs}} reqs</span>
+                                        <span class="be-stat">p99: {{be.p99}}ms</span>
+                                        <span class="badge {{if .be.alive}}badge-ok{{else}}badge-danger{{end}}">
+                                            {{be.healthStatus}}
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    <div data-empty="routes" class="muted" style="display:none;font-size:12px;padding:8px 0">
+                        No routes configured
                     </div>
-                </div>
-
-                <div class="host-meta muted">
-                    {{range .h.domains}}<span class="domain-badge">{{.}}</span>{{end}}
-                </div>
-
-                <div class="host-stats">
-                    <span><strong>{{h.totalReqs | bytes}}</strong> reqs</span>
-                    <span><strong>{{h.errors}}</strong> errors</span>
-                    <span><strong>{{h.p99Ms}}ms</strong> p99</span>
-                    <span><strong>{{h.activeBackends}}</strong> backends</span>
-                </div>
-
-                <!-- Routes loop — nested data-each -->
-                <template data-each="routes" data-as="route">
-                    <div class="route-row">
-                        <span class="route-method">{{route.method}}</span>
-                        <span class="route-path">{{route.path}}</span>
-                        <span class="muted">{{route.backends.length}} backends</span>
-                    </div>
-                </template>
-                <div data-empty="routes" style="display:none" class="muted route-row">
-                    No routes configured
                 </div>
             </div>
         </template>
@@ -76,21 +88,12 @@
 </div>
 
 <script type="module">
-    import { each, template, fill } from '../../src/js/template.js';
-    import { Responder }             from '../../src/js/responder.js';
-    import { on }                    from '../../src/js/events.js';
-    import { api }                   from '../app.js';
-
-    // Custom filter for byte formatting
-    template.filter('bytes', n => {
-        if (!n) return '0';
-        if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-        if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
-        return String(n);
-    });
+    import { each, fill }  from '../../src/js/template.js';
+    import { on, debounce } from '../../src/js/events.js';
+    import { api }          from '../app.js';
 
     let _allHosts = [];
-    const container = document.getElementById('hostsContainer');
+    const hostsContainer = container.querySelector('#hostsContainer') || document.getElementById('hostsContainer');
 
     async function loadHosts() {
         _allHosts = await api.get('/api/hosts') || [];
@@ -98,15 +101,21 @@
     }
 
     function renderHosts() {
-        const search   = document.getElementById('host-search')?.value?.toLowerCase() || '';
-        const sortBy   = document.getElementById('host-sort')?.value   || 'name';
-        const aliveOnly= document.getElementById('alive-only')?.checked || false;
+        const searchEl  = container.querySelector('#host-search');
+        const sortEl    = container.querySelector('#host-sort');
+        const aliveEl   = container.querySelector('#alive-only');
 
-        each(container, 'hosts', _allHosts, {
+        const search    = searchEl?.value?.toLowerCase() || '';
+        const sortBy    = sortEl?.value   || 'name';
+        const aliveOnly = aliveEl?.checked || false;
+
+        each(hostsContainer, 'hosts', _allHosts, {
             filter: (h) => {
                 if (aliveOnly && !h.alive) return false;
-                if (search) return h.hostname.toLowerCase().includes(search)
-                    || h.domains.some(d => d.includes(search));
+                if (search) return (
+                    h.hostname.toLowerCase().includes(search) ||
+                    h.domains.some(d => d.toLowerCase().includes(search))
+                );
                 return true;
             },
             sort: (a, b) => {
@@ -117,36 +126,50 @@
             },
             map: (h) => ({
                 ...h,
-                detailUrl: `#/hosts/${h.id}`,
+                detailUrl    : `#/hosts/${h.id}`,
+                tlsExpiring  : h.tlsDaysLeft && h.tlsDaysLeft < 14,
             }),
-            chunk: 3,   // render 3 at a time — demos chunked rendering
-            empty: Responder.html(`
-            <div class="empty-state">
-                <div class="empty-icon">🔍</div>
-                <p>No hosts match your filters</p>
-                <button onclick="document.getElementById('host-search').value='';
-                    document.getElementById('alive-only').checked=false"
-                    class="btn-sm">Clear filters</button>
-            </div>
-        `),
+            chunk: 3,
+            empty: '<div class="empty-state"><div class="empty-icon">🔍</div><p>No hosts match your filters</p></div>',
         });
 
-        // Render nested routes loop for each host card
-        document.querySelectorAll('.host-card').forEach(card => {
-            const hostId = card.dataset.id;
-            const host   = _allHosts.find(h => h.id === hostId);
-            if (host) {
-                each(card, 'routes', host.routes, {
-                    map: r => ({ ...r, backends: r.backends || [] })
+        // After chunk rendering we need a small delay for the DOM to settle,
+        // then wire nested routes into each host row using container scope.
+        requestAnimationFrame(() => {
+            hostsContainer.querySelectorAll('[data-each-item="hosts"]').forEach(hostEl => {
+                const id   = hostEl.querySelector('[data-bind]')?.getAttribute('href')?.split('/').pop();
+                const host = _allHosts.find(h => h.id === id || hostEl.textContent.includes(h.hostname));
+                if (!host) return;
+
+                const routesSlot = hostEl.querySelector(`[data-each="routes"]`)?.parentElement;
+                if (!routesSlot) return;
+
+                each(hostEl, 'routes', host.routes || [], {
+                    map: r => ({
+                        ...r,
+                        backendCount: r.backends?.length || 0,
+                    }),
                 });
-            }
+
+                // Nested backends within each route card
+                hostEl.querySelectorAll('[data-each-item="routes"]').forEach((routeEl, ri) => {
+                    const route = host.routes?.[ri];
+                    if (route) {
+                        each(routeEl, 'backends', route.backends || []);
+                    }
+                });
+            });
         });
     }
 
-    // Wire controls
-    on('#host-search', 'input',  renderHosts);
-    on('#host-sort',   'change', renderHosts);
-    on('#alive-only',  'change', renderHosts);
+    // Wire controls using container scope — not document-level
+    const searchEl = container.querySelector('#host-search');
+    const sortEl   = container.querySelector('#host-sort');
+    const aliveEl  = container.querySelector('#alive-only');
+
+    if (searchEl) searchEl.addEventListener('input',  debounce(renderHosts, 200));
+    if (sortEl)   sortEl.addEventListener('change',   renderHosts);
+    if (aliveEl)  aliveEl.addEventListener('change',  renderHosts);
 
     await loadHosts();
 </script>

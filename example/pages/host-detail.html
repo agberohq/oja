@@ -1,12 +1,13 @@
 <!--
   pages/host-detail.html
-  Demonstrates: router params ({id}), ctx data passed via Responder.fn,
-                modal.push/pop cascading, modal.confirm, component.update
+  Demonstrates: router params ({id}), middleware ctx.host,
+                container scope, modal.open (perf), component.remove(),
+                modal.confirm(), nested each()
 -->
 <div class="page" data-title="{{hostname}}">
 
     <div class="page-header">
-        <a href="#/hosts" class="back-link">← Hosts</a>
+        <a href="#/hosts" class="back-link muted">← Hosts</a>
         <h1>{{hostname}}</h1>
         <div class="header-actions">
             <span class="badge {{if .alive}}badge-alive{{else}}badge-dead{{end}}">
@@ -16,15 +17,12 @@
         </div>
     </div>
 
+    <!-- Host detail cards -->
     <div class="detail-grid">
         <div class="detail-card">
-            <div class="detail-label">TLS Mode</div>
+            <div class="detail-label">TLS</div>
             <div class="detail-value">
-                {{if .tls}}
-                {{tlsMode}} — {{tlsDaysLeft}} days remaining
-                {{else}}
-                No TLS
-                {{end}}
+                {{if .tls}}{{tlsMode}} · {{tlsDaysLeft}}d left{{else}}None{{end}}
             </div>
         </div>
         <div class="detail-card">
@@ -39,36 +37,56 @@
             <div class="detail-label">p99 Latency</div>
             <div class="detail-value">{{p99Ms}}ms</div>
         </div>
+        <div class="detail-card">
+            <div class="detail-label">Active Backends</div>
+            <div class="detail-value">{{activeBackends}}</div>
+        </div>
+        <div class="detail-card">
+            <div class="detail-label">Domains</div>
+            <div class="detail-value" id="host-domains" style="font-size:12px"></div>
+        </div>
     </div>
 
-    <h2>Routes & Backends</h2>
+    <!-- Routes & Backends -->
+    <div class="section-header">
+        <h2>Routes & Backends</h2>
+    </div>
 
     <div id="routesList">
+        <div data-loading="routes" class="loading-row">Loading routes...</div>
         <template data-each="routes" data-as="route">
             <div class="route-card">
-                <div class="route-header">
-                    <strong>{{route.path}}</strong>
+                <div class="route-card-header">
+                    <span class="route-path">{{route.path}}</span>
                     <span class="badge">{{route.method}}</span>
+                    <span class="muted" style="font-size:11px;margin-left:auto">
+                        {{route.backendCount}} backend{{route.backendCount}}s
+                    </span>
                 </div>
 
-                <!-- Nested backends -->
                 <template data-each="backends" data-as="be">
-                    <div class="backend-row" data-if-class="be.alive:be-alive">
-                        <span class="be-dot" data-if-class="be.alive:dot-green"></span>
+                    <div class="backend-row {{if .be.alive}}be-alive{{else}}be-dead{{end}}"
+                         style="display:grid;grid-template-columns:24px 3fr 80px 80px 80px 70px;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px">
+                        <span class="dot" data-if-class="be.alive:dot-green"></span>
                         <span class="be-url">{{be.url}}</span>
-                        <span class="muted">W:{{be.weight}}</span>
-                        <span class="muted">{{be.reqs}} reqs</span>
-                        <span class="muted">p99: {{be.p99}}ms</span>
+                        <span class="be-stat">{{be.reqs}} reqs</span>
+                        <span class="be-stat">p99: {{be.p99}}ms</span>
+                        <span class="badge {{if .be.alive}}badge-ok{{else}}badge-danger{{end}}">
+                            {{be.healthStatus}}
+                        </span>
                         <button class="btn-sm danger"
                                 data-action="remove-backend"
                                 data-url="{{be.url}}">Remove</button>
                     </div>
                 </template>
-                <div data-empty="backends" class="muted" style="display:none">No backends</div>
+                <div data-empty="backends" class="muted" style="display:none;font-size:12px;padding:8px 0">
+                    No backends configured
+                </div>
             </div>
         </template>
         <div data-empty="routes" class="empty-state" style="display:none">
-            No routes configured
+            <div class="empty-icon">🛤</div>
+            <p>No routes configured for this host</p>
         </div>
     </div>
 </div>
@@ -79,73 +97,104 @@
     import { notify }      from '../../src/js/notify.js';
     import { component }   from '../../src/js/component.js';
     import { on }          from '../../src/js/events.js';
+    import { adapter }     from '../../src/js/adapter.js';
+    import { api }         from '../app.js';
 
-    // ctx.host was attached by the loader middleware in app.js
-    // and passed through Responder.fn → component data
-    const container  = document.getElementById('routesList');
-    const hostData   = window._currentHost; // set below
+    // container is injected by _exec.js — scoped to THIS page instance.
+    // ctx.host was attached by the loader middleware in app.js and
+    // rendered via template.js fill() into the HTML above.
+    // We re-fetch the full host here to get backend detail.
+    const hostname = container.querySelector('h1')?.textContent?.trim();
 
-    // Render routes + nested backends
-    function renderRoutes(host) {
-        each(container, 'routes', host.routes || [], {
-            map: r => ({ ...r })
+    // Domains
+    const hosts = await api.get('/api/hosts') || [];
+    const host  = hosts.find(h => h.hostname === hostname);
+
+    if (host) {
+        // Render domains
+        const domainsEl = container.querySelector('#host-domains');
+        if (domainsEl) {
+            domainsEl.innerHTML = (host.domains || [])
+                .map(d => `<span class="domain-badge">${d}</span> `)
+                .join('');
+        }
+
+        // Render routes + nested backends
+        const routesList = container.querySelector('#routesList');
+        each(routesList, 'routes', host.routes || [], {
+            map: r => ({ ...r, backendCount: r.backends?.length || 0 }),
         });
 
-        // Render nested backends for each route card
-        document.querySelectorAll('.route-card').forEach((card, i) => {
-            const route = host.routes?.[i];
-            if (route) {
-                each(card, 'backends', route.backends || []);
+        // Wire nested backends into each route card
+        requestAnimationFrame(() => {
+            routesList.querySelectorAll('[data-each-item="routes"]').forEach((routeEl, i) => {
+                const route = host.routes?.[i];
+                if (route) each(routeEl, 'backends', route.backends || []);
+            });
+        });
+    }
+
+    // ── Performance modal ─────────────────────────────────────────────────────
+    const perfBtn = container.querySelector('#perf-btn');
+    if (perfBtn) {
+        perfBtn.addEventListener('click', async () => {
+            const titleEl = document.getElementById('perfModalTitle');
+            const hostEl  = document.getElementById('perfModalHost');
+            if (titleEl) titleEl.textContent = 'Performance History';
+            if (hostEl)  hostEl.textContent  = hostname || '';
+
+            modal.open('perfModal');
+            await _loadPerfCharts(hostname, '1h');
+
+            // Range selector
+            const rangeEl = document.getElementById('perfRangeSelect');
+            if (rangeEl) {
+                rangeEl.onchange = () => _loadPerfCharts(hostname, rangeEl.value);
             }
         });
     }
 
-    // Get the host data from the page's own data attributes
-    // (filled by Responder.component via template.js fill())
-    const hostnameEl = document.querySelector('h1');
-    if (hostnameEl) {
-        // Re-use what was rendered — find host from page data
-        // In a real app this would come from ctx.host in the middleware
+    async function _loadPerfCharts(host, range) {
+        const ids = ['perfChartRps','perfChartP99','perfChartErrors','perfChartBE'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="loading-row">Loading...</div>';
+        });
+
+        const data = await api.get(`/api/telemetry?host=${encodeURIComponent(host)}&range=${range}`);
+        if (!data?.samples?.length) {
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<div class="loading-row muted">No data yet</div>';
+            });
+            return;
+        }
+
+        const chart = adapter.use('chart');
+        const s     = data.samples;
+        const fmt   = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        chart.draw(document.getElementById('perfChartRps'),    s.map(x => x.rps),             { color: 'var(--accent)',  unit: '/s',  label: 'req/s' });
+        chart.draw(document.getElementById('perfChartP99'),    s.map(x => x.p99_ms),          { color: 'var(--warning)', unit: 'ms',  label: 'p99' });
+        chart.draw(document.getElementById('perfChartErrors'), s.map(x => x.error_rate),      { color: 'var(--danger)',  unit: '%',   label: 'errors', minY: 0, maxY: 5 });
+        chart.draw(document.getElementById('perfChartBE'),     s.map(x => x.active_backends), { color: 'var(--success)', label: 'backends' });
+
+        const rangeEl = document.getElementById('perf-data-range');
+        if (rangeEl && s.length >= 2) {
+            rangeEl.textContent = `${fmt(s[0].ts)} – ${fmt(s[s.length-1].ts)} · ${s.length} points`;
+        }
     }
 
-    // Performance modal — demonstrates modal.push() / modal.pop()
-    on('#perf-btn', 'click', () => {
-        document.getElementById('perfModalTitle').textContent =
-            'Performance: ' + document.querySelector('h1')?.textContent;
-
-        modal.push('perfModal', {
-            body: {
-                render: (container) => {
-                    container.innerHTML = `
-                    <div class="perf-grid">
-                        <div class="perf-item">
-                            <div class="perf-label">p99 Latency</div>
-                            <div class="perf-value">${document.getElementById('stat-p99')?.textContent || '—'}</div>
-                        </div>
-                        <div class="perf-item">
-                            <div class="perf-label">Requests</div>
-                            <div class="perf-value">${document.querySelector('.detail-value')?.textContent || '—'}</div>
-                        </div>
-                    </div>
-                    <p class="muted" style="margin-top:16px">
-                        In a real app this would show historical charts via adapter.use('d3') or adapter.use('chart').
-                    </p>
-                `;
-                }
-            }
-        });
-    });
-
-    // Backend removal — demonstrates modal.confirm() + component.remove()
+    // ── Backend removal ───────────────────────────────────────────────────────
     on('[data-action="remove-backend"]', 'click', async (e, el) => {
-        const url = el.dataset.url;
+        const url       = el.dataset.url;
         const confirmed = await modal.confirm(`Remove backend ${url}?`);
         if (!confirmed) return;
 
-        const row = el.closest('.backend-row');
+        const row = el.closest('[data-each-item="backends"]');
         if (row) {
             await component.remove(row);
-            notify.success(`Backend ${url} removed`);
+            notify.success(`Backend removed`);
         }
     });
 </script>

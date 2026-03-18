@@ -157,7 +157,7 @@ export class Store {
         this._ns      = namespace + ':';
         this._opts    = options;
         this._secret  = options.secret   || namespace;
-        this._encrypt = options.encrypt  || false;
+        this._encrypt = options.encrypt  && _hasCrypto();
         this._layer   = null;
         this._changes = new Map(); // key → Set of handler fns
 
@@ -189,10 +189,10 @@ export class Store {
         const old = this.get(key);
         try {
             this._layer.set(this._ns + key, JSON.stringify(value));
+            this._notify(key, value, old);
         } catch (e) {
             console.warn('[oja/store] set failed:', key, e);
         }
-        this._notify(key, value, old);
         return this;
     }
 
@@ -249,7 +249,7 @@ export class Store {
         const serialised = JSON.stringify(value);
         let stored = serialised;
 
-        if (this._encrypt && _hasCrypto()) {
+        if (this._encrypt) {
             try {
                 stored = await _encrypt(serialised, this._secret, this._ns);
             } catch (e) {
@@ -260,10 +260,10 @@ export class Store {
         const old = await this.getAsync(key);
         try {
             this._layer.set(this._ns + key, stored);
+            this._notify(key, value, old);
         } catch (e) {
             console.warn('[oja/store] setAsync failed:', key, e);
         }
-        this._notify(key, value, old);
         return this;
     }
 
@@ -276,7 +276,7 @@ export class Store {
             if (raw === null || raw === undefined) return fallback;
 
             let plain = raw;
-            if (this._encrypt && _hasCrypto() && raw.startsWith(_ENC_PREFIX)) {
+            if (this._encrypt && raw.startsWith(_ENC_PREFIX)) {
                 try {
                     plain = await _decrypt(raw, this._secret, this._ns);
                 } catch (e) {

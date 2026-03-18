@@ -37,7 +37,7 @@
  *   // Read anywhere — always the same reactive value
  *   const [isOnline] = context('online');
  *   effect(() => {
- *       document.getElementById('status').textContent = isOnline() ? '●' : '○';
+ *       container.querySelector('.status').textContent = isOnline() ? '●' : '○';
  *   });
  *
  *   // Write from anywhere — all effects that read it re-run
@@ -62,7 +62,7 @@ class ReactiveSystem {
         this._effectQueue   = new Set();
         this._scheduled     = false;
         this._dirtyFlags    = new Map();
-        this._dependencies  = new WeakMap();
+        this._dependencies  = new WeakMap(); // effect -> Set of unsubscribe functions
         this._batchDepth    = 0;
         this._flushDepth    = 0;
     }
@@ -76,10 +76,12 @@ class ReactiveSystem {
         const read = () => {
             if (this._currentEffect) {
                 subscribers.add(this._currentEffect);
+
+                // Track the dependency for cleanup
                 if (!this._dependencies.has(this._currentEffect)) {
                     this._dependencies.set(this._currentEffect, new Set());
                 }
-                this._dependencies.get(this._currentEffect).add(read);
+                this._dependencies.get(this._currentEffect).add(() => subscribers.delete(this._currentEffect));
             }
             return value;
         };
@@ -112,10 +114,14 @@ class ReactiveSystem {
 
     effect(fn) {
         const run = () => {
-            this._currentEffect = run;
-            if (this._dependencies.has(run)) {
-                this._dependencies.delete(run);
+            // Cleanup previous subscriptions before re-running
+            const previousDeps = this._dependencies.get(run);
+            if (previousDeps) {
+                previousDeps.forEach(unsub => unsub());
+                previousDeps.clear();
             }
+
+            this._currentEffect = run;
             try {
                 fn();
             } finally {
@@ -127,8 +133,10 @@ class ReactiveSystem {
         run();
 
         return () => {
-            this._dirtyFlags.delete(run);
+            const deps = this._dependencies.get(run);
+            if (deps) deps.forEach(unsub => unsub());
             this._dependencies.delete(run);
+            this._dirtyFlags.delete(run);
         };
     }
 
@@ -170,7 +178,6 @@ class ReactiveSystem {
         }
 
         this._flushDepth++;
-
         const queue = [...this._effectQueue];
         this._effectQueue.clear();
         this._scheduled = false;
@@ -204,8 +211,7 @@ const _ctx = new Map(); // name → [read, write]
  * Get or create a named reactive value shared across the entire application.
  *
  * First call with a name creates the value with the given initial value.
- * All subsequent calls with the same name return the same [read, write] pair —
- * the initial value is ignored after first creation.
+ * All subsequent calls with the same name return the same [read, write] pair.
  *
  * @param {string} name          — unique name for this context value
  * @param {any}    [initialValue] — initial value (only used on first call)

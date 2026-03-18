@@ -1,7 +1,7 @@
 <!--
   pages/logs.html
-  Demonstrates: OjaSSE (simulated), logger, debug, chunked rendering,
-                notify.on(), filter chips
+  Demonstrates: component.interval(), filter chips, each(), chunked render,
+                context() for online state, export via Blob URL
 -->
 <div class="page" data-title="Logs">
     <div class="page-header">
@@ -13,6 +13,7 @@
                 <button class="chip" data-level="WARN">WARN</button>
                 <button class="chip" data-level="ERROR">ERROR</button>
             </div>
+            <div class="divider-v hide-mobile"></div>
             <button id="pause-btn"  class="btn-sm">Pause</button>
             <button id="clear-btn"  class="btn-sm">Clear</button>
             <button id="export-btn" class="btn-sm">Export</button>
@@ -20,23 +21,23 @@
     </div>
 
     <div id="logConsole" class="log-console">
-        <div data-loading="logs" class="loading-row">Connecting to log stream...</div>
-
+        <div data-loading="logs" class="loading-row" style="color:#666">Connecting to log stream...</div>
         <template data-each="logs" data-as="log">
             <div class="log-entry log-{{log.level | lower}}">
                 <span class="log-ts">{{log.ts}}</span>
                 <span class="log-level">{{log.level}}</span>
-                <span class="log-msg">{{log.msg}}
+                <span class="log-msg">
+                    {{log.msg}}
                     {{if .log.method}}<span class="log-method">{{log.method}}</span>{{end}}
                     {{if .log.path}}<span class="log-path">{{log.path}}</span>{{end}}
-                    {{if .log.status}}<span class="log-status">{{log.status}}</span>{{end}}
-                    {{if .log.duration}}<span class="log-dur muted">{{log.duration}}</span>{{end}}
+                    {{if .log.status}}<span class="log-status">[{{log.status}}]</span>{{end}}
+                    {{if .log.duration}}<span class="log-dur">{{log.duration}}</span>{{end}}
                 </span>
-                <span class="log-remote muted">{{log.remote}}</span>
+                <span class="log-remote">{{log.remote}}</span>
             </div>
         </template>
         <div data-empty="logs" style="display:none" class="empty-state">
-            <p>No log entries</p>
+            <p>No log entries match the current filter</p>
         </div>
     </div>
 
@@ -47,105 +48,102 @@
 </div>
 
 <script type="module">
-    import { each }    from '../../src/js/template.js';
-    import { notify }  from '../../src/js/notify.js';
-    import { logger }  from '../../src/js/logger.js';
-    import { debug }   from '../../src/js/debug.js';
-    import { on }      from '../../src/js/events.js';
-    import { api }     from '../app.js';
+    import { each }          from '../../src/js/template.js';
+    import { notify }        from '../../src/js/notify.js';
+    import { logger }        from '../../src/js/logger.js';
+    import { component }     from '../../src/js/component.js';
+    import { on }            from '../../src/js/events.js';
+    import { api }           from '../app.js';
 
-    const container = document.getElementById('logConsole');
-    const statusEl  = document.getElementById('sse-status');
-    const countEl   = document.getElementById('log-count');
+    // container is scoped to this page instance
+    const logConsole = container.querySelector('#logConsole');
+    const statusEl   = container.querySelector('#sse-status');
+    const countEl    = container.querySelector('#log-count');
 
-    let _logs    = [];
-    let _paused  = false;
-    let _filter  = 'ALL';
-    let _sseTimer= null;
+    let _logs   = [];
+    let _paused = false;
+    let _filter = 'ALL';
 
     function render() {
         const filtered = _filter === 'ALL'
             ? _logs
             : _logs.filter(l => l.level === _filter);
 
-        each(container, 'logs', filtered, {
-            chunk: 20,
-            empty: null,
-        });
-
+        each(logConsole, 'logs', filtered, { chunk: 25 });
         if (countEl) countEl.textContent = `${filtered.length} entries`;
+
+        // Auto-scroll to bottom
+        logConsole.scrollTop = logConsole.scrollHeight;
     }
 
     // Load initial logs
     const initial = await api.get('/api/logs');
-    if (initial) {
-        _logs = initial;
-        render();
+    if (initial) { _logs = initial; render(); }
+
+    // Simulate SSE stream with component.interval() — auto-cleared on navigate
+    if (statusEl) {
+        statusEl.textContent = '● Connected (simulated)';
+        statusEl.style.color = 'var(--success)';
     }
 
-    // Simulate SSE — in a real app this would be:
-    // const sse = new OjaSSE('/api/events');
-    // sse.on('log', (entry) => { ... });
-    // Here we simulate it with setInterval
-    statusEl.textContent = '● Connected (simulated SSE)';
-    statusEl.style.color = '#2ecc71';
-
-    const logMessages = [
-        { level: 'INFO',  msg: 'Request completed',   method: 'GET',  path: '/v1/health', status: 200, duration: '8ms',  remote: '10.0.0.1' },
-        { level: 'WARN',  msg: 'Rate limit warning',  method: 'POST', path: '/v1/login',  status: 429, duration: '2ms',  remote: '5.5.5.5'  },
-        { level: 'INFO',  msg: 'TLS renewed',          method: '',     path: '',           status: 0,   duration: '',     remote: ''         },
-        { level: 'ERROR', msg: 'Backend timeout',      method: 'GET',  path: '/v1/data',  status: 504, duration: '30s',  remote: '10.0.0.2' },
+    const streamMessages = [
+        { level: 'INFO',  msg: 'Request completed',  method: 'GET',  path: '/v1/health', status: 200, duration: '8ms',  remote: '10.0.0.1' },
+        { level: 'WARN',  msg: 'Rate limit warning', method: 'POST', path: '/v1/login',  status: 429, duration: '2ms',  remote: '5.5.5.5'  },
+        { level: 'INFO',  msg: 'TLS renewed',         method: '',     path: '',           status: 0,   duration: '',     remote: ''         },
+        { level: 'ERROR', msg: 'Backend timeout',     method: 'GET',  path: '/v1/data',  status: 504, duration: '30s',  remote: '10.0.0.2' },
+        { level: 'INFO',  msg: 'Request completed',  method: 'GET',  path: '/images',   status: 200, duration: '11ms', remote: '198.51.100.1' },
     ];
     let _msgIdx = 0;
 
-    _sseTimer = setInterval(() => {
+    component.interval(() => {
         if (_paused) return;
         const entry = {
-            ...logMessages[_msgIdx % logMessages.length],
+            ...streamMessages[_msgIdx % streamMessages.length],
             ts: new Date().toLocaleTimeString(),
         };
         _msgIdx++;
         _logs.unshift(entry);
         if (_logs.length > 200) _logs.pop();
-
         render();
-        logger.debug('logs', 'New log entry', { level: entry.level });
 
-        if (entry.level === 'ERROR') {
-            notify.warn(`Error: ${entry.msg}`);
-        }
+        logger.debug('logs', 'SSE entry', { level: entry.level });
+        if (entry.level === 'ERROR') notify.warn(`Backend error: ${entry.msg}`, { duration: 3000 });
     }, 2000);
 
-    // Cleanup on navigate away
-    document.addEventListener('oja:navigate', () => clearInterval(_sseTimer), { once: true });
-
-    // Controls
-    on('.chip', 'click', (e, el) => {
-        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-        el.classList.add('active');
-        _filter = el.dataset.level;
-        render();
+    // Controls — scoped to container
+    container.querySelectorAll('.chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            _filter = chip.dataset.level;
+            render();
+        });
     });
 
-    on('#pause-btn', 'click', (e, el) => {
-        _paused = !_paused;
-        el.textContent     = _paused ? 'Resume' : 'Pause';
-        statusEl.textContent = _paused ? '● Paused' : '● Connected (simulated SSE)';
-        statusEl.style.color = _paused ? '#e74c3c' : '#2ecc71';
-    });
+    const pauseBtn = container.querySelector('#pause-btn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', () => {
+            _paused = !_paused;
+            pauseBtn.textContent = _paused ? 'Resume' : 'Pause';
+            if (statusEl) {
+                statusEl.textContent = _paused ? '● Paused' : '● Connected (simulated)';
+                statusEl.style.color = _paused ? 'var(--danger)' : 'var(--success)';
+            }
+        });
+    }
 
-    on('#clear-btn', 'click', () => {
+    container.querySelector('#clear-btn')?.addEventListener('click', () => {
         _logs = [];
         render();
         notify.info('Logs cleared');
     });
 
-    on('#export-btn', 'click', () => {
+    container.querySelector('#export-btn')?.addEventListener('click', () => {
         const blob = new Blob([JSON.stringify(_logs, null, 2)], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
-        a.download = 'oja-logs.json';
+        a.download = `oja-logs-${new Date().toISOString().slice(0,10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
         notify.success('Logs exported');

@@ -189,9 +189,17 @@ class _ComponentResponder extends _Responder {
                 }
             }
 
-            // Execute any <script> tags — innerHTML does not run scripts.
-            // Pass the component URL so relative imports resolve correctly.
+            // We must set the component's active element before executing scripts
+            // so that onMount/interval calls in the component are correctly scoped.
+            const { component } = await import('./component.js');
+            const oldActive = component._activeElement;
+            component._activeElement = container;
+
+            // Execute scripts with source URL for relative import resolution
             execScripts(container, this._payload);
+
+            // Restore previous active element (handle nested renders)
+            component._activeElement = oldActive;
 
         } catch (e) {
             console.error(`[oja/responder] component load failed: ${this._payload}`, e);
@@ -200,8 +208,7 @@ class _ComponentResponder extends _Responder {
                 errorEl.style.display = '';
                 if (loadingEl) loadingEl.style.display = 'none';
             } else if (this._options.error) {
-                // Nested Responder for error state — no infinite recursion since
-                // error responders should be simple html/text types
+                // Nested Responder for error state
                 await this._options.error.render(container, { error: e.message });
             } else {
                 container.innerHTML = `

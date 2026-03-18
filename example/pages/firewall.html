@@ -1,7 +1,7 @@
 <!--
   pages/firewall.html
-  Demonstrates: component.add(), component.remove(), form.on(),
-                api.post/delete, modal.confirm(), notify all types
+  Demonstrates: form.validate(), component.remove(), modal.confirm(),
+                api.post/delete, each(), notify
 -->
 <div class="page" data-title="Firewall">
     <div class="page-header">
@@ -11,7 +11,6 @@
 
     <!-- Add rule form — hidden by default -->
     <div id="addRuleForm" class="form-card" style="display:none">
-        <h3>New Firewall Rule</h3>
         <form id="firewallForm">
             <div class="form-row">
                 <div class="field">
@@ -28,10 +27,10 @@
             <div class="form-row">
                 <div class="field">
                     <label>Scope (optional)</label>
-                    <input name="scope" type="text" placeholder="* or /admin or /api">
+                    <input name="scope" type="text" placeholder="* or /admin or /api/v1">
                 </div>
                 <div class="field">
-                    <label>Permanent</label>
+                    <label>Duration</label>
                     <label class="toggle-label">
                         <input name="permanent" type="checkbox" checked> Block permanently
                     </label>
@@ -44,109 +43,106 @@
         </form>
     </div>
 
-    <!-- Rules table -->
+    <!-- Rules list -->
     <div id="firewallRules">
         <div data-loading="rules" class="loading-row">Loading rules...</div>
 
         <template data-each="rules" data-as="r">
-            <div class="rule-row" data-ip="{{r.ip}}">
-                <div class="rule-info">
+            <div class="rule-row">
+                <div class="rule-info" style="flex:1">
                     <strong class="rule-ip">{{r.ip}}</strong>
-                    <span class="rule-reason muted">{{r.reason}}</span>
+                    <span class="rule-reason muted">— {{r.reason}}</span>
                 </div>
                 <div class="rule-meta">
-                    <span class="badge">{{r.scope}}</span>
-                    <span class="muted">{{r.created_at | date}}</span>
+                    {{if .r.scope}}<span class="badge">{{r.scope}}</span>{{end}}
+                    <span class="muted" style="font-size:11px;font-family:var(--mono)">{{r.created_at | date}}</span>
                     <span class="badge {{if .r.permanent}}badge-danger{{else}}badge-warn{{end}}">
                         {{if .r.permanent}}Permanent{{else}}Temporary{{end}}
                     </span>
                 </div>
-                <button class="btn-sm danger" data-action="unblock" data-ip="{{r.ip}}">
-                    Unblock
-                </button>
+                <button class="btn-sm danger"
+                        data-action="unblock"
+                        data-ip="{{r.ip}}">Unblock</button>
             </div>
         </template>
 
         <div data-empty="rules" style="display:none" class="empty-state">
             <div class="empty-icon">✅</div>
-            <p>No blocked IPs — all traffic allowed</p>
+            <p>No blocked IPs — all traffic is allowed</p>
         </div>
     </div>
 </div>
 
 <script type="module">
-    import { each }    from '../../src/js/template.js';
-    import { form }    from '../../src/js/form.js';
-    import { notify }  from '../../src/js/notify.js';
-    import { modal }   from '../../src/js/modal.js';
+    import { each }      from '../../src/js/template.js';
+    import { form }      from '../../src/js/form.js';
+    import { notify }    from '../../src/js/notify.js';
+    import { modal }     from '../../src/js/modal.js';
     import { component } from '../../src/js/component.js';
-    import { on }      from '../../src/js/events.js';
-    import { api }     from '../app.js';
-    import { Responder } from '../../src/js/responder.js';
+    import { on }        from '../../src/js/events.js';
+    import { api }       from '../app.js';
 
-    const container = document.getElementById('firewallRules');
+    // All queries use container scope — no document.getElementById
+    const rulesEl    = container.querySelector('#firewallRules');
+    const formCardEl = container.querySelector('#addRuleForm');
+    const addBtnEl   = container.querySelector('#add-rule-btn');
 
     async function loadRules() {
-        const res = await api.get('/api/firewall');
+        const res   = await api.get('/api/firewall');
         const rules = res?.rules || [];
-
-        each(container, 'rules', rules, {
+        each(rulesEl, 'rules', rules, {
             sort: (a, b) => new Date(b.created_at) - new Date(a.created_at),
-            empty: Responder.html(`
-            <div class="empty-state">
-                <div class="empty-icon">✅</div>
-                <p>No blocked IPs — all traffic is allowed</p>
-            </div>
-        `)
         });
     }
 
-    // Toggle add form
-    on('#add-rule-btn',    'click', () => {
-        document.getElementById('addRuleForm').style.display = '';
-        document.getElementById('add-rule-btn').style.display = 'none';
+    // Toggle form
+    addBtnEl?.addEventListener('click', () => {
+        formCardEl.style.display = '';
+        addBtnEl.style.display   = 'none';
     });
-    on('#cancel-rule-btn', 'click', () => {
-        document.getElementById('addRuleForm').style.display = 'none';
-        document.getElementById('add-rule-btn').style.display = '';
+    container.querySelector('#cancel-rule-btn')?.addEventListener('click', () => {
+        formCardEl.style.display = 'none';
+        addBtnEl.style.display   = '';
         form.reset('#firewallForm');
     });
 
-    // Submit new rule
+    // Submit with validation
     form.on('#firewallForm', {
         submit: async (data) => {
-            if (!data.ip.trim()) throw new Error('IP address is required');
-            return api.post('/api/firewall', data);
+            // form.validate() — uses our new declarative validation
+            const ok = await form.validate('#firewallForm', {
+                ip:     (v) => /^[\d.:/a-fA-F]+$/.test(v.trim()) || 'Enter a valid IP or CIDR',
+                reason: (v) => v.trim().length >= 3 || 'Reason must be at least 3 characters',
+            });
+            if (!ok) throw new Error('Please fix the errors above');
+            return api.post('/api/firewall', { ...data, scope: data.scope || '*' });
         },
         success: async (res) => {
             notify.success(`IP ${res.rule.ip} blocked`);
             form.reset('#firewallForm');
-            document.getElementById('addRuleForm').style.display = 'none';
-            document.getElementById('add-rule-btn').style.display = '';
+            formCardEl.style.display = 'none';
+            addBtnEl.style.display   = '';
             await loadRules();
         },
         error: (err) => {
-            form.showError('#firewallForm', 'ip', err.message);
-            notify.error(err.message);
+            if (err.message !== 'Please fix the errors above') {
+                form.showError('#firewallForm', 'ip', err.message);
+                notify.error(err.message);
+            }
         }
     });
 
-    // Unblock with confirmation
+    // Unblock
     on('[data-action="unblock"]', 'click', async (e, el) => {
-        const ip = el.dataset.ip;
+        const ip        = el.dataset.ip;
         const confirmed = await modal.confirm(`Unblock ${ip}?`);
         if (!confirmed) return;
 
         const res = await api.delete(`/api/firewall?ip=${encodeURIComponent(ip)}`);
-        if (!res) {
-            notify.error('Failed to unblock IP');
-            return;
-        }
+        if (!res) { notify.error('Failed to unblock IP'); return; }
 
-        // component.remove() — animates the row out before removing
-        const row = el.closest('.rule-row');
+        const row = el.closest('[data-each-item="rules"]');
         if (row) await component.remove(row);
-
         notify.success(`${ip} unblocked`);
     });
 

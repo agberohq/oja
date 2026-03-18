@@ -172,7 +172,9 @@ export class OjaSSE {
         if (!this._source) return;
         this._source.addEventListener(eventName, (e) => {
             let data = e.data;
-            try { data = JSON.parse(e.data); } catch {}
+            try { data = JSON.parse(e.data); } catch {
+                console.warn(`[oja/sse] failed to parse JSON from "${eventName}"`);
+            }
             this._fire(eventName, data);
             _emit(`sse:${eventName}`, { data, url: this._url });
         });
@@ -181,7 +183,7 @@ export class OjaSSE {
     _fire(eventName, data) {
         this._handlers.get(eventName)?.forEach(fn => {
             try { fn(data); } catch (e) {
-                console.warn(`[oja/sse] handler error for "${eventName}":`, e);
+                console.warn(`[oja/socket] handler error for "${eventName}":`, e);
             }
         });
     }
@@ -270,11 +272,13 @@ export class OjaSocket {
     /**
      * Send a message — queued automatically if not yet connected.
      * Objects are encoded with the configured codec.
+     * Async to handle lazy-loaded binary codecs like MsgPack.
      */
-    send(data) {
+    async send(data) {
+        // Await encode in case it returns a Promise (e.g. MsgPackCodec)
         const encoded = typeof data === 'string'
             ? data
-            : this._opts.codec.encode(data);
+            : await Promise.resolve(this._opts.codec.encode(data));
 
         if (this._ws?.readyState === WebSocket.OPEN) {
             this._ws.send(encoded);
@@ -335,9 +339,14 @@ export class OjaSocket {
             _emit('ws:connect', { url: this._url });
         };
 
-        this._ws.onmessage = (e) => {
+        this._ws.onmessage = async (e) => {
+            // Await decode in case it returns a Promise
             let data = e.data;
-            try { data = this._opts.codec.decode(e.data); } catch {}
+            try {
+                data = await Promise.resolve(this._opts.codec.decode(e.data));
+            } catch {
+                console.warn('[oja/socket] failed to decode message');
+            }
 
             // Fire typed handler if message has a .type field
             if (data && typeof data === 'object' && data.type) {

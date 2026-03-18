@@ -154,10 +154,15 @@ export function each(container, name, items = [], options = {}) {
 }
 
 // ─── Go-style block processor ─────────────────────────────────────────────────
+// Processes {{if}}, {{range}}, {{else}}, {{end}} as a string pre-processor
+// before HTML hits the DOM. Avoids fragile DOM surgery.
 
 function _processBlocks(html, data, escape) {
+    // Fast path — no Go syntax present
     if (!html.includes('{{')) return html;
-    return _evalTemplate(html, data, escape);
+
+    const result = _evalTemplate(html, data, escape);
+    return result;
 }
 
 function _evalTemplate(src, data, escape) {
@@ -172,10 +177,12 @@ function _evalTemplate(src, data, escape) {
             break;
         }
 
+        // Static text before {{
         if (open > i) out.push(src.slice(i, open));
 
         const close = src.indexOf('}}', open + 2);
         if (close === -1) {
+            // Unclosed — treat rest as static
             out.push(src.slice(open));
             break;
         }
@@ -190,6 +197,7 @@ function _evalTemplate(src, data, escape) {
             const val      = _resolve(data, pathStr);
             const truthy   = negated ? !val : !!val;
 
+            // Find matching {{else}} or {{end}} at same depth
             const { ifBody, elseBody, endIndex } = _extractBlock(src, i);
             i = endIndex;
 
@@ -201,7 +209,8 @@ function _evalTemplate(src, data, escape) {
         if (expr.startsWith('range ')) {
             const rangeExpr = expr.slice(6).trim();
 
-            let asVar   = '.';
+            // {{range $h := .hosts}} or {{range .hosts}}
+            let asVar  = '.';
             let pathStr = rangeExpr;
             const assignMatch = rangeExpr.match(/^\$?(\w+)\s*:=\s*(.+)$/);
             if (assignMatch) {
@@ -294,6 +303,7 @@ function _extractBlock(src, start) {
         }
     }
 
+    // Malformed — return everything as body
     return { ifBody: src.slice(start), elseBody: '', endIndex: len };
 }
 
@@ -380,6 +390,7 @@ function _renderBatch(container, tpl, name, asVar, list, mapFn) {
             Length: totalLen,
         };
 
+        // Process Go-style blocks in template HTML first
         const rawHTML   = tpl.innerHTML;
         const processed = render(rawHTML, ctx);
 
@@ -387,6 +398,7 @@ function _renderBatch(container, tpl, name, asVar, list, mapFn) {
         wrapper.innerHTML = processed;
         const clone     = wrapper.content.cloneNode(true);
 
+        // data-attribute directives on cloned DOM
         _walkDOM(clone, ctx);
 
         Array.from(clone.children).forEach(el => {
@@ -429,6 +441,7 @@ function _showSlot(slotEl, tpl, name, content, suffix) {
 
     if (!content) return;
 
+    // No slot in markup — inject one after the template
     const el = document.createElement('div');
     el.dataset[`eachEmpty`] = name;
     tpl.after(el);
@@ -439,6 +452,7 @@ function _applyContent(el, content) {
     if (typeof content === 'string') {
         el.innerHTML = content;
     } else if (content && typeof content.render === 'function') {
+        // Responder instance
         content.render(el);
     }
 }
@@ -458,13 +472,11 @@ function _applyContent(el, content) {
  * @param {string} expr
  */
 function _resolve(data, expr) {
-    // Strip leading dot or $ — {{.name}} and {{name}} are equivalent
+    // Remove leading dot — {{.name}} and {{name}} are equivalent
     const path = expr.replace(/^\$?\./, '');
     if (!path) return data;
 
-    // Split on dots AND brackets, filter empty strings from '][' or trailing ']'
-    // e.g. "hosts[0].status" → ["hosts", "0", "status"]
-    //      "routes[0].backends[1].url" → ["routes", "0", "backends", "1", "url"]
+    // Split on dots, opening brackets, and closing brackets: hosts[0].status -> [hosts, 0, status]
     const keys = path.split(/\.|\[|\]/).filter(Boolean);
 
     return keys.reduce((acc, key) => {
