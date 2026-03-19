@@ -1,5 +1,4 @@
 import { find as _find, findAll as _findAll } from './ui.js';
-
 /**
  * oja/_exec.js
  * Execute <script> tags that were injected via innerHTML.
@@ -39,10 +38,11 @@ import { find as _find, findAll as _findAll } from './ui.js';
  *
  * @param {Element} container   — DOM element the HTML was mounted into
  * @param {string}  [sourceUrl] — URL the HTML was fetched from. Used as the
+ * @param {object} propsData  -  Props Information
  *                                base for resolving relative import specifiers.
  *                                Falls back to document.baseURI if omitted.
  */
-export function execScripts(container, sourceUrl) {
+export function execScripts(container, sourceUrl, propsData = {}) {
     const base = sourceUrl
         ? new URL(sourceUrl, document.baseURI).href
         : document.baseURI;
@@ -57,47 +57,39 @@ export function execScripts(container, sourceUrl) {
         if (old.type === 'module') {
             const ctxKey  = '__oja_ctx_'  + Date.now() + '_' + Math.random().toString(36).slice(2);
             const helpKey = '__oja_hlp_'  + Date.now() + '_' + Math.random().toString(36).slice(2);
+            const propsKey = '__oja_prp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+
             window[ctxKey]  = container;
             window[helpKey] = {
                 find:    (sel, opts = {}) => _find(sel, { ...opts, scope: container }),
                 findAll: (sel)            => _findAll(sel, container),
             };
 
-            // Rewrite relative import specifiers to absolute URLs.
-            //
-            // Three syntactic forms are handled:
-            //
-            //   1. Static named import:   import { x } from './y.js'
-            //   2. Side-effect import:    import './y.js'
-            //   3. Dynamic import:        import('./y.js')
-            //
-            // The static patterns (1 and 2) are anchored to statement
-            // boundaries (start of line, or preceded by ; or newline) to
-            // avoid false matches inside string literals such as:
-            //   const msg = "imported from './assets/img.png'";
-            //
-            // Multi-line static imports are supported by allowing the capture
-            // group to span newlines between the opening brace and the `from`
-            // keyword:
-            //   import {
-            //       foo, bar
-            //   } from './module.js'
+            window[propsKey] = new Proxy(propsData || {}, {
+                get(target, prop) {
+                    const val = target[prop];
+                    if (typeof val === 'function' && val.__isOjaSignal) return val();
+                    return val;
+                },
+                set(target, prop, value) {
+                    console.error(`[Oja] Attempted to mutate props.${String(prop)} to ${value}. Props are read-only. Use callbacks to communicate with parents.`);
+                    return false;
+                }
+            });
+
             const body = old.textContent
-                // Static named/namespace import — spans newlines between { ... } and from
                 .replace(
                     /((?:^|\n|;)\s*import\s+(?:[\w*{}][\s\S]*?)?)\bfrom\s+(['"])([^'"]+)\2/gm,
                     function(m, prefix, q, s) {
                         return s.startsWith('.') ? prefix + 'from ' + q + _abs(s, base) + q : m;
                     }
                 )
-                // Dynamic import — import('./path')
                 .replace(
                     /\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g,
                     function(m, q, s) {
                         return s.startsWith('.') ? 'import(' + q + _abs(s, base) + q + ')' : m;
                     }
                 )
-                // Side-effect import — import './path'
                 .replace(
                     /((?:^|\n|;)\s*)import\s+(['"])([^'"]+)\2/gm,
                     function(m, prefix, q, s) {
@@ -110,6 +102,8 @@ export function execScripts(container, sourceUrl) {
                 'delete window['             + JSON.stringify(ctxKey)  + '];',
                 'const { find, findAll } = window[' + JSON.stringify(helpKey) + '];',
                 'delete window['                     + JSON.stringify(helpKey) + '];',
+                'const props = window[' + JSON.stringify(propsKey) + '];',
+                'delete window[' + JSON.stringify(propsKey) + '];',
                 body,
             ].join('\n');
 
@@ -118,9 +112,6 @@ export function execScripts(container, sourceUrl) {
             next.src  = blobUrl;
             next.type = 'module';
 
-            // Revoke the blob URL once the script has loaded or errored.
-            // 30 seconds accommodates top-level await in component scripts
-            // on slow connections without permanently leaking the URL.
             const revoke = function() { URL.revokeObjectURL(blobUrl); };
             next.addEventListener('load',  revoke, { once: true });
             next.addEventListener('error', function(e) {
@@ -130,11 +121,6 @@ export function execScripts(container, sourceUrl) {
             setTimeout(revoke, 30000);
 
         } else {
-            // Classic script — copy text directly.
-            // Note: document.currentScript is null inside scripts injected
-            // this way because the browser did not parse them from HTML.
-            // Components that need self-reference should use data attributes
-            // or the container variable (available in module scripts via _exec).
             next.textContent = old.textContent;
         }
 

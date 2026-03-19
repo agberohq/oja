@@ -12,7 +12,7 @@
 import { Router, Out, context } from '../../build/oja.core.esm.js';
 
 // Shared guestbook entries — any page calling context('entries') gets this pair
-export const [entries, setEntries] = context('entries', []);
+export const[entries, setEntries] = context('entries',[]);
 
 // Shared game progress — game.html reads this to restore level on navigation
 export const [gameLevel, setGameLevel] = context('gameLevel', 0);
@@ -22,6 +22,7 @@ const router = new Router({ mode: 'hash', outlet: '#app' });
 router.Get('/',          Out.component('pages/counter.html'));
 router.Get('/guestbook', Out.component('pages/guestbook.html'));
 router.Get('/game',      Out.component('pages/game.html'));
+router.Get('/todo',      Out.component('pages/todo.html'));
 
 router.NotFound(Out.html(`
     <div style="text-align:center;padding:64px 0;color:#444">

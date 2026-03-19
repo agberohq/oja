@@ -76,8 +76,6 @@
  *   template.filter(name, fn)       → register a custom filter
  */
 
-// ─── i18n configuration ───────────────────────────────────────────────────────
-
 let _i18n = {
     locale: 'en',
     fallback: 'en',
@@ -87,27 +85,10 @@ let _i18n = {
         return count === 1 ? word : word + 's';
     },
     interpolate: (str, ...args) => {
-        // Supports both positional and named interpolation:
-        //
-        //   Positional (original):  'Hello {0}, you have {1} messages' → args[0], args[1]
-        //   Named (new):            'Hello {username}, you have {count} messages'
-        //                           → args[0].username, args[0].count
-        //
-        // Named keys look for the first argument as an object (the common case
-        // when callers pass a single data object). Numeric keys continue to
-        // use positional argument lookup for backwards compatibility.
-        //
-        //   // Positional (existing translations keep working):
-        //   i18n.interpolate('Bonjour {0}', 'Ade')          // → 'Bonjour Ade'
-        //
-        //   // Named (new translations can use readable keys):
-        //   i18n.interpolate('Hello {username}', { username: 'Ade' }) // → 'Hello Ade'
         return str.replace(/{(\w+)}/g, (match, key) => {
             if (!isNaN(key)) {
-                // Numeric key — positional lookup (backwards compatible)
                 return args[Number(key)] !== undefined ? args[Number(key)] : match;
             }
-            // Named key — look in the first argument if it is an object
             const data = args[0];
             if (data !== null && typeof data === 'object' && key in data) {
                 return data[key] !== undefined ? data[key] : match;
@@ -117,29 +98,14 @@ let _i18n = {
     }
 };
 
-// ─── Filter registry ──────────────────────────────────────────────────────────
-
 const _filters = new Map([
-    ['upper',   (s)       => String(s ?? '').toUpperCase()],
-    ['lower',   (s)       => String(s ?? '').toLowerCase()],
-    ['title',   (s)       => String(s ?? '').replace(/\b\w/g, l => l.toUpperCase())],
-    ['json',    (v)       => JSON.stringify(v)],
-    ['date',    (ts)      => ts ? new Date(ts).toLocaleDateString() : ''],
-    ['time',    (ts)      => ts ? new Date(ts).toLocaleTimeString() : ''],
-    ['ago',     (ts)      => _timeAgo(ts)],
-    ['default', (v, dflt) => (v !== undefined && v !== null && v !== '') ? v : (dflt ?? '')],
-    ['trunc',   (s, n)    => { const str = String(s ?? ''); return str.length > n ? str.slice(0, n) + '…' : str; }],
-    ['bytes',   (n)       => _formatBytes(Number(n) || 0)],
-    // i18n filters
-    ['t',       (key, ...args) => _translate(key, ...args)],
-    ['pluralize', (count, word, pluralForm) => _i18n.pluralize(count, word, pluralForm)],
+    ['upper',   (s)       => String(s ?? '').toUpperCase()],['lower',   (s)       => String(s ?? '').toLowerCase()],['title',   (s)       => String(s ?? '').replace(/\b\w/g, l => l.toUpperCase())],['json',    (v)       => JSON.stringify(v)],['date',    (ts)      => ts ? new Date(ts).toLocaleDateString() : ''],['time',    (ts)      => ts ? new Date(ts).toLocaleTimeString() : ''],
+    ['ago',     (ts)      => _timeAgo(ts)],['default', (v, dflt) => (v !== undefined && v !== null && v !== '') ? v : (dflt ?? '')],['trunc',   (s, n)    => { const str = String(s ?? ''); return str.length > n ? str.slice(0, n) + '…' : str; }],['bytes',   (n)       => _formatBytes(Number(n) || 0)],
+    ['t',       (key, ...args) => _translate(key, ...args)],['pluralize', (count, word, pluralForm) => _i18n.pluralize(count, word, pluralForm)],
 ]);
 
-// ─── Token cache ──────────────────────────────────────────────────────────────
-
 const _cache = new Map();
-
-// ─── Public API ───────────────────────────────────────────────────────────────
+const TPL_PREFIX = '__OJA_TPL_';
 
 /**
  * Process an HTML string — runs Go-style block statements then interpolates.
@@ -214,15 +180,6 @@ export function each(container, name, items = [], options = {}) {
     }
 }
 
-/**
- * Register a custom filter for use in templates.
- *
- *   import { template } from '../oja/template.js';
- *   template.filter('slug', s => s.toLowerCase().replace(/\s+/g, '-'));
- *
- *   // In HTML:
- *   // {{.title | slug}}
- */
 export const template = {
     filter(name, fn) {
         _filters.set(name, fn);
@@ -230,31 +187,15 @@ export const template = {
     },
     filters: _filters,
 
-    /**
-     * Configure internationalization settings.
-     *
-     * @param {Object} config
-     *   locale    : string              — current locale (default: 'en')
-     *   fallback  : string              — fallback locale (default: 'en')
-     *   messages  : Object              — key → translated string
-     *   pluralize : Function            — (count, word, pluralForm) => string
-     *   interpolate : Function          — (str, ...args) => string
-     */
     i18n(config = {}) {
         _i18n = { ..._i18n, ...config };
         return this;
     },
 
-    /**
-     * Get current i18n configuration.
-     */
     getI18n() {
         return { ..._i18n };
     },
 
-    /**
-     * Add translation messages for a locale.
-     */
     addMessages(locale, messages) {
         if (!_i18n.messages[locale]) {
             _i18n.messages[locale] = {};
@@ -263,16 +204,11 @@ export const template = {
         return this;
     },
 
-    /**
-     * Set current locale.
-     */
     setLocale(locale) {
         _i18n.locale = locale;
         return this;
     }
 };
-
-// ─── Translation helper ───────────────────────────────────────────────────────
 
 function _translate(key, ...args) {
     const localeMessages = _i18n.messages[_i18n.locale];
@@ -287,27 +223,25 @@ function _translate(key, ...args) {
     return message;
 }
 
-// ─── Go-style block processor ─────────────────────────────────────────────────
-
+// Processes Go-style block statements and interpolates data.
+// Masks template tags to prevent premature evaluation.
 function _processBlocks(html, data, escape) {
     if (!html.includes('{{')) return html;
 
-    // Mask <template> contents so they aren't processed by the outer render
     const templates =[];
     let maskedHtml = html;
     if (html.includes('<template')) {
         maskedHtml = html.replace(/(<template\b[^>]*>)([\s\S]*?)(<\/template>)/gi, (match, open, content, close) => {
             templates.push(content);
-            return `${open}__OJA_TPL_${templates.length - 1}__${close}`;
+            return `${open}${TPL_PREFIX}${templates.length - 1}__${close}`;
         });
     }
 
     let processed = _evalTemplate(maskedHtml, data, escape);
 
-    // Unmask templates back to original state
     if (templates.length > 0) {
         templates.forEach((content, i) => {
-            processed = processed.replace(`__OJA_TPL_${i}__`, () => content);
+            processed = processed.replace(`${TPL_PREFIX}${i}__`, () => content);
         });
     }
 
@@ -315,7 +249,7 @@ function _processBlocks(html, data, escape) {
 }
 
 function _evalTemplate(src, data, escape) {
-    const out    = [];
+    const out    =[];
     let   i      = 0;
     const len    = src.length;
 
@@ -362,7 +296,7 @@ function _evalTemplate(src, data, escape) {
             }
 
             const items = _resolve(data, pathStr);
-            const list  = Array.isArray(items) ? items : [];
+            const list  = Array.isArray(items) ? items :[];
 
             const { ifBody: loopBody, elseBody: emptyBody, endIndex } = _extractBlock(src, i);
             i = endIndex;
@@ -375,22 +309,11 @@ function _evalTemplate(src, data, escape) {
                         ...data,
                         [asVar]: item,
                         '.':     item,
-                        // Generic accessors — convenient for simple single loops
                         Index:   index,
                         First:   index === 0,
                         Last:    index === list.length - 1,
                         Length:  list.length,
-                        // Scoped accessors prefixed with the loop variable name.
-                        // These survive nested loops — inner loop's Index does not
-                        // overwrite the outer loop's Index when you use these:
-                        //   {{range .hosts as host}}
-                        //     {{host_Index}} ← outer index, always accessible
-                        //     {{range .tags as tag}}
-                        //       {{tag_Index}} ← inner index
-                        //     {{end}}
-                        //   {{end}}
-                        [`${asVar}_Index`]:  index,
-                        [`${asVar}_First`]:  index === 0,
+                        [`${asVar}_Index`]:  index,[`${asVar}_First`]:  index === 0,
                         [`${asVar}_Last`]:   index === list.length - 1,
                         [`${asVar}_Length`]: list.length,
                     };
@@ -426,6 +349,10 @@ function _evalTemplate(src, data, escape) {
             }
         } else {
             rawVal = _resolve(data, expr);
+        }
+
+        if (typeof rawVal === 'function' && rawVal.__isOjaSignal) {
+            rawVal = rawVal();
         }
 
         const str = rawVal === undefined || rawVal === null ? '' : String(rawVal);
@@ -469,8 +396,6 @@ function _extractBlock(src, start) {
     return { ifBody: src.slice(start), elseBody: '', endIndex: len };
 }
 
-// ─── DOM walker ───────────────────────────────────────────────────────────────
-
 function _walkDOM(node, data) {
     const walker = document.createTreeWalker(
         node,
@@ -478,7 +403,7 @@ function _walkDOM(node, data) {
         null
     );
 
-    const nodes = [];
+    const nodes =[];
     let cur = walker.nextNode();
     while (cur) { nodes.push(cur); cur = walker.nextNode(); }
 
@@ -511,7 +436,7 @@ function _walkDOM(node, data) {
 
         if (n.dataset.bind) {
             for (const binding of n.dataset.bind.split(',')) {
-                const [attr, key] = binding.trim().split(':');
+                const[attr, key] = binding.trim().split(':');
                 if (attr && key) {
                     const val = _resolve(data, key.trim());
                     if (val !== undefined && val !== null) {
@@ -530,10 +455,6 @@ function _walkDOM(node, data) {
     }
 }
 
-// ─── Batch and chunked rendering ──────────────────────────────────────────────
-
-// startIndex and totalLen are supplied by _renderChunked so that Index/First/Last
-// reflect the item's position in the full list, not just the current chunk.
 function _renderBatch(container, tpl, name, asVar, list, mapFn, startIndex = 0, totalLen = list.length) {
     const fragment  = document.createDocumentFragment();
 
@@ -543,17 +464,11 @@ function _renderBatch(container, tpl, name, asVar, list, mapFn, startIndex = 0, 
         const ctx   = {
             ...data,
             [asVar]: data,
-            // Generic accessors — convenient for simple single loops
             Index:  index,
             First:  index === 0,
             Last:   index === totalLen - 1,
-            Length: totalLen,
-            // Scoped accessors prefixed with the loop variable name.
-            // These survive nested loops without being overwritten.
-            [`${asVar}_Index`]:  index,
-            [`${asVar}_First`]:  index === 0,
-            [`${asVar}_Last`]:   index === totalLen - 1,
-            [`${asVar}_Length`]: totalLen,
+            Length: totalLen,[`${asVar}_Index`]:  index,
+            [`${asVar}_First`]:  index === 0,[`${asVar}_Last`]:   index === totalLen - 1,[`${asVar}_Length`]: totalLen,
         };
 
         const rawHTML   = tpl.innerHTML;
@@ -595,8 +510,6 @@ function _renderChunked(container, tpl, name, asVar, list, options) {
     requestAnimationFrame(next);
 }
 
-// ─── Empty slot helper ────────────────────────────────────────────────────────
-
 function _showSlot(slotEl, tpl, name, content, suffix) {
     if (slotEl) {
         slotEl.style.display = '';
@@ -620,8 +533,6 @@ function _applyContent(el, content) {
     }
 }
 
-// ─── Path resolution ──────────────────────────────────────────────────────────
-
 function _resolve(data, expr) {
     const path = expr.replace(/^\$?\./, '');
     if (!path) return data;
@@ -637,8 +548,6 @@ function _resolve(data, expr) {
         return acc[key];
     }, data);
 }
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
 
 function _esc(str) {
     return str

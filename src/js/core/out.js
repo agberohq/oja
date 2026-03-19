@@ -1,7 +1,3 @@
-// src/js/core/out.js
-// ====== DETAILED ======
-// Lines: 680
-// Size: 23764 bytes
 /**
  * oja/out.js
  * The universal display primitive — describes WHAT to show without rendering
@@ -63,21 +59,15 @@ import { render as templateRender, fill, each } from './template.js';
 import { execScripts }                           from './_exec.js';
 import { emit }                                  from './events.js';
 
-// ─── Cache for component HTML ─────────────────────────────────────────────────
-//
-// Matches the TTL and LRU eviction strategy used in component.js so both
-// modules benefit from the same HTML without double-fetching.
-
-const _cache    = new Map(); // url → { html, timestamp, size }
-const CACHE_TTL = 60000;     // 60 seconds
-const CACHE_MAX = 50;        // max entries before LRU eviction
+const _cache    = new Map();
+const CACHE_TTL = 60000;
+const CACHE_MAX = 50;
 
 async function _fetchHTML(url, options = {}) {
     const now    = Date.now();
     const cached = _cache.get(url);
 
     if (cached && (now - cached.timestamp) < CACHE_TTL && !options.bypassCache) {
-        // Move to end (most recently used) for LRU ordering
         _cache.delete(url);
         _cache.set(url, cached);
         emit('out:cache-hit', { url });
@@ -98,7 +88,6 @@ async function _fetchHTML(url, options = {}) {
         const html = await res.text();
         const size = new Blob([html]).size;
 
-        // Evict oldest entries when over the limit
         while (_cache.size >= CACHE_MAX) {
             const oldestKey = _cache.keys().next().value;
             _cache.delete(oldestKey);
@@ -115,12 +104,6 @@ async function _fetchHTML(url, options = {}) {
         throw e;
     }
 }
-
-// ─── Deep merge helper ────────────────────────────────────────────────────────
-//
-// Used by withData() so nested objects are merged rather than overwritten.
-// Shallow spread ({ ...a, ...b }) loses nested fields — a common gotcha when
-// partially updating props like { user: { name: 'Ade', role: 'admin' } }.
 
 function _deepMerge(target, source) {
     const out = { ...target };
@@ -141,11 +124,6 @@ function _deepMerge(target, source) {
     return out;
 }
 
-// ─── Guaranteed-safe minimal error display ────────────────────────────────────
-//
-// Used when the error Out itself throws — the last line of defence.
-// Must never depend on any Oja module or throw under any circumstance.
-
 function _emergencyError(container, message) {
     try {
         container.innerHTML = `<div class="oja-error" role="alert" style="padding:1rem;color:#c00">
@@ -155,11 +133,9 @@ function _emergencyError(container, message) {
         }</pre>
         </div>`;
     } catch {
-        // If even this fails, we give up silently — the container may be detached.
+        // Ignore
     }
 }
-
-// ─── Base class ───────────────────────────────────────────────────────────────
 
 class _Out {
     constructor(type, payload, options = {}) {
@@ -173,9 +149,6 @@ class _Out {
         throw new Error(`[oja/out] render() not implemented for type: ${this.type}`);
     }
 
-    /**
-     * Optional prefetch — called by router to prepare resources before navigation.
-     */
     async prefetch(options = {}) {
         return this;
     }
@@ -188,9 +161,6 @@ class _Out {
         );
     }
 
-    /**
-     * Plain text representation — used for accessibility (notify aria-live, etc.)
-     */
     getText() {
         return null;
     }
@@ -200,8 +170,6 @@ class _Out {
     }
 }
 
-// ─── Concrete types ───────────────────────────────────────────────────────────
-
 class _HtmlOut extends _Out {
     constructor(html, options = {}) {
         super('html', html, options);
@@ -209,7 +177,7 @@ class _HtmlOut extends _Out {
 
     async render(container) {
         container.innerHTML = this._payload;
-        execScripts(container);
+        execScripts(container, null, {});
     }
 
     getText() {
@@ -365,16 +333,11 @@ class _ComponentOut extends _Out {
                 }
             }
 
-            // Dynamic import breaks circular dependency: out.js → component.js → out.js.
-            // The import is deferred to render time so the module graph resolves at load
-            // time without a cycle, while still giving component.js its _activeElement
-            // tracking so onMount/onUnmount hooks registered inside component scripts
-            // are scoped to the right container.
             const { component } = await import('./component.js');
             const oldActive = component._activeElement;
             component._activeElement = container;
             try {
-                execScripts(container, this._payload);
+                execScripts(container, this._payload, mergedData);
             } finally {
                 component._activeElement = oldActive;
             }
@@ -393,16 +356,6 @@ class _ComponentOut extends _Out {
                 errorEl.style.display = '';
                 if (loadingEl) loadingEl.style.display = 'none';
             } else if (this._options.error) {
-                // Render the error Out — guarded against double-fault.
-                //
-                // Double-fault scenario: the main component failed because the
-                // network is down. If this._options.error is itself a component
-                // Out, it would also attempt a fetch and also fail — entering
-                // a pointless second round-trip before reaching _emergencyError.
-                //
-                // Guard: if the original error was a network failure (TypeError)
-                // AND the error Out is a component type, skip straight to the
-                // emergency fallback rather than making a doomed fetch attempt.
                 const isNetworkError = e instanceof TypeError;
                 const errorIsComponent = this._options.error.type === 'component';
 
@@ -447,13 +400,6 @@ class _ComponentOut extends _Out {
         return this;
     }
 
-    /**
-     * Return a new Out with additional data merged in.
-     * Deep merges nested objects — does not overwrite them.
-     *
-     *   const page = Out.c('pages/host.html', { host });
-     *   const withMeta = page.withData({ meta: { title: 'Host detail' } });
-     */
     withData(data) {
         return new _ComponentOut(
             this._payload,
@@ -463,9 +409,6 @@ class _ComponentOut extends _Out {
         );
     }
 
-    /**
-     * Return a new Out with additional lists merged in.
-     */
     withLists(lists) {
         return new _ComponentOut(
             this._payload,
@@ -488,12 +431,11 @@ class _FnOut extends _Out {
                 await result.render(container, context);
             } else if (typeof result === 'string') {
                 container.innerHTML = result;
-                execScripts(container);
+                execScripts(container, null, {});
             }
         } catch (e) {
             console.error('[oja/out] fn Out threw:', e);
             if (this._options.error) {
-                // Guard against the error Out also failing (double-fault)
                 try {
                     await this._options.error.render(container, { error: e.message });
                 } catch (e2) {
@@ -530,109 +472,43 @@ class _EmptyOut extends _Out {
     }
 }
 
-// ─── Public factory ───────────────────────────────────────────────────────────
-
 export const Out = {
-
-    /**
-     * Fetch and render an HTML component file.
-     * The most common Out type — used for pages, components, modals, empty states.
-     *
-     *   Out.component('pages/hosts.html')
-     *   Out.component('pages/hosts.html', { user })
-     *   Out.component('pages/hosts.html', {}, { hosts: items })
-     *   Out.component('pages/hosts.html', {}, {}, { error: Out.component('states/error.html') })
-     */
     component(url, data = {}, lists = {}, options = {}) {
         return new _ComponentOut(url, data, lists, options);
     },
 
-    /**
-     * Raw HTML string. Scripts inside are executed.
-     *
-     *   Out.html('<strong>Deploy complete</strong> in 2.3s')
-     */
     html(htmlString) {
         return new _HtmlOut(htmlString);
     },
 
-    /**
-     * Plain text — automatically escaped, safe for user-provided content.
-     *
-     *   Out.text(user.displayName)
-     */
     text(string) {
         return new _TextOut(String(string));
     },
 
-    /**
-     * SVG — inline string or URL to fetch.
-     *
-     *   Out.svg('<svg>...</svg>')
-     *   Out.svg('/icons/empty-state.svg', { alt: 'No results' })
-     */
     svg(svgStringOrUrl, options = {}) {
         return new _SvgOut(svgStringOrUrl, options);
     },
 
-    /**
-     * Image — creates an <img> element with lazy loading by default.
-     *
-     *   Out.image('/avatars/ade.jpg', { alt: 'Ade', width: 48, height: 48 })
-     */
     image(url, options = {}) {
         return new _ImageOut(url, options);
     },
 
-    /**
-     * Anchor link.
-     *
-     *   Out.link('https://docs.example.com', 'View docs')
-     */
     link(url, label, options = {}) {
         return new _LinkOut(url, label, options);
     },
 
-    /**
-     * Lazy async function — called at render time with (container, context).
-     * Return value can be another Out, a string, or nothing.
-     *
-     *   Out.fn(async (container, ctx) => {
-     *       const data = await api.get('/summary');
-     *       return Out.component('widgets/summary.html', data);
-     *   })
-     */
     fn(asyncFn, options = {}) {
         return new _FnOut(asyncFn, options);
     },
 
-    /**
-     * Explicit no-op — renders nothing. Useful as a default/placeholder.
-     *
-     *   router.Get('/hidden', Out.empty());
-     */
     empty() {
         return new _EmptyOut();
     },
 
-    /**
-     * Type check — true if value is any Out instance.
-     *
-     *   Out.is(someValue)  // → true / false
-     */
     is(value) {
         return value instanceof _Out;
     },
 
-    /**
-     * Prefetch multiple Outs in parallel.
-     * Call after initial load to warm the cache for likely next pages.
-     *
-     *   Out.prefetchAll([
-     *       Out.component('pages/dashboard.html'),
-     *       Out.component('pages/hosts.html'),
-     *   ]);
-     */
     async prefetchAll(outs, options = {}) {
         const promises = outs
             .filter(o => o instanceof _Out)
@@ -641,10 +517,6 @@ export const Out = {
         return this;
     },
 
-    /**
-     * Clear the HTML component cache.
-     * Pass a URL to clear one entry, or no argument to clear everything.
-     */
     clearCache(url) {
         if (url) {
             _cache.delete(url);
@@ -654,9 +526,6 @@ export const Out = {
         return this;
     },
 
-    /**
-     * Cache statistics — useful for monitoring and debugging.
-     */
     cacheStats() {
         const entries = [];
         for (const [url, entry] of _cache.entries()) {
@@ -666,26 +535,10 @@ export const Out = {
     }
 };
 
-// ─── Shorthand aliases ────────────────────────────────────────────────────────
-//
-// Real application code uses these constantly — the full names read better
-// in documentation and examples; the short names read better in route files.
-//
-//   r.Get('/hosts',     Out.c('pages/hosts.html'));
-//   modal.open('info', { body: Out.h('<p>Hello</p>') });
-//   notify.show(Out.t('Saved'));
-
 Out.c = Out.component;
 Out.h = Out.html;
 Out.t = Out.text;
 
-// ─── Backwards compatibility ──────────────────────────────────────────────────
-//
-// `Responder` is the old name. Keep it as a deprecated alias so existing code
-// using `Responder.component(...)` continues to work through the transition.
-// Will be removed in v1.0.
-
 export const Responder = Out;
 
-// Export base class for instanceof checks and plugin authors
 export { _Out as OutBase };
