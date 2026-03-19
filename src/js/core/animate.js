@@ -1,3 +1,4 @@
+// src/js/core/animate.js
 /**
  * oja/animate.js
  * Animation utilities for DOM elements.
@@ -111,13 +112,27 @@
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-const _animations = new Map(); // id -> animation
+// Keyed by element so animate.stop(el) can cancel all active animations on it.
+const _animations = new Map(); // element -> Set<Animation>
+
 const _defaults = {
     duration: 400,
     easing: 'ease',
     delay: 0,
     fill: true,
 };
+
+// ─── Transform properties ─────────────────────────────────────────────────────
+//
+// These properties are animated via element.style.transform rather than
+// individual CSS properties (which don't exist or have very limited support).
+// All transform values are composed into a single transform string each frame
+// so they don't overwrite each other.
+
+const _TRANSFORM_PROPS = new Set(['x', 'y', 'z', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'skewX', 'skewY']);
+
+// Properties that are unitless (no 'px' suffix)
+const _UNITLESS_PROPS = new Set(['opacity', 'scale', 'scaleX', 'scaleY', 'zoom', 'fontWeight', 'lineHeight', 'zIndex']);
 
 // Easing functions
 const EASINGS = {
@@ -150,6 +165,96 @@ const EASINGS = {
     },
 };
 
+// ─── Transform helpers ────────────────────────────────────────────────────────
+
+/**
+ * Read current transform-related values from a computed style.
+ * Parses the `transform` matrix back into individual axis values.
+ * Returns 0 for any axis that isn't currently set.
+ *
+ * @param {CSSStyleDeclaration} style
+ * @param {string} prop - one of: x, y, z, rotate, scale, ...
+ * @returns {number}
+ */
+function _getTransformValue(style, prop) {
+    const transform = style.transform;
+
+    // No transform set yet — everything starts at identity
+    if (!transform || transform === 'none') {
+        // For scale, identity is 1, not 0
+        if (prop === 'scale' || prop === 'scaleX' || prop === 'scaleY') return 1;
+        return 0;
+    }
+
+    // For a matrix/matrix3d we decompose the relevant components.
+    // For simple shorthand transforms we parse them directly.
+    const matrixMatch = transform.match(/^matrix(?:3d)?\((.+)\)$/);
+    if (matrixMatch) {
+        const values = matrixMatch[1].split(',').map(Number);
+        if (values.length === 6) {
+            // 2D matrix(a, b, c, d, tx, ty)
+            switch (prop) {
+                case 'x':      return values[4];
+                case 'y':      return values[5];
+                case 'scale':
+                case 'scaleX': return values[0];
+                case 'scaleY': return values[3];
+                case 'rotate': return Math.round(Math.atan2(values[1], values[0]) * (180 / Math.PI));
+                default:       return 0;
+            }
+        }
+        if (values.length === 16) {
+            // 3D matrix — extract translation
+            switch (prop) {
+                case 'x': return values[12];
+                case 'y': return values[13];
+                case 'z': return values[14];
+                default:  return 0;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * Build a CSS transform string from a map of transform property values.
+ * Called each animation frame to compose all active transform props at once
+ * so they don't overwrite each other.
+ *
+ * @param {Object} transformValues  - { x: 0, y: 0, rotate: 0, scale: 1, ... }
+ * @returns {string}
+ */
+function _buildTransformString(transformValues) {
+    const parts = [];
+
+    const x = transformValues.x ?? 0;
+    const y = transformValues.y ?? 0;
+    const z = transformValues.z ?? 0;
+
+    if (x !== 0 || y !== 0 || z !== 0) {
+        parts.push(z !== 0 ? `translate3d(${x}px, ${y}px, ${z}px)` : `translate(${x}px, ${y}px)`);
+    }
+
+    if (transformValues.rotate  != null) parts.push(`rotate(${transformValues.rotate}deg)`);
+    if (transformValues.rotateX != null) parts.push(`rotateX(${transformValues.rotateX}deg)`);
+    if (transformValues.rotateY != null) parts.push(`rotateY(${transformValues.rotateY}deg)`);
+    if (transformValues.rotateZ != null) parts.push(`rotateZ(${transformValues.rotateZ}deg)`);
+
+    const sx = transformValues.scaleX ?? transformValues.scale;
+    const sy = transformValues.scaleY ?? transformValues.scale;
+    if (sx != null || sy != null) {
+        const svx = sx ?? 1;
+        const svy = sy ?? 1;
+        parts.push(svx === svy ? `scale(${svx})` : `scale(${svx}, ${svy})`);
+    }
+
+    if (transformValues.skewX != null) parts.push(`skewX(${transformValues.skewX}deg)`);
+    if (transformValues.skewY != null) parts.push(`skewY(${transformValues.skewY}deg)`);
+
+    return parts.join(' ') || 'none';
+}
+
 // ─── Core Animation Class ─────────────────────────────────────────────────────
 
 class Animation {
@@ -165,7 +270,9 @@ class Animation {
         this.pausedTime = 0;
         this.raf = null;
         this.completed = false;
-        this.reverse = false;
+
+        this._reversed = false;
+
         this.onCompleteCallbacks = [];
         this.onUpdateCallbacks = [];
 
@@ -176,9 +283,21 @@ class Animation {
 
     play() {
         if (this.completed) return this;
+        const delay = this.options.delay || 0;
+        this.startTime = performance.now() - this.pausedTime + delay;
         this.startTime = performance.now() - this.pausedTime;
         this.paused = false;
-        this._tick();
+        if (delay > 0 && this.pausedTime === 0) {
+            // First play with a delay — schedule the actual start
+            setTimeout(() => {
+                if (!this.paused && !this.completed) {
+                    this.startTime = performance.now();
+                    this._tick();
+                }
+            }, delay);
+        } else {
+            this._tick();
+        }
         return this;
     }
 
@@ -201,11 +320,20 @@ class Animation {
     stop() {
         cancelAnimationFrame(this.raf);
         this.completed = true;
+        // Remove from global map
+        if (this.element) {
+            const set = _animations.get(this.element);
+            if (set) set.delete(this);
+        }
         return this;
     }
 
+    /**
+     * Reverse the animation direction.
+     * Swaps start and end values and continues from current position.
+     */
     reverse() {
-        this.reverse = !this.reverse;
+        this._reversed = !this._reversed;
         [this.startValues, this.endValues] = [this.endValues, this.startValues];
 
         if (!this.paused) {
@@ -242,63 +370,103 @@ class Animation {
             const elapsed = now - this.startTime;
             const progress = Math.min(elapsed / this.options.duration, 1);
 
-            this._update(this.reverse ? 1 - progress : progress);
+            this._update(this._reversed ? 1 - progress : progress);
 
             if (progress < 1) {
                 this._tick();
             } else {
                 this.completed = true;
+                // Remove from global map on natural completion
+                if (this.element) {
+                    const set = _animations.get(this.element);
+                    if (set) set.delete(this);
+                }
                 this.onCompleteCallbacks.forEach(fn => fn());
             }
         });
     }
 
     _update(progress) {
+        if (!this.element) return;
+
         const easing = EASINGS[this.options.easing] || EASINGS.ease;
-        const t = easing(progress);
+        const t = easing(Math.max(0, Math.min(1, progress)));
+
+        // Collect all transform property values for this frame so we can
+        // compose them into a single transform string at the end.
+        // This prevents each prop from overwriting the previous one.
+        const transformFrame = {};
+        let hasTransform = false;
 
         for (const [prop, end] of Object.entries(this.endValues)) {
-            const start = this.startValues[prop];
-            let value;
+            const start = this.startValues[prop] ?? (
+                (prop === 'scale' || prop === 'scaleX' || prop === 'scaleY') ? 1 : 0
+            );
 
-            if (typeof start === 'number' && typeof end === 'number') {
-                value = start + (end - start) * t;
-                this.element.style[prop] = value + 'px';
-            } else if (prop.startsWith('--')) {
-                // CSS variable
+            // ── CSS custom properties ──────────────────────────────────────
+            if (prop.startsWith('--')) {
                 if (typeof end === 'number') {
-                    value = start + (end - start) * t;
+                    const value = start + (end - start) * t;
                     this.element.style.setProperty(prop, value);
                 }
-            } else if (prop === 'opacity') {
-                value = start + (end - start) * t;
-                this.element.style[prop] = value;
-            } else {
-                // Handle other properties (transform, color, etc)
-                this.element.style[prop] = end;
+                continue;
             }
+
+            // ── Opacity ────────────────────────────────────────────────────
+            if (prop === 'opacity') {
+                this.element.style.opacity = start + (end - start) * t;
+                continue;
+            }
+
+            if (_TRANSFORM_PROPS.has(prop)) {
+                if (typeof start === 'number' && typeof end === 'number') {
+                    transformFrame[prop] = start + (end - start) * t;
+                } else {
+                    // String end value (e.g. rotate was passed as '45deg')
+                    // Parse the numeric part and interpolate
+                    const endNum = parseFloat(end);
+                    const startNum = typeof start === 'number' ? start : parseFloat(start) || 0;
+                    transformFrame[prop] = startNum + (endNum - startNum) * t;
+                }
+                hasTransform = true;
+                continue;
+            }
+
+            // ── Numeric CSS properties ─────────────────────────────────────
+            if (typeof start === 'number' && typeof end === 'number') {
+                const value = start + (end - start) * t;
+                const unit = _UNITLESS_PROPS.has(prop) ? '' : 'px';
+                this.element.style[prop] = value + unit;
+                continue;
+            }
+
+            // ── Non-interpolatable — snap to end value ─────────────────────
+            this.element.style[prop] = end;
+        }
+
+        // Compose and apply all transform properties in one write
+        if (hasTransform) {
+            this.element.style.transform = _buildTransformString(transformFrame);
         }
 
         this.onUpdateCallbacks.forEach(fn => fn(progress));
     }
 
     _getCurrentValues() {
+        if (!this.element) return {};
+
         const values = {};
         const style = getComputedStyle(this.element);
 
         for (const prop of Object.keys(this.properties)) {
-            if (prop === 'x' || prop === 'y' || prop === 'z') {
-                const transform = style.transform;
-                if (transform && transform !== 'none') {
-                    const match = transform.match(new RegExp(`${prop.toUpperCase()}\\(([^)]+)\\)`));
-                    values[prop] = match ? parseFloat(match[1]) : 0;
-                } else {
-                    values[prop] = 0;
-                }
+            if (_TRANSFORM_PROPS.has(prop)) {
+                values[prop] = _getTransformValue(style, prop);
             } else if (prop.startsWith('--')) {
                 values[prop] = parseFloat(style.getPropertyValue(prop)) || 0;
             } else if (prop === 'opacity') {
-                values[prop] = parseFloat(style[prop]) || 1;
+                values[prop] = parseFloat(style[prop] ?? '1') || 1;
+            } else if (typeof this.properties[prop] === 'number') {
+                values[prop] = parseFloat(style[prop]) || 0;
             } else {
                 values[prop] = style[prop];
             }
@@ -311,9 +479,16 @@ class Animation {
         const values = {};
 
         for (const [prop, val] of Object.entries(this.properties)) {
+            // Skip non-animatable options that live in the properties object
+            if (prop === 'duration' || prop === 'easing' || prop === 'delay' || prop === 'fill') continue;
+
             if (Array.isArray(val)) {
+                // [from, to] syntax — override the computed start value
                 values[prop] = val[1];
-                this.startValues[prop] = val[0];
+                this.startValues[prop] = typeof val[0] === 'string' ? parseFloat(val[0]) || 0 : val[0];
+            } else if (typeof val === 'string' && _TRANSFORM_PROPS.has(prop)) {
+                // e.g. rotate: '45deg' — strip the unit, store as number
+                values[prop] = parseFloat(val) || 0;
             } else {
                 values[prop] = val;
             }
@@ -323,16 +498,44 @@ class Animation {
     }
 }
 
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Register an animation in the global map and start it.
+ *
+ * @param {Element} element
+ * @param {Object}  properties
+ * @param {Object}  options
+ * @returns {Animation}
+ */
+function _createAndPlay(element, properties, options) {
+    const el = typeof element === 'string' ? document.querySelector(element) : element;
+    const anim = new Animation(el, properties, options);
+
+    // Register in global map so animate.stop(el) can find and cancel it
+    if (el) {
+        if (!_animations.has(el)) _animations.set(el, new Set());
+        _animations.get(el).add(anim);
+    }
+
+    anim.play();
+    return anim;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const animate = {
     /**
-     * Animate element to target values
+     * Animate element to target values.
+     * Supports: opacity, x, y, z, rotate, scale, scaleX, scaleY,
+     *           skewX, skewY, rotateX, rotateY, rotateZ,
+     *           any numeric CSS property, CSS custom properties (--var).
+     *
+     *   animate.to('#box', { x: 100, opacity: 0.5, duration: 600 });
+     *   animate.to('#box', { x: [0, 100], rotate: [0, 45] }); // [from, to]
      */
     to(element, properties, options = {}) {
-        const anim = new Animation(element, properties, options);
-        anim.play();
-        return anim;
+        return _createAndPlay(element, properties, options);
     },
 
     /**
@@ -345,7 +548,7 @@ export const animate = {
         el.style.opacity = '0';
         el.style.display = '';
 
-        return this.to(el, { opacity: 1 }, { duration: 400, ...options });
+        return _createAndPlay(el, { opacity: 1 }, { duration: 400, ...options });
     },
 
     /**
@@ -355,7 +558,7 @@ export const animate = {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
         if (!el) return null;
 
-        const anim = this.to(el, { opacity: 0 }, { duration: 400, ...options });
+        const anim = _createAndPlay(el, { opacity: 0 }, { duration: 400, ...options });
         anim.onComplete(() => {
             el.style.display = 'none';
         });
@@ -363,7 +566,7 @@ export const animate = {
     },
 
     /**
-     * Slide in element
+     * Slide in element from a direction
      */
     slideIn(element, options = {}) {
         const { direction = 'left', distance = 100, ...rest } = options;
@@ -373,26 +576,18 @@ export const animate = {
         const props = {};
 
         switch (direction) {
-            case 'left':
-                props.x = [distance, 0];
-                break;
-            case 'right':
-                props.x = [-distance, 0];
-                break;
-            case 'up':
-                props.y = [distance, 0];
-                break;
-            case 'down':
-                props.y = [-distance, 0];
-                break;
+            case 'left':  props.x = [distance, 0];   break;
+            case 'right': props.x = [-distance, 0];  break;
+            case 'up':    props.y = [distance, 0];   break;
+            case 'down':  props.y = [-distance, 0];  break;
         }
 
         el.style.display = '';
-        return this.to(el, props, { duration: 400, ...rest });
+        return _createAndPlay(el, props, { duration: 400, ...rest });
     },
 
     /**
-     * Slide out element
+     * Slide out element to a direction
      */
     slideOut(element, options = {}) {
         const { direction = 'left', distance = 100, ...rest } = options;
@@ -402,21 +597,13 @@ export const animate = {
         const props = {};
 
         switch (direction) {
-            case 'left':
-                props.x = [0, -distance];
-                break;
-            case 'right':
-                props.x = [0, distance];
-                break;
-            case 'up':
-                props.y = [0, -distance];
-                break;
-            case 'down':
-                props.y = [0, distance];
-                break;
+            case 'left':  props.x = [0, -distance]; break;
+            case 'right': props.x = [0, distance];  break;
+            case 'up':    props.y = [0, -distance]; break;
+            case 'down':  props.y = [0, distance];  break;
         }
 
-        const anim = this.to(el, props, { duration: 400, ...rest });
+        const anim = _createAndPlay(el, props, { duration: 400, ...rest });
         anim.onComplete(() => {
             el.style.display = 'none';
         });
@@ -424,27 +611,27 @@ export const animate = {
     },
 
     /**
-     * Scale element
+     * Scale element to a target value
      */
     scale(element, to, options = {}) {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
         if (!el) return null;
-
-        return this.to(el, { scale: to }, { duration: 300, ...options });
+        return _createAndPlay(el, { scale: to }, { duration: 300, ...options });
     },
 
     /**
-     * Rotate element
+     * Rotate element to a target angle in degrees
      */
     rotate(element, to, options = {}) {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
         if (!el) return null;
-
-        return this.to(el, { rotate: to + 'deg' }, { duration: 300, ...options });
+        // Accept both numeric degrees and '45deg' strings
+        const degrees = typeof to === 'string' ? parseFloat(to) : to;
+        return _createAndPlay(el, { rotate: degrees }, { duration: 300, ...options });
     },
 
     /**
-     * Sequence animations
+     * Run animations in sequence — each starts when the previous completes
      */
     sequence(animations) {
         let promise = Promise.resolve();
@@ -464,7 +651,7 @@ export const animate = {
     },
 
     /**
-     * Parallel animations
+     * Run animations in parallel
      */
     parallel(animations) {
         return Promise.all(animations.map(anim => {
@@ -480,7 +667,13 @@ export const animate = {
     },
 
     /**
-     * Stagger animations
+     * Stagger animations across a set of elements.
+     * The factory receives (element, index) and returns a properties object.
+     *
+     *   animate.stagger('.list-item', (el, i) => ({
+     *       opacity: [0, 1],
+     *       y: [20, 0],
+     *   }), { stagger: 80 });
      */
     stagger(elements, factory, options = {}) {
         const { stagger = 50, ...rest } = options;
@@ -490,7 +683,7 @@ export const animate = {
 
         return items.map((el, i) => {
             const props = factory(el, i);
-            return this.to(el, props, {
+            return _createAndPlay(el, props, {
                 ...rest,
                 delay: (rest.delay || 0) + i * stagger,
             });
@@ -498,12 +691,14 @@ export const animate = {
     },
 
     /**
-     * Spring animation (physics-based)
+     * Spring animation (physics-based feel via easing).
+     * For true spring physics, stiffness and damping control the easing curve.
      */
     spring(element, properties, options = {}) {
         const { stiffness = 170, damping = 26, mass = 1, ...rest } = options;
-        // Simplified spring - in practice you'd implement a physics solver
-        return this.to(element, properties, {
+        // Simplified spring — uses ease-out as a reasonable approximation.
+        // A full physics solver would integrate the spring equation per-frame.
+        return _createAndPlay(element, properties, {
             easing: 'ease-out',
             duration: 1000,
             ...rest,
@@ -511,7 +706,13 @@ export const animate = {
     },
 
     /**
-     * Timeline for complex sequences
+     * Timeline for complex time-based sequences.
+     * Each .add() schedules an animation at an absolute time offset.
+     *
+     *   animate.timeline()
+     *       .add('#box', { x: 100 }, 0)
+     *       .add('#box', { opacity: 0 }, 500)
+     *       .play();
      */
     timeline() {
         const animations = [];
@@ -535,7 +736,8 @@ export const animate = {
     },
 
     /**
-     * CSS transition wrapper
+     * CSS transition wrapper — delegates to the browser's transition engine.
+     * Better for GPU-composited properties (transform, opacity).
      */
     transition(element, properties, options = {}) {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
@@ -543,18 +745,14 @@ export const animate = {
 
         const { duration = 200, easing = 'ease', delay = 0 } = options;
 
-        // Save original transition
         const original = el.style.transition;
 
-        // Apply transition
         el.style.transition = `all ${duration}ms ${easing} ${delay}ms`;
 
-        // Apply properties
         for (const [prop, value] of Object.entries(properties)) {
             el.style[prop] = value;
         }
 
-        // Clean up
         setTimeout(() => {
             el.style.transition = original;
         }, duration + delay);
@@ -565,27 +763,80 @@ export const animate = {
     },
 
     /**
-     * SVG attribute animation
+     * Animate SVG element attributes.
+     * Accepts numeric attributes (r, cx, cy, width, height, strokeWidth, etc.)
+     * and interpolates them each frame.
+     *
+     *   animate.svg('#circle', { r: [10, 50], cx: [100, 200] });
      */
     svg(element, attributes, options = {}) {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
-        if (!el || !(el instanceof SVGElement)) return null;
+        if (!el || !(el instanceof SVGElement)) {
+            console.warn('[oja/animate] svg() target is not an SVGElement:', element);
+            return null;
+        }
 
+        // Read start values from current attributes
         const startValues = {};
+        const endValues   = {};
+
         for (const [attr, val] of Object.entries(attributes)) {
             if (Array.isArray(val)) {
-                startValues[attr] = val[0];
-                attributes[attr] = val[1];
+                startValues[attr] = parseFloat(val[0]) || 0;
+                endValues[attr]   = parseFloat(val[1]) || 0;
             } else {
-                startValues[attr] = el.getAttribute(attr);
+                startValues[attr] = parseFloat(el.getAttribute(attr)) || 0;
+                endValues[attr]   = parseFloat(val) || 0;
             }
         }
 
-        return this.to({ style: el.style }, attributes, options);
+        // Use a custom animation that writes to SVG attributes instead of style
+        const opts = { ..._defaults, ...options };
+        let startTime = null;
+        let raf;
+        let completed = false;
+        const completeCallbacks = [];
+
+        const tick = () => {
+            raf = requestAnimationFrame(() => {
+                if (!startTime) startTime = performance.now();
+                const elapsed  = performance.now() - startTime;
+                const progress = Math.min(elapsed / opts.duration, 1);
+                const easingFn = EASINGS[opts.easing] || EASINGS.ease;
+                const t        = easingFn(progress);
+
+                for (const [attr, end] of Object.entries(endValues)) {
+                    const start = startValues[attr] ?? 0;
+                    el.setAttribute(attr, start + (end - start) * t);
+                }
+
+                if (progress < 1) {
+                    tick();
+                } else {
+                    completed = true;
+                    completeCallbacks.forEach(fn => fn());
+                }
+            });
+        };
+
+        const delay = opts.delay || 0;
+        if (delay > 0) {
+            setTimeout(tick, delay);
+        } else {
+            tick();
+        }
+
+        return {
+            stop()       { cancelAnimationFrame(raf); completed = true; },
+            onComplete(fn) { completeCallbacks.push(fn); return this; },
+            get completed() { return completed; },
+        };
     },
 
     /**
-     * Animate when element comes into view
+     * Animate when element comes into view (IntersectionObserver-based).
+     *
+     *   animate.whenInView('.fade-up', { opacity: [0, 1], y: [50, 0], duration: 600 });
      */
     whenInView(element, properties, options = {}) {
         const { threshold = 0.1, once = true, ...rest } = options;
@@ -609,23 +860,27 @@ export const animate = {
     },
 
     /**
-     * Easing functions
+     * Easing functions — can be passed as strings to options.easing,
+     * or called directly for custom interpolation.
      */
     easing: EASINGS,
 
     /**
-     * Stop all animations on an element
+     * Stop all active animations on an element.
+     *
+     *   animate.stop('#box');
      */
     stop(element) {
         const el = typeof element === 'string' ? document.querySelector(element) : element;
         if (!el) return;
 
-        // Cancel all animations on this element
-        for (const [id, anim] of _animations) {
-            if (anim.element === el) {
-                anim.stop();
-                _animations.delete(id);
-            }
+        const set = _animations.get(el);
+        if (!set) return;
+
+        for (const anim of set) {
+            cancelAnimationFrame(anim.raf);
+            anim.completed = true;
         }
+        _animations.delete(el);
     },
 };
