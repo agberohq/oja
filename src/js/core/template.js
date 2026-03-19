@@ -87,8 +87,32 @@ let _i18n = {
         return count === 1 ? word : word + 's';
     },
     interpolate: (str, ...args) => {
-        return str.replace(/{(\d+)}/g, (match, index) => {
-            return args[index] !== undefined ? args[index] : match;
+        // Supports both positional and named interpolation:
+        //
+        //   Positional (original):  'Hello {0}, you have {1} messages' → args[0], args[1]
+        //   Named (new):            'Hello {username}, you have {count} messages'
+        //                           → args[0].username, args[0].count
+        //
+        // Named keys look for the first argument as an object (the common case
+        // when callers pass a single data object). Numeric keys continue to
+        // use positional argument lookup for backwards compatibility.
+        //
+        //   // Positional (existing translations keep working):
+        //   i18n.interpolate('Bonjour {0}', 'Ade')          // → 'Bonjour Ade'
+        //
+        //   // Named (new translations can use readable keys):
+        //   i18n.interpolate('Hello {username}', { username: 'Ade' }) // → 'Hello Ade'
+        return str.replace(/{(\w+)}/g, (match, key) => {
+            if (!isNaN(key)) {
+                // Numeric key — positional lookup (backwards compatible)
+                return args[Number(key)] !== undefined ? args[Number(key)] : match;
+            }
+            // Named key — look in the first argument if it is an object
+            const data = args[0];
+            if (data !== null && typeof data === 'object' && key in data) {
+                return data[key] !== undefined ? data[key] : match;
+            }
+            return match;
         });
     }
 };
