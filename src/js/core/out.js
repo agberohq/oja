@@ -382,13 +382,29 @@ class _ComponentOut extends _Out {
                 errorEl.style.display = '';
                 if (loadingEl) loadingEl.style.display = 'none';
             } else if (this._options.error) {
-                // Render the error Out — but guard against it also failing (double-fault).
-                // If it throws we fall through to the guaranteed-safe emergency display.
-                try {
-                    await this._options.error.render(container, { error: e.message });
-                } catch (e2) {
-                    console.error('[oja/out] error Out also threw — using emergency fallback:', e2);
+                // Render the error Out — guarded against double-fault.
+                //
+                // Double-fault scenario: the main component failed because the
+                // network is down. If this._options.error is itself a component
+                // Out, it would also attempt a fetch and also fail — entering
+                // a pointless second round-trip before reaching _emergencyError.
+                //
+                // Guard: if the original error was a network failure (TypeError)
+                // AND the error Out is a component type, skip straight to the
+                // emergency fallback rather than making a doomed fetch attempt.
+                const isNetworkError = e instanceof TypeError;
+                const errorIsComponent = this._options.error.type === 'component';
+
+                if (isNetworkError && errorIsComponent) {
+                    console.warn('[oja/out] network down — skipping component error Out to avoid double fetch');
                     _emergencyError(container, e.message);
+                } else {
+                    try {
+                        await this._options.error.render(container, { error: e.message });
+                    } catch (e2) {
+                        console.error('[oja/out] error Out also threw — using emergency fallback:', e2);
+                        _emergencyError(container, e.message);
+                    }
                 }
             } else {
                 container.innerHTML = `
