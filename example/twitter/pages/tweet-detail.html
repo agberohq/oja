@@ -1,0 +1,73 @@
+<!--
+  pages/tweet-detail.html
+  Single tweet detail view.
+  Rendered into #main-outlet on route '/tweet/{id}'.
+
+  Data:
+    tweet       — the specific tweet object
+    currentUser — context getter
+-->
+<div>
+    <div class="header" style="display:flex;align-items:center;gap:16px">
+        <a href="#/" style="color:var(--text);text-decoration:none;font-size:20px">←</a>
+        <h1>Tweet</h1>
+    </div>
+
+    <div class="tweet" data-tweet-id="{{tweet.id}}"
+         style="padding:16px;border-bottom:1px solid var(--border)">
+        <div class="avatar">{{if .tweet.userAvatar}}{{tweet.userAvatar}}{{else}}{{currentUser.avatar}}{{end}}</div>
+        <div style="flex:1">
+            <div class="tweet-header">
+                <span class="tweet-name">{{if .tweet.userName}}{{tweet.userName}}{{else}}{{currentUser.name}}{{end}}</span>
+                <span class="tweet-username">@{{if .tweet.userUsername}}{{tweet.userUsername}}{{else}}{{currentUser.username}}{{end}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding:16px;border-bottom:1px solid var(--border)">
+        <p style="font-size:23px;line-height:1.4;margin-bottom:16px">{{tweet.content}}</p>
+        <div style="color:var(--text-secondary);font-size:15px;margin-bottom:16px">
+            {{tweet.timestamp | ago}} · Twitter Web App
+        </div>
+        <div style="display:flex;gap:24px;border-top:1px solid var(--border);padding-top:16px;color:var(--text-secondary)">
+            <span><strong style="color:var(--text)">{{tweet.retweets}}</strong> Retweets</span>
+            <span><strong style="color:var(--text)">{{tweet.likes}}</strong> Likes</span>
+        </div>
+    </div>
+
+    <div class="tweet-stats" style="padding:4px 16px;border-bottom:1px solid var(--border)">
+        <span class="tweet-stat" data-action="reply" style="font-size:20px">💬</span>
+        <span class="tweet-stat {{if .tweet.retweeted}}retweeted{{end}}" data-action="retweet" style="font-size:20px">🔁</span>
+        <span class="tweet-stat {{if .tweet.liked}}liked{{end}}" data-action="like" style="font-size:20px">❤️</span>
+        <span class="tweet-stat" data-action="share" style="font-size:20px">📤</span>
+    </div>
+
+    <!-- Reply compose -->
+    <div class="compose-box" style="border-bottom:1px solid var(--border)">
+        <div class="avatar">{{currentUser.avatar}}</div>
+        <div class="compose-content">
+            <form id="replyForm">
+                <textarea name="content" placeholder="Tweet your reply" maxlength="280"></textarea>
+                <div class="compose-footer">
+                    <div></div>
+                    <button type="submit" class="compose-submit" data-loading="Replying...">Reply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { form, notify, context } from '../../src/oja.js';
+
+    const [tweets, setTweets] = context('tweets');
+    const [currentUser]       = context('user');
+
+    form.on(container.querySelector('#replyForm'), {
+        submit: (data) => {
+            if (!data.content?.trim()) throw new Error("Can't reply with nothing!");
+            notify.success('Reply posted!');
+        },
+        error: (err) => notify.error(err.message),
+    });
+</script>

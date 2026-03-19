@@ -26,6 +26,12 @@ EXTERN_DIR = externs
 CORE_ENTRY = $(SRC_DIR)/oja.js
 FULL_ENTRY = $(SRC_DIR)/oja.full.js
 
+# All source files — make rebuilds when any of these change
+JS_CORE_SRC = $(wildcard $(JS_DIR)/core/*.js) $(wildcard $(JS_DIR)/core/codecs/*.js)
+JS_EXT_SRC  = $(wildcard $(JS_DIR)/ext/*.js)
+JS_UI_SRC   = $(wildcard $(JS_DIR)/ui/*.js)
+ALL_JS_SRC  = $(CORE_ENTRY) $(FULL_ENTRY) $(JS_CORE_SRC) $(JS_EXT_SRC) $(JS_UI_SRC)
+
 # esbuild outputs — IIFE (for <script> tags) and ESM (for bundlers / import maps)
 CORE_IIFE  = $(BUILD_DIR)/oja.core.min.js
 CORE_ESM   = $(BUILD_DIR)/oja.core.esm.js
@@ -53,7 +59,7 @@ all: core full $(CSS_OUT)
 
 core: $(CORE_IIFE) $(CORE_ESM)
 
-$(CORE_IIFE): $(CORE_ENTRY)
+$(CORE_IIFE): $(ALL_JS_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building core IIFE (esbuild)..."
 	@npx esbuild $(CORE_ENTRY) \
@@ -65,7 +71,7 @@ $(CORE_IIFE): $(CORE_ENTRY)
 		--log-level=warning
 	@echo "✓ $@ ($$(wc -c < $@ | $(SIZE)))"
 
-$(CORE_ESM): $(CORE_ENTRY)
+$(CORE_ESM): $(ALL_JS_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building core ESM (esbuild)..."
 	@npx esbuild $(CORE_ENTRY) \
@@ -83,7 +89,7 @@ $(CORE_ESM): $(CORE_ENTRY)
 
 full: $(FULL_IIFE) $(FULL_ESM)
 
-$(FULL_IIFE): $(FULL_ENTRY)
+$(FULL_IIFE): $(ALL_JS_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building full IIFE (esbuild)..."
 	@npx esbuild $(FULL_ENTRY) \
@@ -95,7 +101,7 @@ $(FULL_IIFE): $(FULL_ENTRY)
 		--log-level=warning
 	@echo "✓ $@ ($$(wc -c < $@ | $(SIZE)))"
 
-$(FULL_ESM): $(FULL_ENTRY)
+$(FULL_ESM): $(ALL_JS_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building full ESM (esbuild)..."
 	@npx esbuild $(FULL_ENTRY) \
@@ -123,7 +129,7 @@ $(EXTERN_DIR):
 	@echo "/** @externs */" > $(EXTERN_DIR)/oja.externs.js
 	@echo "var Oja = {};" >> $(EXTERN_DIR)/oja.externs.js
 
-$(CORE_SIMPLE): $(CORE_ENTRY)
+$(CORE_SIMPLE): $(ALL_JS_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building core IIFE (Closure SIMPLE)..."
 	@npx google-closure-compiler \
@@ -138,7 +144,7 @@ $(CORE_SIMPLE): $(CORE_ENTRY)
 		--output_wrapper="var Oja={};(function(Oja){%output%}).call(this,Oja);"
 	@echo "✓ $@ ($$(wc -c < $@ | $(SIZE)))"
 
-$(CORE_ADVANCED): $(CORE_ENTRY) $(EXTERN_DIR)/oja.externs.js
+$(CORE_ADVANCED): $(ALL_JS_SRC) $(EXTERN_DIR)/oja.externs.js
 	@mkdir -p $(BUILD_DIR)
 	@echo "› Building core IIFE (Closure ADVANCED)..."
 	@npx google-closure-compiler \
@@ -222,8 +228,10 @@ check:
 	@echo "  ─────────────────────────────────────────────────────────────"
 	@echo "  Source files"
 	@echo "  ─────────────────────────────────────────────────────────────"
-	@printf "  JS core     %3d files\n" "$$(ls $(JS_DIR)/*.js 2>/dev/null | wc -l | tr -d ' ')"
-	@printf "  JS plugins  %3d files\n" "$$(ls $(JS_DIR)/plugin/*.js 2>/dev/null | wc -l | tr -d ' ')"
+	@printf "  JS core     %3d files\n" "$$(ls $(JS_DIR)/core/*.js 2>/dev/null | wc -l | tr -d ' ')"
+	@printf "  JS codecs   %3d files\n" "$$(ls $(JS_DIR)/core/codecs/*.js 2>/dev/null | wc -l | tr -d ' ')"
+	@printf "  JS ext      %3d files\n" "$$(ls $(JS_DIR)/ext/*.js 2>/dev/null | wc -l | tr -d ' ')"
+	@printf "  JS ui       %3d files\n" "$$(ls $(JS_DIR)/ui/*.js 2>/dev/null | wc -l | tr -d ' ')"
 	@printf "  CSS         %3d files\n" "$$(ls $(CSS_DIR)/*.css 2>/dev/null | wc -l | tr -d ' ')"
 	@echo ""
 

@@ -1,0 +1,106 @@
+<!--
+  pages/guestbook.html
+  Page 2 — Guestbook
+
+  Demonstrates:
+    form.on()       — submit, validation, error display, reset
+    form.validate() — declarative field rules
+    context()       — shared entries state, survives navigation to counter and back
+    each()          — stamps <template data-each> for every entry
+    find()          — scoped DOM queries, no getElementById
+    notify          — success toast
+    data-bind       — dynamic inline style on avatar (color per entry)
+-->
+<div class="gb-form">
+    <h2>Sign the Guestbook</h2>
+
+    <form id="gb-form">
+        <div class="field">
+            <label>Your name</label>
+            <input name="name" type="text" placeholder="Ada Lovelace" autocomplete="off">
+            <span class="field-error" data-field="name"></span>
+        </div>
+        <div class="field">
+            <label>Message</label>
+            <textarea name="message" placeholder="Say something nice…"></textarea>
+            <span class="field-error" data-field="message"></span>
+        </div>
+        <button type="submit" class="btn btn-primary"
+                style="width:100%;margin-top:4px"
+                data-loading="Signing…">
+            Sign
+        </button>
+    </form>
+</div>
+
+<!-- entries list — each() stamps this template for every item -->
+<div id="entries-list">
+    <template data-each="entries" data-as="e">
+        <div class="entry">
+            <div class="entry-avatar" data-bind="style:e.avatarStyle">{{e.initial}}</div>
+            <div>
+                <div class="entry-name">{{e.name}}</div>
+                <div class="entry-message">{{e.message}}</div>
+                <div class="entry-time">{{e.time}}</div>
+            </div>
+        </div>
+    </template>
+
+    <div data-empty="entries"
+         style="text-align:center;color:#444;padding:32px 0;font-size:13px">
+        No entries yet — be the first to sign!
+    </div>
+</div>
+
+<script type="module">
+    import { form, each, notify, context, find } from '../../../build/oja.core.min.js';
+
+    const COLORS = ['#f9a825', '#66bb6a', '#42a5f5', '#ab47bc', '#ef5350', '#26c6da'];
+
+    // context() — same entries across counter page and guestbook page
+    const [entries, setEntries] = context('entries');
+
+    const listEl = find(container, '#entries-list');
+    const formEl = find(container, '#gb-form');
+
+    // ── Render — each() stamps the <template data-each="entries"> ────────────
+    function renderEntries() {
+        each(listEl, 'entries', entries(), {
+            map: (e) => ({ ...e, avatarStyle: `background:${e.color}` }),
+        });
+    }
+
+    renderEntries();
+
+    // ── Form — one call handles submit, validation, success, and error ────────
+    form.on(formEl, {
+        submit: async (data) => {
+            const ok = await form.validate(formEl, {
+                name:    (v) => v.trim().length >= 2 || 'Name must be at least 2 characters',
+                message: (v) => v.trim().length >= 5 || 'Message must be at least 5 characters',
+            });
+            if (!ok) throw new Error('validation');
+            return data;
+        },
+
+        success: (data) => {
+            const idx = entries().length;
+            setEntries([{
+                name        : data.name.trim(),
+                message     : data.message.trim(),
+                initial     : data.name.trim()[0].toUpperCase(),
+                color       : COLORS[idx % COLORS.length],
+                avatarStyle : `background:${COLORS[idx % COLORS.length]}`,
+                time        : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }, ...entries()]);
+
+            renderEntries();
+            form.reset(formEl);
+            notify.success(`Thanks for signing, ${data.name.trim()}!`);
+        },
+
+        error: (err) => {
+            if (err.message !== 'validation') notify.error(err.message);
+        },
+    });
+</script>

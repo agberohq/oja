@@ -1,0 +1,29 @@
+<div class="tweet" data-tweet-id="{{.tweet.id}}">
+    <div class="avatar">{{if .tweet.userAvatar}}{{.tweet.userAvatar}}{{else}}{{.currentUser.avatar}}{{end}}</div>
+    <div style="flex:1">
+        <div class="tweet-header">
+            <span class="tweet-name">{{if .tweet.userName}}{{.tweet.userName}}{{else}}{{.currentUser.name}}{{end}}</span>
+            <span class="tweet-username">@{{if .tweet.userUsername}}{{.tweet.userUsername}}{{else}}{{.currentUser.username}}{{end}}</span>
+            <span class="tweet-time">{{.tweet.timestamp | .formatTimeAgo}}</span>
+        </div>
+
+        <div class="tweet-content">
+            <p>{{.tweet.content}}</p>
+        </div>
+
+        <div class="tweet-stats">
+            <span class="tweet-stat" data-action="reply">
+                💬 {{.tweet.replies}}
+            </span>
+            <span class="tweet-stat {{if .tweet.retweeted}}retweeted{{end}}" data-action="retweet">
+                🔁 {{.tweet.retweets}}
+            </span>
+            <span class="tweet-stat {{if .tweet.liked}}liked{{end}}" data-action="like">
+                ❤️ {{.tweet.likes}}
+            </span>
+            <span class="tweet-stat" data-action="share">
+                📤
+            </span>
+        </div>
+    </div>
+</div>

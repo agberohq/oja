@@ -1,0 +1,112 @@
+<!--
+  pages/profile.html
+  User profile page.
+  Rendered into #main-outlet on route '/profile'.
+
+  Data:
+    currentUser — context getter
+    tweets      — context getter (filtered to user's own tweets in app.js)
+-->
+<div>
+    <div class="header">
+        <h1>Profile</h1>
+    </div>
+
+    <div class="profile-header"></div>
+
+    <div class="profile-avatar">{{currentUser.avatar}}</div>
+
+    <div class="profile-info">
+        <div style="display:flex;justify-content:space-between;align-items:start">
+            <div>
+                <div class="profile-name">{{currentUser.name}}</div>
+                <div class="text-secondary">@{{currentUser.username}}</div>
+            </div>
+            <button id="edit-profile-btn" class="post-button"
+                    style="width:auto;padding:8px 24px;margin:0">
+                Edit profile
+            </button>
+        </div>
+
+        <div class="profile-bio">{{currentUser.bio}}</div>
+
+        <div class="profile-meta">
+            <span>📍 San Francisco</span>
+            <span>🔗 oja.simple</span>
+            <span>📅 Joined March 2024</span>
+        </div>
+
+        <div style="display:flex;gap:16px">
+            <span><strong>{{currentUser.following}}</strong> Following</span>
+            <span><strong>{{currentUser.followers}}</strong> Followers</span>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button class="profile-tab active" data-tab="tweets"
+                style="flex:1;padding:16px;background:transparent;border:none;color:var(--text);font-weight:700;border-bottom:2px solid var(--primary);cursor:pointer">
+            Tweets
+        </button>
+        <button class="profile-tab" data-tab="replies"
+                style="flex:1;padding:16px;background:transparent;border:none;color:var(--text-secondary);cursor:pointer">
+            Replies
+        </button>
+        <button class="profile-tab" data-tab="media"
+                style="flex:1;padding:16px;background:transparent;border:none;color:var(--text-secondary);cursor:pointer">
+            Media
+        </button>
+        <button class="profile-tab" data-tab="likes"
+                style="flex:1;padding:16px;background:transparent;border:none;color:var(--text-secondary);cursor:pointer">
+            Likes
+        </button>
+    </div>
+
+    <!-- User's tweets -->
+    <div id="profile-tweets">
+        <template data-each="tweets" data-as="t">
+            <div class="tweet" data-tweet-id="{{t.id}}">
+                <div class="avatar">{{currentUser.avatar}}</div>
+                <div style="flex:1">
+                    <div class="tweet-header">
+                        <span class="tweet-name">{{currentUser.name}}</span>
+                        <span class="tweet-username">@{{currentUser.username}}</span>
+                        <span class="tweet-time">{{t.timestamp | ago}}</span>
+                    </div>
+                    <div class="tweet-content">
+                        <p>{{t.content}}</p>
+                    </div>
+                    <div class="tweet-stats">
+                        <span class="tweet-stat" data-action="reply">💬 {{t.replies}}</span>
+                        <span class="tweet-stat {{if .t.retweeted}}retweeted{{end}}" data-action="retweet">🔁 {{t.retweets}}</span>
+                        <span class="tweet-stat {{if .t.liked}}liked{{end}}" data-action="like">❤️ {{t.likes}}</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <div data-empty="tweets" style="display:none;padding:40px;text-align:center;color:var(--text-secondary)">
+            No tweets yet
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { each, notify, context } from '../../src/oja.js';
+
+    const [tweets]      = context('tweets');
+    const [currentUser] = context('user');
+
+    // Only show the current user's tweets
+    const myTweets = tweets().filter(t => t.userId === currentUser().id);
+
+    each(
+        container.querySelector('#profile-tweets'),
+        'tweets',
+        myTweets,
+        { map: t => ({ ...t, currentUser: currentUser() }) }
+    );
+
+    container.querySelector('#edit-profile-btn')?.addEventListener('click', () => {
+        notify.info('Profile editing coming soon!');
+    });
+</script>

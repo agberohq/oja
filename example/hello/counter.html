@@ -1,0 +1,69 @@
+<!--
+  pages/counter.html
+  Page 1 — Counter
+
+  Demonstrates:
+    state()  — reactive value, single source of truth
+    effect() — all DOM updates live here, driven by state changes
+    on()     — event handling via Oja, not addEventListener
+    find()   — scoped DOM queries via Oja, not getElementById
+    notify   — milestone toast
+-->
+<div class="card">
+    <p class="card-title">Counter</p>
+
+    <div class="count-display" id="count">0</div>
+
+    <div class="progress-track">
+        <div class="progress-fill" id="progress-bar" style="width:0%"></div>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn" id="btn-reset">Reset</button>
+        <button class="btn btn-primary" id="btn-increment">+ Increment</button>
+    </div>
+
+    <p class="card-hint" id="message">Click increment to begin</p>
+</div>
+
+<script type="module">
+    import { state, effect, on, find, notify } from '../../../build/oja.core.min.js';
+
+    const MAX = 10;
+
+    // ── State — one value, one setter, nothing else ───────────────────────────
+    const [count, setCount] = state(0);
+
+    // ── find() — Oja's scoped DOM helper, replaces getElementById ────────────
+    const countEl = find(container, '#count');
+    const barEl   = find(container, '#progress-bar');
+    const msgEl   = find(container, '#message');
+    const incrBtn = find(container, '#btn-increment');
+    const resetBtn = find(container, '#btn-reset');
+
+    // ── Effects — every DOM change flows from here, never written ad-hoc ──────
+    effect(() => {
+        const n = count();
+
+        countEl.textContent  = n;
+        barEl.style.width    = `${(n / MAX) * 100}%`;
+        incrBtn.disabled     = n >= MAX;
+
+        if (n === 0)      msgEl.textContent = 'Click increment to begin';
+        else if (n < MAX) msgEl.textContent = `${MAX - n} to go…`;
+        else              msgEl.textContent = '🎉 You made it!';
+
+        // Replay CSS bump animation on every count change
+        countEl.classList.remove('bump');
+        requestAnimationFrame(() => countEl.classList.add('bump'));
+    });
+
+    // Milestone toast — separate effect so the concern is isolated
+    effect(() => {
+        if (count() === MAX) notify.success('Hurray! You reached 10! 🎉', { duration: 4000 });
+    });
+
+    // ── Events — on() targets the element directly, scoped to this component ──
+    on(incrBtn,  'click', () => { if (count() < MAX) setCount(count() + 1); });
+    on(resetBtn, 'click', () => setCount(0));
+</script>

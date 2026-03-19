@@ -85,12 +85,7 @@
 </div>
 
 <script type="module">
-    import { state, effect, derived, batch, context } from '../../src/js/reactive.js';
-    import { each }      from '../../src/js/template.js';
-    import { adapter }   from '../../src/js/adapter.js';
-    import { notify }    from '../../src/js/notify.js';
-    import { component } from '../../src/js/component.js';
-    import { on }        from '../../src/js/events.js';
+    import { state, effect, derived, batch, context, each, adapter, notify, component, on } from '../../../src/oja.js';
     import { api, setRps, setAvgP99, setTotalReqs, setErrors, setActiveBackends } from '../app.js';
 
     // ── Local state ───────────────────────────────────────────────────────────

@@ -1,0 +1,24 @@
+<!--
+  components/entry.html
+  A single guestbook entry — mounted by Out.component() inside each().
+
+  Demonstrates:
+    - Component as a plain HTML file with template variables
+    - Go-style {{var}} interpolation
+    - No script block needed — pure template, zero JS
+
+  Data variables:
+    {{name}}       — signer's name
+    {{message}}    — their message
+    {{initial}}    — first letter of name for avatar
+    {{avatarStyle}} — inline style string for avatar background
+    {{time}}       — formatted time string
+-->
+<div class="entry">
+    <div class="entry-avatar" data-bind="style:avatarStyle">{{initial}}</div>
+    <div>
+        <div class="entry-name">{{name}}</div>
+        <div class="entry-message">{{message}}</div>
+        <div class="entry-time">{{time}}</div>
+    </div>
+</div>

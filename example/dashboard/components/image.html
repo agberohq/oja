@@ -1,0 +1,381 @@
+<!--
+  components/image.html
+  Smart image component — handles loading, loaded, and error states automatically.
+  Uses lazy loading via IntersectionObserver by default.
+
+  Demonstrates:
+    - `container` variable (scoped to this instance — no document.getElementById needed)
+    - component.onUnmount() for cleanup
+    - Multiple instances on the same page without conflicts
+    - Event delegation for retry and custom actions
+    - IntersectionObserver for lazy loading
+    - ResizeObserver for responsive images
+
+  Data variables:
+    {{src}}         — image URL to load
+    {{alt}}         — alt text (default: '')
+    {{fallback}}    — URL to show if image fails to load (optional)
+    {{width}}       — CSS width  (default: '100%')
+    {{height}}      — CSS height (default: 'auto')
+    {{shape}}       — 'circle' | 'rounded' | 'square' | 'thumbnail' (default: 'square')
+    {{lazy}}        — 'true' | 'false' — use IntersectionObserver (default: 'true')
+    {{fit}}         — CSS object-fit value (default: 'cover')
+    {{retry}}       — 'true' | 'false' — show retry button on error (default: 'true')
+    {{retryCount}}  — number of retry attempts (default: '3')
+    {{placeholder}} — placeholder color while loading (default: '#f0f0f0')
+    {{sizes}}       — responsive sizes attribute (default: '100vw')
+    {{srcset}}      — comma-separated list of responsive images (optional)
+
+  Events emitted:
+    - 'image:load:start'  — when image starts loading
+    - 'image:load:success' — when image successfully loads
+    - 'image:load:error'   — when image fails to load
+    - 'image:retry'        — when user clicks retry
+    - 'image:visible'      — when image becomes visible (lazy mode)
+
+  Usage:
+    // Mount once
+    await component.mount('#avatarSlot', 'components/image.html', {
+        src:      user.avatarUrl,
+        alt:      user.name,
+        fallback: '/assets/default-avatar.png',
+        width:    '80px',
+        height:   '80px',
+        shape:    'circle',
+        retry:    'true'
+    });
+
+    // Mount many (each is fully isolated — container is scoped per instance)
+    hosts.forEach(host => {
+        component.add('#hostGrid', 'components/image.html', {
+            src:    host.logoUrl,
+            alt:    host.name,
+            width:  '48px',
+            shape:  'rounded',
+            srcset: host.logoResponsive,
+            sizes:  '(max-width: 600px) 48px, 96px'
+        });
+    });
+-->
+
+<div class="oja-img-wrap"
+     style="width:{{width|default '100%'}};height:{{height|default 'auto'}};background-color:{{placeholder|default '#f0f0f0'}}"
+     data-shape="{{shape|default 'square'}}"
+     data-retry="{{retry|default 'true'}}"
+     data-retry-count="{{retryCount|default '3'}}"
+     data-lazy="{{lazy|default 'true'}}"
+     data-loaded="false">
+
+    <!-- Actual image — hidden until loaded -->
+    <img class="oja-img-el"
+         data-src="{{src}}"
+         data-srcset="{{srcset}}"
+         data-sizes="{{sizes|default '100vw'}}"
+         alt="{{alt}}"
+         style="display:none;width:100%;height:100%;object-fit:{{fit|default 'cover'}}"
+         crossorigin="anonymous"
+         loading="lazy">
+
+    <!-- Loading spinner — shown until image loads -->
+    <div class="oja-img-loading" role="status" aria-label="Loading image">
+        <svg class="oja-img-spinner" viewBox="0 0 24 24" fill="none"
+             width="24" height="24" xmlns="http://www.w3.org/2000/svg"
+             aria-hidden="true">
+            <path d="M12 2V6M12 18V22M4.93 4.93L7.76 7.76M16.24 16.24L19.07 19.07
+                     M2 12H6M18 12H22M4.93 19.07L7.76 16.24M16.24 7.76L19.07 4.93"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="sr-only">Loading...</span>
+    </div>
+
+    <!-- Error state — shown if image fails -->
+    <div class="oja-img-error" style="display:none" role="alert">
+        {{if .fallback}}
+        <img data-fallback="{{fallback}}"
+             alt="{{alt}} - fallback"
+             style="width:100%;height:100%;object-fit:{{fit|default 'cover'}}">
+        {{else}}
+        <div class="oja-img-error-content">
+            <svg viewBox="0 0 24 24" fill="none" width="32" height="32"
+                 aria-hidden="true">
+                <path d="M12 8V12M12 16H12.01M21 12C21 16.97 16.97 21 12 21
+                         C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12Z"
+                      stroke="#dc3545" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <p class="oja-img-error-message">Failed to load image</p>
+            {{if eq .retry "true"}}
+            <button class="oja-img-retry-btn" data-action="retry-image">
+                Retry
+            </button>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Success state indicator (optional) -->
+    <div class="oja-img-success" style="display:none" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+            <path d="M20 6L9 17L4 12" stroke="#28a745" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+    </div>
+</div>
+
+<script type="module">
+    import { component } from '../../../src/js/core/component.js';
+    import { on, emit, onceVisible, onResize } from '../../../src/js/core/events.js';
+
+    // `container` is automatically injected by _exec.js —
+    // scoped to THIS instance, safe to use even with multiple images on the page.
+
+    const wrap       = container.querySelector('.oja-img-wrap');
+    const imgEl      = container.querySelector('.oja-img-el');
+    const loadingEl  = container.querySelector('.oja-img-loading');
+    const errorEl    = container.querySelector('.oja-img-error');
+    const successEl  = container.querySelector('.oja-img-success');
+    const fallbackEl = container.querySelector('[data-fallback]');
+    const retryBtn   = container.querySelector('[data-action="retry-image"]');
+
+    const src        = imgEl?.dataset.src || '';
+    const srcset     = imgEl?.dataset.srcset || '';
+    const sizes      = imgEl?.dataset.sizes || '100vw';
+    const lazy       = wrap?.dataset.lazy !== 'false';
+    const retryEnabled = wrap?.dataset.retry === 'true';
+    const maxRetries = parseInt(wrap?.dataset.retryCount || '3', 10);
+
+    let retryCount = 0;
+    let isLoading = false;
+    let loadAttempts = 0;
+
+    // Apply shape
+    const shape = wrap?.dataset.shape || 'square';
+    const radii = {
+        circle: '50%',
+        rounded: '12px',
+        'rounded-lg': '16px',
+        'rounded-sm': '4px',
+        thumbnail: '4px',
+        square: '0'
+    };
+    if (wrap) wrap.style.borderRadius = radii[shape] || '0';
+
+    // Emit events through component's container
+    function emitEvent(name, detail = {}) {
+        const event = new CustomEvent(name, {
+            detail: { ...detail, container },
+            bubbles: true
+        });
+        container.dispatchEvent(event);
+    }
+
+    function loadImage() {
+        if (!src) {
+            showError('No image source provided');
+            return;
+        }
+
+        if (isLoading) return;
+
+        isLoading = true;
+        loadAttempts++;
+
+        emitEvent('image:load:start', {
+            src,
+            attempt: loadAttempts,
+            retryCount
+        });
+
+        const img = new Image();
+
+        // Support srcset for responsive images
+        if (srcset) {
+            img.srcset = srcset;
+        }
+        if (sizes) {
+            img.sizes = sizes;
+        }
+
+        img.onload = () => {
+            // Apply to actual img element
+            if (srcset) imgEl.srcset = srcset;
+            if (sizes) imgEl.sizes = sizes;
+            imgEl.src = src;
+
+            imgEl.style.display = '';
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'none';
+
+            // Show success indicator briefly
+            if (successEl) {
+                successEl.style.display = 'block';
+                setTimeout(() => {
+                    if (successEl) successEl.style.display = 'none';
+                }, 1000);
+            }
+
+            // Fade in
+            imgEl.style.opacity = '0';
+            imgEl.style.transition = 'opacity 0.3s ease';
+            requestAnimationFrame(() => {
+                imgEl.style.opacity = '1';
+            });
+
+            wrap.dataset.loaded = 'true';
+            isLoading = false;
+            retryCount = 0;
+
+            emitEvent('image:load:success', {
+                src,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight
+            });
+        };
+
+        img.onerror = (error) => {
+            isLoading = false;
+
+            if (retryEnabled && retryCount < maxRetries) {
+                retryCount++;
+                emitEvent('image:retry', {
+                    src,
+                    attempt: loadAttempts,
+                    retryCount,
+                    maxRetries
+                });
+
+                // Exponential backoff for retries
+                const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
+                setTimeout(loadImage, delay);
+            } else {
+                showError(error.message || 'Failed to load image');
+                emitEvent('image:load:error', {
+                    src,
+                    error: error.message,
+                    attempts: loadAttempts
+                });
+            }
+        };
+
+        // Set crossOrigin if needed
+        if (imgEl.crossOrigin) {
+            img.crossOrigin = imgEl.crossOrigin;
+        }
+
+        img.src = src;
+    }
+
+    function showError(message) {
+        loadingEl.style.display = 'none';
+
+        if (fallbackEl) {
+            fallbackEl.src = fallbackEl.dataset.fallback;
+            errorEl.style.display = '';
+        } else {
+            const errorMsg = errorEl.querySelector('.oja-img-error-message');
+            if (errorMsg && message) {
+                errorMsg.textContent = message;
+            }
+            errorEl.style.display = '';
+        }
+
+        wrap.dataset.loaded = 'error';
+    }
+
+    function resetImage() {
+        imgEl.style.display = 'none';
+        imgEl.src = '';
+        if (srcset) imgEl.srcset = '';
+        loadingEl.style.display = '';
+        errorEl.style.display = 'none';
+        wrap.dataset.loaded = 'false';
+        retryCount = 0;
+        loadAttempts = 0;
+    }
+
+    function retry() {
+        resetImage();
+        loadImage();
+    }
+
+    // Handle retry button click
+    if (retryBtn) {
+        on(retryBtn, 'click', (e) => {
+            e.preventDefault();
+            retry();
+        });
+    }
+
+    // Listen for retry events from parent (e.g., form.reset)
+    container.addEventListener('image:retry-request', () => {
+        retry();
+    });
+
+    // Lazy loading with IntersectionObserver
+    if (!lazy) {
+        loadImage();
+    } else if (typeof IntersectionObserver !== 'undefined') {
+        onceVisible(wrap, (el, entry) => {
+            emitEvent('image:visible', {
+                src,
+                intersectionRatio: entry.intersectionRatio,
+                boundingClientRect: entry.boundingClientRect
+            });
+            loadImage();
+        }, {
+            threshold: 0.1,
+            rootMargin: '50px'
+        });
+    } else {
+        // Fallback for environments without IntersectionObserver
+        loadImage();
+    }
+
+    // Responsive image support - update if container size changes
+    if (typeof ResizeObserver !== 'undefined' && srcset) {
+        onResize(wrap, (size) => {
+            // Only reload if we have a significant size change
+            if (Math.abs(size.width - (imgEl._lastWidth || 0)) > 100) {
+                imgEl._lastWidth = size.width;
+
+                // Re-evaluate which srcset image to use
+                if (wrap.dataset.loaded === 'true') {
+                    // Force browser to re-evaluate srcset
+                    const currentSrc = imgEl.currentSrc;
+                    imgEl.srcset = srcset; // Reapply to trigger update
+                }
+            }
+        });
+    }
+
+    // Clean up on unmount
+    component.onUnmount(() => {
+        // Cancel any ongoing loads
+        imgEl.src = '';
+        if (srcset) imgEl.srcset = '';
+        isLoading = false;
+
+        emitEvent('image:unmounted', { src });
+    });
+
+    // Expose API to parent via container
+    container.loadImage = loadImage;
+    container.resetImage = resetImage;
+    container.retry = retry;
+    container.isLoaded = () => wrap.dataset.loaded === 'true';
+    container.isLoading = () => isLoading;
+
+    // Add CSS for screen reader only text
+    const style = document.createElement('style');
+    style.textContent = `
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+    `;
+    container.appendChild(style);
+</script>

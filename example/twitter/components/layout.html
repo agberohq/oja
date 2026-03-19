@@ -1,0 +1,117 @@
+<div class="layout">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">🐦</div>
+
+        <nav>
+            <a href="#/" class="nav-item" data-page="/" data-loading="...">
+                <span class="icon">🏠</span>
+                <span>Home</span>
+            </a>
+            <a href="#/explore" class="nav-item" data-page="/explore" data-loading="...">
+                <span class="icon">🔍</span>
+                <span>Explore</span>
+            </a>
+            <a href="#/profile" class="nav-item" data-page="/profile" data-loading="...">
+                <span class="icon">👤</span>
+                <span>Profile</span>
+            </a>
+        </nav>
+
+        <button class="post-button" onclick="modal.open('composeModal')" data-loading="...">
+            Post
+        </button>
+
+        <div style="margin-top: auto; padding: 20px 0;">
+            <div class="flex gap-2">
+                <div class="avatar">{{.currentUser.avatar}}</div>
+                <div>
+                    <div class="font-bold">{{.currentUser.name}}</div>
+                    <div class="text-secondary">@{{.currentUser.username}}</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+        {{if eq .page "feed"}}
+        {{Out.component('components/feed.html', {
+        currentUser: .currentUser,
+        tweets: .tweets,
+        formatTimeAgo: .formatTimeAgo
+        })}}
+        {{else if eq .page "explore"}}
+        {{Out.component('components/explore.html', {
+        currentUser: .currentUser,
+        trends: .trends,
+        tweets: .tweets
+        })}}
+        {{else if eq .page "profile"}}
+        {{Out.component('components/profile.html', {
+        currentUser: .currentUser,
+        tweets: .tweets
+        })}}
+        {{else if eq .page "tweet"}}
+        {{Out.component('components/tweet-detail.html', {
+        tweet: .tweet,
+        currentUser: .currentUser,
+        formatTimeAgo: .formatTimeAgo
+        })}}
+        {{end}}
+    </main>
+
+    <!-- Right Sidebar -->
+    <aside class="right-sidebar">
+        <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search" placeholder="Search">
+        </div>
+
+        <div class="trending-card">
+            <h3>Trends for you</h3>
+            <template data-each="trends" data-as="trend">
+                <div class="trending-item" data-each-item="trends">
+                    <div class="trending-category">{{.trend.category}}</div>
+                    <div class="trending-name">#{{.trend.name}}</div>
+                    <div class="trending-count">{{.trend.tweets}} tweets</div>
+                </div>
+            </template>
+        </div>
+
+        <div class="trending-card">
+            <h3>Who to follow</h3>
+            <div class="trending-item">
+                <div class="flex gap-2">
+                    <div class="avatar">S</div>
+                    <div>
+                        <div class="font-bold">Sarah Chen</div>
+                        <div class="text-secondary">@sarahcodes</div>
+                    </div>
+                </div>
+                <button class="post-button" style="margin-top:12px; padding:8px; font-size:1rem">Follow</button>
+            </div>
+            <div class="trending-item">
+                <div class="flex gap-2">
+                    <div class="avatar">M</div>
+                    <div>
+                        <div class="font-bold">Marcus Williams</div>
+                        <div class="text-secondary">@marcusw</div>
+                    </div>
+                </div>
+                <button class="post-button" style="margin-top:12px; padding:8px; font-size:1rem">Follow</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<!-- Compose Modal -->
+<div class="modal-overlay" id="composeModal">
+    <div class="modal">
+        <div class="modal-header">
+            <button class="modal-close" onclick="modal.close()" aria-label="Close">✕</button>
+            <h2>New tweet</h2>
+        </div>
+        {{Out.component('components/compose.html', { currentUser: .currentUser })}}
+    </div>
+</div>

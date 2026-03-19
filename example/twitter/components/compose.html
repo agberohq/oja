@@ -1,0 +1,68 @@
+<div class="compose-box" style="border-bottom:none; padding:0">
+    <div class="avatar">{{.currentUser.avatar}}</div>
+    <div class="compose-content">
+        <form id="composeForm">
+            <textarea name="content" placeholder="What's happening?" maxlength="280"
+                      style="min-height:120px" required></textarea>
+            <span data-field="content" class="field-error"></span>
+
+            <div class="compose-footer">
+                <div class="compose-actions">
+                    <button type="button" disabled>📷</button>
+                    <button type="button" disabled>🎥</button>
+                    <button type="button" disabled>📊</button>
+                </div>
+                <div class="flex gap-2">
+                    <span id="charCount" style="color:var(--text-secondary)">0/280</span>
+                    <button type="submit" class="compose-submit" data-loading="Posting...">Tweet</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script type="module">
+    import { form, notify, modal, context } from '../../oja/src/oja.js';
+
+    const [tweets, setTweets] = context('tweets');
+    const [currentUser] = context('user');
+
+    const textarea = document.querySelector('[name="content"]');
+    const charCount = document.getElementById('charCount');
+
+    textarea?.addEventListener('input', () => {
+        const len = textarea.value.length;
+        charCount.textContent = `${len}/280`;
+        charCount.style.color = len > 260 ? (len > 280 ? 'var(--error)' : 'var(--warning)') : 'var(--text-secondary)';
+    });
+
+    form.on('#composeForm', {
+        submit: (data) => {
+            if (!data.content.trim()) {
+                throw new Error("Can't tweet nothing!");
+            }
+
+            const newTweet = {
+                id: Date.now().toString(),
+                userId: currentUser().id,
+                userName: currentUser().name,
+                userUsername: currentUser().username,
+                userAvatar: currentUser().avatar,
+                content: data.content,
+                likes: 0,
+                retweets: 0,
+                replies: 0,
+                timestamp: Date.now(),
+                liked: false,
+                retweeted: false
+            };
+
+            setTweets([newTweet, ...tweets()]);
+            modal.close();
+            notify.success('Tweet posted!');
+        },
+        error: (err) => {
+            notify.error(err.message);
+        }
+    });
+</script>

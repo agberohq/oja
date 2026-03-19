@@ -1,0 +1,62 @@
+<!--
+  pages/explore.html
+  Explore page — popular tweets and trending topics.
+  Rendered into #main-outlet on route '/explore'.
+
+  Data:
+    currentUser — context getter
+    tweets      — context getter (filtered to popular only in app.js)
+    trends      — context getter
+-->
+<div>
+    <div class="header">
+        <h1>Explore</h1>
+    </div>
+
+    <div style="padding:16px">
+        <h2 style="margin-bottom:16px">Popular right now</h2>
+
+        <div id="popular-feed">
+            <template data-each="tweets" data-as="t">
+                <div class="tweet" data-tweet-id="{{t.id}}"
+                     style="background:var(--surface);border-radius:16px;margin-bottom:16px">
+                    <div class="avatar">{{if .t.userAvatar}}{{t.userAvatar}}{{else}}#{{end}}</div>
+                    <div style="flex:1">
+                        <div class="tweet-header">
+                            <span class="tweet-name">{{if .t.userName}}{{t.userName}}{{else}}User{{end}}</span>
+                            <span class="tweet-username">@{{if .t.userUsername}}{{t.userUsername}}{{else}}user{{end}}</span>
+                            <span class="tweet-time">{{t.timestamp | ago}}</span>
+                        </div>
+                        <div class="tweet-content">
+                            <p>{{t.content}}</p>
+                        </div>
+                        <div class="tweet-stats">
+                            <span class="tweet-stat">❤️ {{t.likes}}</span>
+                            <span class="tweet-stat">🔁 {{t.retweets}}</span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div data-empty="tweets" style="display:none;padding:40px;text-align:center;color:var(--text-secondary)">
+                Nothing trending right now
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { each, context } from '../../src/oja.js';
+
+    const [tweets]      = context('tweets');
+    const [currentUser] = context('user');
+
+    // Popular = more than 300 likes
+    const popular = tweets().filter(t => t.likes > 300);
+
+    each(
+        container.querySelector('#popular-feed'),
+        'tweets',
+        popular,
+        { map: t => ({ ...t, currentUser: currentUser() }) }
+    );
+</script>

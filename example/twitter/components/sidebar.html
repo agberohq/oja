@@ -1,0 +1,134 @@
+<!--
+  components/sidebar.html
+  Persistent layout shell — rendered once by layout.js, never re-renders on navigation.
+  The router writes into #main-outlet on every route change.
+
+  Demonstrates:
+    - layout.js shell pattern
+    - data-page for active nav link highlighting (ui.js)
+    - context() user data available via data passed from layout()
+    - compose modal declared here — accessible from any page
+
+  Data variables (from layout data() callback in app.js):
+    currentUser.name, currentUser.username, currentUser.avatar
+    trends[] — for the right sidebar
+-->
+<div class="layout">
+
+    <!-- Left sidebar — navigation -->
+    <aside class="sidebar">
+        <div class="logo">🐦</div>
+
+        <nav>
+            <a href="#/" class="nav-item" data-page="/" data-loading="...">
+                <span class="icon">🏠</span>
+                <span>Home</span>
+            </a>
+            <a href="#/explore" class="nav-item" data-page="/explore" data-loading="...">
+                <span class="icon">🔍</span>
+                <span>Explore</span>
+            </a>
+            <a href="#/profile" class="nav-item" data-page="/profile" data-loading="...">
+                <span class="icon">👤</span>
+                <span>Profile</span>
+            </a>
+        </nav>
+
+        <button class="post-button" id="compose-btn">Post</button>
+
+        <div class="sidebar-user">
+            <div class="avatar">{{currentUser.avatar}}</div>
+            <div>
+                <div class="font-bold">{{currentUser.name}}</div>
+                <div class="text-secondary">@{{currentUser.username}}</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main content — router outlet, replaced on every navigation -->
+    <main id="main-outlet"></main>
+
+    <!-- Right sidebar — search + trends, static within the shell -->
+    <aside class="right-sidebar">
+        <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search" placeholder="Search" autocomplete="off">
+        </div>
+
+        <div class="trending-card">
+            <h3>Trends for you</h3>
+            <template data-each="trends" data-as="trend">
+                <div class="trending-item">
+                    <div class="trending-category">{{trend.category}}</div>
+                    <div class="trending-name">#{{trend.name}}</div>
+                    <div class="trending-count">{{trend.tweets}} tweets</div>
+                </div>
+            </template>
+        </div>
+
+        <div class="trending-card">
+            <h3>Who to follow</h3>
+            <div class="trending-item">
+                <div class="flex gap-2">
+                    <div class="avatar">S</div>
+                    <div>
+                        <div class="font-bold">Sarah Chen</div>
+                        <div class="text-secondary">@sarahcodes</div>
+                    </div>
+                </div>
+                <button class="post-button" style="margin-top:12px;padding:8px;font-size:1rem">Follow</button>
+            </div>
+            <div class="trending-item">
+                <div class="flex gap-2">
+                    <div class="avatar">M</div>
+                    <div>
+                        <div class="font-bold">Marcus Williams</div>
+                        <div class="text-secondary">@marcusw</div>
+                    </div>
+                </div>
+                <button class="post-button" style="margin-top:12px;padding:8px;font-size:1rem">Follow</button>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<!-- Compose modal — lives in the shell so it's always in the DOM -->
+<div class="modal-overlay" id="composeModal">
+    <div class="modal">
+        <div class="modal-header">
+            <button id="compose-close" aria-label="Close">✕</button>
+            <h2>New tweet</h2>
+        </div>
+        <div id="compose-body"></div>
+    </div>
+</div>
+
+<script type="module">
+    import { on, modal, component, each } from '../../src/oja.js';
+
+    // Wire compose button — opens modal and mounts compose component lazily
+    on('#compose-btn', 'click', async () => {
+        const [currentUser] = (await import('../app.js')).currentUser
+            ? [{ currentUser: (await import('../app.js')).currentUser }]
+            : [{}];
+
+        modal.open('composeModal');
+    });
+
+    on('#compose-close', 'click', () => modal.close());
+
+    // Wire trends list using each() — data was passed to this shell via layout()
+    // The template data-each already handles rendering above; this is a no-op
+    // unless you want client-side re-filtering of trends.
+
+    // Notify on mount — welcome back message lives here, not in app.js
+    component.onMount(() => {
+        import('../app.js').then(({ currentUser }) => {
+            const name = currentUser().name;
+            import('../../src/oja.js').then(({ notify }) => {
+                notify.success(`Welcome back, ${name}!`);
+            });
+        });
+    });
+</script>

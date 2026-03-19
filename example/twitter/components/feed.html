@@ -1,0 +1,131 @@
+<!--
+  pages/feed.html
+  Home feed — rendered into #main-outlet on route '/'.
+
+  Demonstrates:
+    - context() to read and write shared tweet state
+    - form.on() for the compose box
+    - data-each for the tweet list
+    - component.interval() for simulated live updates
+    - container scope throughout
+
+  Data (from app.js via Out.fn):
+    currentUser — context getter
+    tweets      — context getter
+-->
+<div>
+    <div class="header">
+        <h1>Home</h1>
+    </div>
+
+    <!-- Inline compose box -->
+    <div class="compose-box">
+        <div class="avatar">{{currentUser.avatar}}</div>
+        <div class="compose-content">
+            <form id="composeForm">
+                <textarea name="content" placeholder="What's happening?"
+                          maxlength="280" id="compose-textarea"></textarea>
+                <div class="compose-footer">
+                    <div class="compose-actions">
+                        <button type="button" disabled>📷</button>
+                        <button type="button" disabled>🎥</button>
+                        <button type="button" disabled>📊</button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span id="charCount" style="color:var(--text-secondary);font-size:14px">0/280</span>
+                        <button type="submit" class="compose-submit" data-loading="Posting...">Tweet</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tweet feed -->
+    <div id="feed">
+        <template data-each="tweets" data-as="t">
+            <div class="tweet" data-tweet-id="{{t.id}}">
+                <div class="avatar">{{if .t.userAvatar}}{{t.userAvatar}}{{else}}{{currentUser.avatar}}{{end}}</div>
+                <div style="flex:1">
+                    <div class="tweet-header">
+                        <span class="tweet-name">{{if .t.userName}}{{t.userName}}{{else}}{{currentUser.name}}{{end}}</span>
+                        <span class="tweet-username">@{{if .t.userUsername}}{{t.userUsername}}{{else}}{{currentUser.username}}{{end}}</span>
+                        <span class="tweet-time">{{t.timestamp | ago}}</span>
+                    </div>
+                    <div class="tweet-content">
+                        <p>{{t.content}}</p>
+                    </div>
+                    <div class="tweet-stats">
+                        <span class="tweet-stat" data-action="reply">💬 {{t.replies}}</span>
+                        <span class="tweet-stat {{if .t.retweeted}}retweeted{{end}}" data-action="retweet">🔁 {{t.retweets}}</span>
+                        <span class="tweet-stat {{if .t.liked}}liked{{end}}" data-action="like">❤️ {{t.likes}}</span>
+                        <span class="tweet-stat" data-action="share">📤</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <div data-empty="tweets" class="empty-state" style="display:none;padding:40px;text-align:center;color:var(--text-secondary)">
+            No tweets yet. Be the first!
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { form, notify, context, component, each } from '../../src/oja.js';
+
+    const [tweets, setTweets] = context('tweets');
+    const [currentUser]       = context('user');
+
+    // Render feed using each() into the container-scoped element
+    const feedEl = container.querySelector('#feed');
+    each(feedEl, 'tweets', tweets(), {
+        map: t => ({ ...t, currentUser: currentUser() }),
+    });
+
+    // Character counter
+    const textarea  = container.querySelector('#compose-textarea');
+    const charCount = container.querySelector('#charCount');
+    textarea?.addEventListener('input', () => {
+        const len = textarea.value.length;
+        charCount.textContent = `${len}/280`;
+        charCount.style.color = len > 260
+            ? (len > 280 ? 'var(--error)' : 'var(--warning)')
+            : 'var(--text-secondary)';
+    });
+
+    // Compose form — uses form.on() for consistent handling
+    form.on(container.querySelector('#composeForm'), {
+        submit: (data) => {
+            const content = data.content?.trim();
+            if (!content) throw new Error("Can't tweet nothing!");
+            if (content.length > 280) throw new Error('Tweet too long!');
+
+            const newTweet = {
+                id           : Date.now().toString(),
+                userId       : currentUser().id,
+                userName     : currentUser().name,
+                userUsername : currentUser().username,
+                userAvatar   : currentUser().avatar,
+                content,
+                likes        : 0,
+                retweets     : 0,
+                replies      : 0,
+                timestamp    : Date.now(),
+                liked        : false,
+                retweeted    : false,
+            };
+
+            setTweets([newTweet, ...tweets()]);
+            // Re-render feed
+            each(feedEl, 'tweets', tweets(), {
+                map: t => ({ ...t, currentUser: currentUser() }),
+            });
+            notify.success('Tweet posted!');
+        },
+        error: (err) => notify.error(err.message),
+    });
+
+    // Simulated live updates — auto-cleared when navigating away
+    component.interval(() => {
+        console.log('[feed] Checking for new tweets...');
+    }, 60000);
+</script>

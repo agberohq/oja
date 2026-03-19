@@ -10,17 +10,17 @@
     {{actionUrl}}— button href (optional)
 
   Usage:
-    // As Responder in each()
+    // As Out in each()
     each(container, 'hosts', [], {
-        empty: Responder.component('components/empty-state.html', {
+        empty: Out.component('components/empty-state.html', {
             icon:     '🔍',
             title:    'No hosts found',
             subtitle: 'Try clearing your filters',
         })
     });
 
-    // As Responder in router.NotFound()
-    router.NotFound(Responder.component('components/empty-state.html', {
+    // As Out in router.NotFound()
+    router.NotFound(Out.component('components/empty-state.html', {
         icon:      '404',
         title:     'Page not found',
         actionUrl: '#/dashboard',
