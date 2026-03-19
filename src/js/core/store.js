@@ -63,6 +63,7 @@ class _SessionAdapter {
         for (let i = 0; i < sessionStorage.length; i++) out.push(sessionStorage.key(i));
         return out;
     }
+    clear()     { sessionStorage.clear(); }
 }
 
 class _LocalAdapter {
@@ -82,6 +83,7 @@ class _LocalAdapter {
         for (let i = 0; i < localStorage.length; i++) out.push(localStorage.key(i));
         return out;
     }
+    clear()     { localStorage.clear(); }
 }
 
 class _MemoryAdapter {
@@ -92,20 +94,21 @@ class _MemoryAdapter {
     set(k, v)    { this._map.set(k, v); }
     remove(k)    { this._map.delete(k); }
     keys()       { return [...this._map.keys()]; }
+    clear()      { this._map.clear(); }
 }
 
 // ─── Encryption (Web Crypto API) ──────────────────────────────────────────────
 
-const _ENC_PREFIX = '__oja_enc__:';
+const ENC_PREFIX = '__oja_enc__:';
+const KEY_VERSION = 1;
 
-// Derive a 256-bit AES-GCM key from a passphrase using PBKDF2
-async function _deriveKey(passphrase, salt) {
+async function _deriveKey(passphrase, salt, iterations = 100000) {
     const enc      = new TextEncoder();
     const keyMat   = await crypto.subtle.importKey(
         'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']
     );
     return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt: enc.encode(salt), iterations, hash: 'SHA-256' },
         keyMat,
         { name: 'AES-GCM', length: 256 },
         false,
@@ -113,28 +116,54 @@ async function _deriveKey(passphrase, salt) {
     );
 }
 
-async function _encrypt(plaintext, passphrase, salt) {
+async function _encrypt(plaintext, passphrase, salt, aad = null) {
     const key  = await _deriveKey(passphrase, salt);
     const iv   = crypto.getRandomValues(new Uint8Array(12));
     const enc  = new TextEncoder();
-    const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+    const ct   = await crypto.subtle.encrypt(
+        {
+            name: 'AES-GCM',
+            iv,
+            additionalData: aad ? enc.encode(aad) : undefined
+        },
+        key,
+        enc.encode(plaintext)
+    );
 
-    // Pack: iv (12 bytes) + ciphertext → base64
-    const buf  = new Uint8Array(12 + ct.byteLength);
-    buf.set(iv, 0);
-    buf.set(new Uint8Array(ct), 12);
-    return _ENC_PREFIX + btoa(String.fromCharCode(...buf));
+    const version = KEY_VERSION;
+    const buf  = new Uint8Array(1 + 12 + ct.byteLength);
+    buf[0] = version;
+    buf.set(iv, 1);
+    buf.set(new Uint8Array(ct), 13);
+    return ENC_PREFIX + btoa(String.fromCharCode(...buf));
 }
 
-async function _decrypt(stored, passphrase, salt) {
-    if (!stored.startsWith(_ENC_PREFIX)) return stored; // not encrypted
-    const raw  = atob(stored.slice(_ENC_PREFIX.length));
+async function _decrypt(stored, passphrase, salt, aad = null) {
+    if (!stored.startsWith(ENC_PREFIX)) return stored;
+
+    const raw  = atob(stored.slice(ENC_PREFIX.length));
     const buf  = Uint8Array.from(raw, c => c.charCodeAt(0));
-    const iv   = buf.slice(0, 12);
-    const ct   = buf.slice(12);
+    const version = buf[0];
+    const iv   = buf.slice(1, 13);
+    const ct   = buf.slice(13);
+    const enc  = new TextEncoder();
+
     const key  = await _deriveKey(passphrase, salt);
-    const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const dec  = await crypto.subtle.decrypt(
+        {
+            name: 'AES-GCM',
+            iv,
+            additionalData: aad ? enc.encode(aad) : undefined
+        },
+        key,
+        ct
+    );
     return new TextDecoder().decode(dec);
+}
+
+async function _reencrypt(stored, oldPassphrase, newPassphrase, salt, aad = null) {
+    const plaintext = await _decrypt(stored, oldPassphrase, salt, aad);
+    return _encrypt(plaintext, newPassphrase, salt, aad);
 }
 
 function _hasCrypto() {
@@ -152,14 +181,16 @@ export class Store {
      *   prefer  : 'session' | 'local'   — preferred storage layer (default: 'session')
      *   encrypt : boolean                — enable AES-GCM encryption (default: false)
      *   secret  : string                 — encryption passphrase (default: namespace)
+     *   aad     : string                 — additional authenticated data (optional)
      */
     constructor(namespace = 'oja', options = {}) {
         this._ns      = namespace + ':';
         this._opts    = options;
         this._secret  = options.secret   || namespace;
+        this._aad     = options.aad      || null;
         this._encrypt = options.encrypt  && _hasCrypto();
         this._layer   = null;
-        this._changes = new Map(); // key → Set of handler fns
+        this._changes = new Map();
 
         this._init(options.prefer || 'session');
     }
@@ -180,7 +211,6 @@ export class Store {
         }
     }
 
-    /** Which storage layer is active — useful for debugging */
     get storageLayer() { return this._layer.name; }
 
     // ─── Synchronous API (no encryption) ─────────────────────────────────────
@@ -228,6 +258,12 @@ export class Store {
         return this;
     }
 
+    clearAll() {
+        this._layer.clear();
+        this._changes.clear();
+        return this;
+    }
+
     all() {
         const result = {};
         this._layer.keys()
@@ -241,17 +277,13 @@ export class Store {
 
     // ─── Async API (with optional encryption) ────────────────────────────────
 
-    /**
-     * Store a value — encrypted if store was created with { encrypt: true }.
-     * Falls back to plain storage if Web Crypto is unavailable.
-     */
     async setAsync(key, value) {
         const serialised = JSON.stringify(value);
         let stored = serialised;
 
         if (this._encrypt) {
             try {
-                stored = await _encrypt(serialised, this._secret, this._ns);
+                stored = await _encrypt(serialised, this._secret, this._ns, this._aad);
             } catch (e) {
                 console.warn('[oja/store] encryption failed, storing plain:', e);
             }
@@ -267,18 +299,15 @@ export class Store {
         return this;
     }
 
-    /**
-     * Retrieve a value — decrypted if store was created with { encrypt: true }.
-     */
     async getAsync(key, fallback = null) {
         try {
             const raw = this._layer.get(this._ns + key);
             if (raw === null || raw === undefined) return fallback;
 
             let plain = raw;
-            if (this._encrypt && raw.startsWith(_ENC_PREFIX)) {
+            if (this._encrypt && raw.startsWith(ENC_PREFIX)) {
                 try {
-                    plain = await _decrypt(raw, this._secret, this._ns);
+                    plain = await _decrypt(raw, this._secret, this._ns, this._aad);
                 } catch (e) {
                     console.warn('[oja/store] decryption failed:', key, e);
                     return fallback;
@@ -291,16 +320,126 @@ export class Store {
         }
     }
 
-    // ─── Change listeners ─────────────────────────────────────────────────────
+    /**
+     * Rotate encryption key for all stored values.
+     * Re-encrypts all data with a new passphrase while preserving existing values.
+     * Returns number of keys successfully re-encrypted.
+     */
+    async rotateKey(newSecret, options = {}) {
+        if (!this._encrypt) {
+            throw new Error('[oja/store] Cannot rotate key on non-encrypted store');
+        }
+
+        const {
+            oldSecret = this._secret,
+            onProgress = null,
+            batchSize = 10
+        } = options;
+
+        const keys = this._layer.keys()
+            .filter(k => k.startsWith(this._ns))
+            .map(k => k.slice(this._ns.length));
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (let i = 0; i < keys.length; i += batchSize) {
+            const batch = keys.slice(i, i + batchSize);
+            await Promise.all(batch.map(async (key) => {
+                try {
+                    const raw = this._layer.get(this._ns + key);
+                    if (!raw || !raw.startsWith(ENC_PREFIX)) {
+                        errorCount++;
+                        return;
+                    }
+
+                    const reencrypted = await _reencrypt(
+                        raw,
+                        oldSecret,
+                        newSecret,
+                        this._ns,
+                        this._aad
+                    );
+
+                    this._layer.set(this._ns + key, reencrypted);
+                    successCount++;
+
+                    if (onProgress) {
+                        onProgress({ key, success: true });
+                    }
+                } catch (e) {
+                    errorCount++;
+                    console.warn(`[oja/store] Failed to re-encrypt key: ${key}`, e);
+                    if (onProgress) {
+                        onProgress({ key, success: false, error: e.message });
+                    }
+                }
+            }));
+        }
+
+        if (successCount > 0) {
+            this._secret = newSecret;
+            _emit('store:key-rotated', {
+                namespace: this._ns,
+                successCount,
+                errorCount
+            });
+        }
+
+        return { successCount, errorCount };
+    }
 
     /**
-     * Watch a key for changes.
-     * Handler is called with (newValue, oldValue) whenever the key changes.
-     * Returns an unsubscribe function.
-     *
-     *   const unsub = store.onChange('page', (next, prev) => console.log(next));
-     *   unsub(); // stop watching
+     * Export all encrypted data with current key.
+     * Useful for backup or migration.
      */
+    async exportEncrypted() {
+        if (!this._encrypt) {
+            throw new Error('[oja/store] Cannot export from non-encrypted store');
+        }
+
+        const data = {};
+        const keys = this._layer.keys()
+            .filter(k => k.startsWith(this._ns));
+
+        for (const fullKey of keys) {
+            const raw = this._layer.get(fullKey);
+            if (raw && raw.startsWith(ENC_PREFIX)) {
+                const shortKey = fullKey.slice(this._ns.length);
+                data[shortKey] = raw;
+            }
+        }
+
+        return {
+            namespace: this._ns,
+            version: KEY_VERSION,
+            data
+        };
+    }
+
+    /**
+     * Import encrypted data.
+     * Expects format from exportEncrypted().
+     */
+    async importEncrypted(exported) {
+        if (!this._encrypt) {
+            throw new Error('[oja/store] Cannot import to non-encrypted store');
+        }
+
+        if (exported.namespace !== this._ns) {
+            throw new Error('[oja/store] Namespace mismatch on import');
+        }
+
+        for (const [key, value] of Object.entries(exported.data)) {
+            this._layer.set(this._ns + key, value);
+        }
+
+        _emit('store:imported', { namespace: this._ns, count: Object.keys(exported.data).length });
+        return this;
+    }
+
+    // ─── Change listeners ─────────────────────────────────────────────────────
+
     onChange(key, handler) {
         if (!this._changes.has(key)) this._changes.set(key, new Set());
         this._changes.get(key).add(handler);
@@ -322,14 +461,12 @@ export class Store {
 
     // ─── Convenience ─────────────────────────────────────────────────────────
 
-    /** Increment a numeric value by n (default 1) */
     increment(key, n = 1) {
         const current = this.get(key, 0);
         this.set(key, (typeof current === 'number' ? current : 0) + n);
         return this;
     }
 
-    /** Push a value onto an array — creates the array if it doesn't exist */
     push(key, value) {
         const arr = this.get(key, []);
         if (!Array.isArray(arr)) return this;
@@ -338,10 +475,14 @@ export class Store {
         return this;
     }
 
-    /** Merge an object into a stored object */
     merge(key, partial) {
         const current = this.get(key, {});
         this.set(key, { ...current, ...partial });
         return this;
     }
+}
+
+function _emit(name, detail = {}) {
+    if (typeof document === 'undefined') return;
+    document.dispatchEvent(new CustomEvent(name, { detail }));
 }

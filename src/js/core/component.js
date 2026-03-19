@@ -66,22 +66,127 @@
 
 import { render, each, fill } from './template.js';
 import { execScripts }        from './_exec.js';
+import { emit }               from './events.js';
 
-// ─── HTML cache ───────────────────────────────────────────────────────────────
+// ─── HTML cache with TTL ─────────────────────────────────────────────────────
 
-const _cache = new Map(); // url → html string
+const _cache = new Map(); // url → { html, timestamp, hits, size }
+
+const CACHE_DEFAULTS = {
+    ttl: 60000,        // 60 seconds default
+    maxSize: 20,       // max 20 components in cache
+    maxMemory: 5 * 1024 * 1024, // 5MB max total cache size
+};
+
+let _cacheConfig = { ...CACHE_DEFAULTS };
+let _cacheStats = {
+    hits: 0,
+    misses: 0,
+    evictions: 0,
+    totalBytes: 0,
+};
 
 async function _load(url) {
-    if (_cache.has(url)) return _cache.get(url);
+    // Normalise the URL so 'page' and 'page/' don't create two cache entries
+    // for the same resource. Relative URLs are resolved against the current page.
+    const normalised = (() => {
+        try { return new URL(url, location.href).href; } catch { return url; }
+    })();
+    url = normalised;
+
+    const now = Date.now();
+    const cached = _cache.get(url);
+
+    if (cached && (now - cached.timestamp) < _cacheConfig.ttl) {
+        cached.hits++;
+        _cacheStats.hits++;
+        emit('component:cache-hit', { url, hits: cached.hits });
+        return cached.html;
+    }
+
+    if (cached) {
+        _cache.delete(url);
+        _cacheStats.totalBytes -= cached.size || 0;
+    }
+
+    _cacheStats.misses++;
+    emit('component:cache-miss', { url });
+
     const res = await fetch(url);
     if (!res.ok) throw new Error(`[oja/component] failed to load: ${url} (${res.status})`);
+
     const html = await res.text();
-    _cache.set(url, html);
+    const size = new Blob([html]).size;
+
+    _cacheStats.totalBytes += size;
+
+    while (_cache.size >= _cacheConfig.maxSize || _cacheStats.totalBytes > _cacheConfig.maxMemory) {
+        _evictOldest();
+    }
+
+    _cache.set(url, { html, timestamp: now, hits: 1, size });
+    emit('component:cached', { url, size });
+
     return html;
 }
 
+function _evictOldest() {
+    let oldestUrl = null;
+    let oldestTime = Infinity;
+
+    for (const [url, entry] of _cache.entries()) {
+        if (entry.timestamp < oldestTime) {
+            oldestTime = entry.timestamp;
+            oldestUrl = url;
+        }
+    }
+
+    if (oldestUrl) {
+        const entry = _cache.get(oldestUrl);
+        _cacheStats.totalBytes -= entry.size || 0;
+        _cacheStats.evictions++;
+        _cache.delete(oldestUrl);
+        emit('component:cache-evict', { url: oldestUrl });
+    }
+}
+
+// ─── Performance monitoring ───────────────────────────────────────────────────
+
+const _renderTimings = new Map(); // url → { count, totalMs, maxMs, minMs }
+
+let _monitoringEnabled = false;
+let _slowThreshold = 100; // ms
+
+function _trackRender(url, ms) {
+    if (!_monitoringEnabled) return;
+
+    if (!_renderTimings.has(url)) {
+        // Cap at 100 entries to prevent unbounded growth in long-running SPAs.
+        // Evict the oldest entry when the limit is reached.
+        if (_renderTimings.size >= 100) {
+            const firstKey = _renderTimings.keys().next().value;
+            _renderTimings.delete(firstKey);
+        }
+        _renderTimings.set(url, {
+            count: 0,
+            totalMs: 0,
+            maxMs: 0,
+            minMs: Infinity,
+        });
+    }
+
+    const stats = _renderTimings.get(url);
+    stats.count++;
+    stats.totalMs += ms;
+    stats.maxMs = Math.max(stats.maxMs, ms);
+    stats.minMs = Math.min(stats.minMs, ms);
+
+    if (ms > _slowThreshold) {
+        emit('component:slow-render', { url, ms, threshold: _slowThreshold });
+    }
+}
+
 // ─── Lifecycle registry ───────────────────────────────────────────────────────
-// associated with a specific container element via WeakMap to prevent pollution.
 
 const _scopes = new WeakMap(); // Element → { mount: [], unmount: [], intervals: [], timeouts: [] }
 export let _activeElement = null; // Exported for responder.js to set scope
@@ -94,17 +199,15 @@ function _getScope(el) {
     return _scopes.get(el);
 }
 
-// ─── Animation hooks (overrideable transitions) ───────────────────────────────
+// ─── Animation hooks ──────────────────────────────────────────────────────────
 
 let _hooks = {
-    entering: null, // (el) => Promise | void
-    leaving:  null, // (el) => Promise | void
-    updated:  null, // (el) => Promise | void
+    entering: null,
+    leaving:  null,
+    updated:  null,
 };
 
-// ─── CSS class transitions (defaults) ────────────────────────────────────────
-
-const CSS_TRANSITION_MS = 250; // must match oja.css animation durations
+const CSS_TRANSITION_MS = 250;
 
 function _enter(el) {
     if (_hooks.entering) return Promise.resolve(_hooks.entering(el));
@@ -128,6 +231,106 @@ function _flash(el) {
 
 export const component = {
 
+    // ─── Cache configuration ─────────────────────────────────────────────────
+
+    /**
+     * Configure the component cache behavior.
+     *
+     * @param {Object} config
+     *   ttl       : number  — time to live in ms (default: 60000)
+     *   maxSize   : number  — maximum number of cached components (default: 20)
+     *   maxMemory : number  — maximum total cache size in bytes (default: 5MB)
+     */
+    configureCache(config = {}) {
+        _cacheConfig = { ..._cacheConfig, ...config };
+        return this;
+    },
+
+    /**
+     * Get cache statistics.
+     * Returns { hits, misses, evictions, totalBytes, size }
+     */
+    cacheStats() {
+        return {
+            ..._cacheStats,
+            size: _cache.size,
+            config: { ..._cacheConfig },
+        };
+    },
+
+    /**
+     * Clear the component HTML cache.
+     * Useful during development or after a deploy.
+     */
+    clearCache(url) {
+        if (url) {
+            const entry = _cache.get(url);
+            if (entry) {
+                _cacheStats.totalBytes -= entry.size || 0;
+                _cache.delete(url);
+            }
+        } else {
+            _cache.clear();
+            _cacheStats.totalBytes = 0;
+            _cacheStats.evictions = 0;
+        }
+        return this;
+    },
+
+    /**
+     * Pre-fetch and cache a component without mounting it.
+     * Call during app init to avoid loading delays on first navigation.
+     */
+    async prefetch(url) {
+        await _load(url);
+        return this;
+    },
+
+    /**
+     * Pre-fetch multiple components in parallel.
+     * Useful for prefetching an entire section of the app.
+     */
+    async prefetchAll(urls) {
+        await Promise.all(urls.map(url => _load(url).catch(e => {
+            console.warn(`[oja/component] prefetch failed: ${url}`, e);
+        })));
+        return this;
+    },
+
+    // ─── Performance monitoring ───────────────────────────────────────────────
+
+    /**
+     * Enable render performance monitoring.
+     * Emits 'component:slow-render' events when renders exceed threshold.
+     *
+     * @param {number} thresholdMs - Slow render threshold in ms (default: 100)
+     */
+    enableMonitoring(thresholdMs = 100) {
+        _monitoringEnabled = true;
+        _slowThreshold = thresholdMs;
+        return this;
+    },
+
+    disableMonitoring() {
+        _monitoringEnabled = false;
+        return this;
+    },
+
+    /**
+     * Get render timing statistics.
+     * Returns map of URL → { count, avgMs, maxMs, minMs }
+     */
+    renderStats() {
+        const stats = {};
+        for (const [url, data] of _renderTimings.entries()) {
+            stats[url] = {
+                ...data,
+                avgMs: Math.round(data.totalMs / data.count),
+            };
+        }
+        return stats;
+    },
+
     // ─── Mounting ─────────────────────────────────────────────────────────────
 
     /**
@@ -140,10 +343,10 @@ export const component = {
      * @param {Object}         lists   — { listName: [items] } for data-each loops
      */
     async mount(target, url, data = {}, lists = {}) {
+        const start = performance.now();
         const container = _resolve(target);
         if (!container) return;
 
-        // Teardown previous content in this specific container
         await this._runUnmount(container);
 
         const loadingEl = container.querySelector('[data-loading]');
@@ -161,9 +364,6 @@ export const component = {
 
             fill(container, data);
 
-            // Execute scripts — passes container so component scripts have
-            // a scoped reference to their own DOM element.
-            // Stack pattern ensures nested mounts don't lose parent context.
             const prev = _activeElement;
             _activeElement = container;
             try {
@@ -171,6 +371,10 @@ export const component = {
             } finally {
                 _activeElement = prev;
             }
+
+            const ms = performance.now() - start;
+            _trackRender(url, ms);
+            emit('component:mounted', { url, ms });
 
         } catch (e) {
             console.error(`[oja/component] failed to mount "${url}":`, e);
@@ -192,6 +396,7 @@ export const component = {
      * Use for adding a single row/card to an existing list.
      */
     async add(target, url, data = {}) {
+        const start = performance.now();
         const container = _resolve(target);
         if (!container) return;
 
@@ -211,6 +416,16 @@ export const component = {
         const el = wrapper.firstElementChild || wrapper;
         container.appendChild(el);
         await _enter(el);
+
+        const ms = performance.now() - start;
+        emit('component:added', { url, ms });
+
+        // Notify ui.js to re-wire any data-ui widgets inside the new element.
+        // Without this, dynamically added components (e.g. a new table row
+        // containing a datepicker) would never have their widgets initialised
+        // because no navigation event fired.
+        emit('oja:component:added', { el });
+
         return el;
     },
 
@@ -222,11 +437,10 @@ export const component = {
         const el = _resolve(target);
         if (!el) return;
 
-        // Teardown scoped hooks for this subtree
         await this._runUnmount(el);
-
         await _leave(el);
         el.remove();
+        emit('component:removed', { target });
     },
 
     /**
@@ -234,18 +448,15 @@ export const component = {
      * Use when a value changes and you want the user to notice.
      */
     async update(target, data = {}) {
+        const start = performance.now();
         const el = _resolve(target);
         if (!el) return;
+
         fill(el, data);
         await _flash(el);
-    },
 
-    /**
-     * Pre-fetch and cache a component without mounting it.
-     * Call during app init to avoid loading delays on first navigation.
-     */
-    async prefetch(url) {
-        await _load(url);
+        const ms = performance.now() - start;
+        emit('component:updated', { target, ms });
     },
 
     // ─── Page lifecycle ───────────────────────────────────────────────────────
@@ -330,15 +541,6 @@ export const component = {
         _hooks = { ..._hooks, ...overrides };
     },
 
-    /**
-     * Clear the component HTML cache.
-     * Useful during development or after a deploy.
-     */
-    clearCache(url) {
-        if (url) _cache.delete(url);
-        else     _cache.clear();
-    },
-
     // ─── Internal — called by router.js ──────────────────────────────────────
 
     /**
@@ -346,21 +548,30 @@ export const component = {
      * @internal
      */
     async _runUnmount(el) {
+        // Recursively teardown child components first — child intervals and
+        // unmount hooks must be cleared before the parent, otherwise removing
+        // a dashboard card that contains a live-gauge widget leaves "ghost"
+        // timers running for every sub-widget inside it.
+        const children = el.querySelectorAll('*');
+        for (const child of children) {
+            if (_scopes.has(child)) {
+                await this._runUnmount(child);
+            }
+        }
+
+        // Teardown this element
         const scope = _scopes.get(el);
         if (!scope) return;
 
-        // Clear timers first
         for (const id of scope.intervals) clearInterval(id);
         for (const id of scope.timeouts)  clearTimeout(id);
 
-        // Run user-registered teardown hooks
         for (const fn of scope.unmount) {
             try { await fn(); } catch (e) {
                 console.warn('[oja/component] onUnmount hook error:', e);
             }
         }
 
-        // Clean up the WeakMap
         _scopes.delete(el);
     },
 

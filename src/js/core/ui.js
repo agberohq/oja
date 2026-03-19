@@ -26,6 +26,26 @@
  *     → original content restored
  *     → .oja-loading removed
  *
+ * ─── DOM Query Helpers ───────────────────────────────────────────────────────
+ *
+ *   // Single element
+ *   const btn = find('button.save-btn');
+ *
+ *   // Multiple elements
+ *   const items = findAll('.list-item');
+ *
+ *   // Scoped to container (perfect for components)
+ *   const [wrap, img, loading, error] = findAllIn(container, [
+ *       '.wrap', '.img', '.loading', '.error'
+ *   ]);
+ *
+ *   // With required check
+ *   const input = find('input[name="email"]', { required: true });
+ *   if (!input) return;
+ *
+ *   // Create element
+ *   const div = createEl('div', { class: 'card', text: 'Hello' });
+ *
  * ─── Widgets and Pickers ─────────────────────────────────────────────────────
  *
  *   JS developer registers the widget logic once in app.js.
@@ -39,7 +59,7 @@
  *
  * ─── JS API for custom actions (Fluent Chain) ────────────────────────────────
  *
- *   import { ui } from '../oja/ui.js';
+ *   import { ui, find } from '../oja/ui.js';
  *
  *   on('#deploy-btn', 'click', async (e, el) => {
  *       const btn = ui(el);
@@ -74,6 +94,272 @@
  */
 
 import { listen, emit } from './events.js';
+
+// ─── DOM Query Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Find a single element - safe alternative to $ that won't conflict with jQuery
+ *
+ *   const btn = find('button.submit');
+ *   const input = find('input[name="email"]');
+ *
+ * @param {string} selector - CSS selector
+ * @param {Object} options
+ *   @param {boolean} options.required - If true, warns when element not found
+ *   @param {Element} options.scope - Scope to query within (default: document)
+ *   @param {number} options.timeout - Wait for element to appear (ms)
+ * @returns {Element|null|Promise<Element|null>}
+ */
+export function find(selector, options = {}) {
+    const { required = false, scope = document, timeout = 0 } = options;
+
+    if (timeout > 0) {
+        return new Promise((resolve) => {
+            const el = scope.querySelector(selector);
+            if (el) {
+                resolve(el);
+                return;
+            }
+
+            const observer = new MutationObserver((mutations, obs) => {
+                const el = scope.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    resolve(el);
+                }
+            });
+
+            observer.observe(scope, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                if (required) {
+                    console.warn(`[oja/ui] Required element not found after ${timeout}ms: ${selector}`);
+                }
+                resolve(null);
+            }, timeout);
+        });
+    }
+
+    const el = scope.querySelector(selector);
+
+    if (required && !el) {
+        console.warn(`[oja/ui] Required element not found: ${selector}`);
+    }
+
+    return el;
+}
+
+/**
+ * Find all elements matching selector
+ *
+ *   const items = findAll('.list-item');
+ *   items.forEach(el => el.classList.add('active'));
+ *
+ * @param {string} selector - CSS selector
+ * @param {Element} scope - Scope to query within (default: document)
+ * @returns {Element[]}
+ */
+export function findAll(selector, scope = document) {
+    return Array.from(scope.querySelectorAll(selector));
+}
+
+/**
+ * Find multiple elements by their selectors and return as array
+ * Perfect for component initialization
+ *
+ *   const [wrap, img, loading, error] = findAllIn(container, [
+ *       '.oja-img-wrap', '.oja-img-el', '.oja-img-loading', '.oja-img-error'
+ *   ]);
+ *
+ * @param {Element} scope - Scope to query within
+ * @param {string[]} selectors - Array of CSS selectors
+ * @param {Object} options
+ *   @param {boolean} options.required - If true, warns when any element not found
+ * @returns {Array<Element|null>}
+ */
+export function findAllIn(scope, selectors, options = {}) {
+    const { required = false } = options;
+
+    return selectors.map(selector => {
+        const el = scope.querySelector(selector);
+
+        if (required && !el) {
+            console.warn(`[oja/ui] Required element not found in scope: ${selector}`);
+        }
+
+        return el;
+    });
+}
+
+/**
+ * Create a DOM element with attributes and children
+ *
+ *   const div = createEl('div', {
+ *       class: 'card',
+ *       text: 'Hello World',
+ *       style: 'color: red'
+ *   });
+ *
+ *   const btn = createEl('button', {
+ *       class: 'btn',
+ *       onclick: () => handleClick(),
+ *       children: [
+ *           createEl('span', { class: 'icon', text: '✓' }),
+ *           'Submit'
+ *       ]
+ *   });
+ *
+ * @param {string} tag - HTML tag name
+ * @param {Object} attrs - Attributes and properties
+ * @returns {Element}
+ */
+export function createEl(tag, attrs = {}) {
+    const el = document.createElement(tag);
+
+    for (const [key, value] of Object.entries(attrs)) {
+        if (key === 'text') {
+            el.textContent = value;
+        } else if (key === 'html') {
+            el.innerHTML = value;
+        } else if (key === 'children' && Array.isArray(value)) {
+            value.forEach(child => {
+                if (typeof child === 'string') {
+                    el.appendChild(document.createTextNode(child));
+                } else if (child instanceof Element) {
+                    el.appendChild(child);
+                }
+            });
+        } else if (key.startsWith('on') && typeof value === 'function') {
+            const eventName = key.slice(2).toLowerCase();
+            el.addEventListener(eventName, value);
+        } else if (value === true) {
+            el.setAttribute(key, '');
+        } else if (value !== false && value !== null && value !== undefined) {
+            el.setAttribute(key, value);
+        }
+    }
+
+    return el;
+}
+
+/**
+ * Remove all children from an element
+ *
+ *   emptyEl('#container');
+ *   emptyEl(containerEl);
+ *
+ * @param {string|Element} target
+ * @returns {Element}
+ */
+export function empty(target) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return el;
+
+    while (el.firstChild) {
+        el.removeChild(el.firstChild);
+    }
+
+    return el;
+}
+
+/**
+ * Remove element from DOM
+ *
+ *   removeEl('#temp');
+ *   removeEl(tempEl);
+ *
+ * @param {string|Element} target
+ * @returns {boolean} - True if element was removed
+ */
+export function removeEl(target) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el || !el.parentNode) return false;
+
+    el.parentNode.removeChild(el);
+    return true;
+}
+
+/**
+ * Insert HTML after an element
+ *
+ *   afterEl('#target', '<div>New content</div>');
+ *
+ * @param {string|Element} target
+ * @param {string} html
+ */
+export function afterEl(target, html) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    el.insertAdjacentHTML('afterend', html);
+}
+
+/**
+ * Insert HTML before an element
+ *
+ *   beforeEl('#target', '<div>New content</div>');
+ *
+ * @param {string|Element} target
+ * @param {string} html
+ */
+export function beforeEl(target, html) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    el.insertAdjacentHTML('beforebegin', html);
+}
+
+/**
+ * Toggle element visibility
+ *
+ *   toggleEl('#sidebar', true);  // show
+ *   toggleEl('#sidebar', false); // hide
+ *   toggleEl('#sidebar');        // toggle
+ *
+ * @param {string|Element} target
+ * @param {boolean} force - Force show/hide
+ * @returns {boolean} - New visibility state
+ */
+export function toggleEl(target, force) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return false;
+
+    const isHidden = window.getComputedStyle(el).display === 'none';
+    const shouldShow = force !== undefined ? force : isHidden;
+
+    el.style.display = shouldShow ? '' : 'none';
+    return shouldShow;
+}
+
+/**
+ * Check if element matches selector
+ *
+ *   if (matches(el, '.active')) { ... }
+ *
+ * @param {Element} el
+ * @param {string} selector
+ * @returns {boolean}
+ */
+export function matches(el, selector) {
+    return el.matches(selector);
+}
+
+/**
+ * Get closest matching ancestor
+ *
+ *   const card = closest(btn, '.card');
+ *
+ * @param {Element} el
+ * @param {string} selector
+ * @returns {Element|null}
+ */
+export function closest(el, selector) {
+    return el.closest(selector);
+}
 
 // ─── Spinner SVG ──────────────────────────────────────────────────────────────
 
@@ -305,6 +591,14 @@ listen('oja:navigate:end', () => {
     ui.widget.wire(document.body);
 });
 
+// Re-wire widgets when component.add() inserts a new element dynamically.
+// Without this, a datepicker (data-ui="datepicker") inside a newly added
+// table row would never be initialised — no navigation event fires for
+// programmatic DOM insertions.
+listen('oja:component:added', ({ el }) => {
+    if (el) ui.widget.wire(el);
+});
+
 // Auto-wire on DOM ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => ui.wire());
@@ -320,3 +614,16 @@ function _esc(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+
+// Re-export DOM helpers attached to ui for convenience
+ui.find = find;
+ui.findAll = findAll;
+ui.findAllIn = findAllIn;
+ui.createEl = createEl;
+ui.empty = empty;
+ui.remove = removeEl;
+ui.after = afterEl;
+ui.before = beforeEl;
+ui.toggle = toggleEl;
+ui.matches = matches;
+ui.closest = closest;

@@ -234,11 +234,13 @@ export class OjaSocket {
             maxAttempts     : 0,
             pingInterval    : 0,
             pingMessage     : 'ping',
+            maxQueueSize    : 100,   // max messages queued while disconnected
             ...options
         };
         this._ws         = null;
         this._handlers   = new Map();
         this._queue      = [];   // messages queued while connecting
+        this._maxQueue   = this._opts.maxQueueSize ?? 100; // bounded — see send()
         this._attempts   = 0;
         this._closed     = false;
         this._reconnTimer= null;
@@ -283,6 +285,14 @@ export class OjaSocket {
         if (this._ws?.readyState === WebSocket.OPEN) {
             this._ws.send(encoded);
         } else {
+            // Cap the outbound queue so a long disconnection (server down) with
+            // frequent send() calls doesn't exhaust memory. The oldest message
+            // is dropped when the limit is reached — callers that need delivery
+            // guarantees should listen for 'oja:socket:queue-overflow'.
+            if (this._queue.length >= this._maxQueue) {
+                this._queue.shift();
+                _emit('oja:socket:queue-overflow', { url: this._opts.url, dropped: 1 });
+            }
             this._queue.push(encoded);
         }
         return this;

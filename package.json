@@ -10,20 +10,25 @@
         "url": "https://github.com/agberohq/oja.git"
     },
     "keywords": [
-        "spa", "framework", "router", "zero-build",
-        "vanilla-js", "template", "reactive"
+        "spa",
+        "framework",
+        "router",
+        "zero-build",
+        "vanilla-js",
+        "template",
+        "reactive"
     ],
     "type": "module",
-    "main":   "build/oja.min.js",
+    "main": "build/oja.min.js",
     "module": "build/oja.esm.js",
     "exports": {
         ".": {
-            "import":  "./build/oja.esm.js",
+            "import": "./build/oja.esm.js",
             "default": "./build/oja.min.js"
         },
-        "./src/*":            "./src/*",
-        "./src/js/*":         "./src/js/*",
-        "./src/js/codecs/*":  "./src/js/codecs/*"
+        "./src/*": "./src/*",
+        "./src/js/*": "./src/js/*",
+        "./src/js/codecs/*": "./src/js/codecs/*"
     },
     "files": [
         "src/",
@@ -38,7 +43,8 @@
         "clean": "make clean"
     },
     "devDependencies": {
-        "esbuild":       "latest",
-        "clean-css-cli": "latest"
+        "clean-css-cli": "latest",
+        "esbuild": "latest",
+        "google-closure-compiler": "^20260316.0.0"
     }
 }

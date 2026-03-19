@@ -87,7 +87,7 @@
  */
 
 import { OjaWorker } from './worker.js';
-import { debug }     from './debug.js';
+import { debug }     from '../core/debug.js';
 
 export class OjaWasm {
     /**

@@ -19,19 +19,19 @@
 import './mock/api.js';
 
 // ── Oja imports ───────────────────────────────────────────────────────────────
-import { Router }            from '../src/js/router.js';
-import { Responder }         from '../src/js/responder.js';
-import { auth }              from '../src/js/auth.js';
-import { Api }               from '../src/js/api.js';
-import { notify }            from '../src/js/notify.js';
-import { modal }             from '../src/js/modal.js';
-import { component }         from '../src/js/component.js';
-import { logger }            from '../src/js/logger.js';
-import { debug }             from '../src/js/debug.js';
-import { adapter }           from '../src/js/adapter.js';
-import { Store }             from '../src/js/store.js';
-import { context, effect }   from '../src/js/reactive.js';
-import { on, listen, keys }  from '../src/js/events.js';
+import { Router }            from '../src/js/core/router.js';
+import { Out }         from '../src/js/core/out.js';
+import { auth }              from '../src/js/core/auth.js';
+import { Api }               from '../src/js/core/api.js';
+import { notify }            from '../src/js/core/notify.js';
+import { modal }             from '../src/js/core/modal.js';
+import { component }         from '../src/js/core/component.js';
+import { logger }            from '../src/js/core/logger.js';
+import { debug }             from '../src/js/core/debug.js';
+import { adapter }           from '../src/js/core/adapter.js';
+import { Store }             from '../src/js/core/store.js';
+import { context, effect }   from '../src/js/core/reactive.js';
+import { on, listen, keys }  from '../src/js/core/events.js';
 
 // ── Debug ─────────────────────────────────────────────────────────────────────
 debug.enable('router,auth,api');
@@ -172,7 +172,7 @@ auth.level('auditor',   () => auth.session.isActive() && auth.hasRole('auditor')
 export const router = new Router({
     mode    : 'hash',
     outlet  : '#app',
-    loading : Responder.html(`
+    loading : Out.html(`
         <div class="page-loading">
             <svg class="oja-spinner" viewBox="0 0 24 24" fill="none" width="24" height="24">
                 <path d="M12 2V6M12 18V22M4.93 4.93L7.76 7.76M16.24 16.24L19.07 19.07
@@ -223,25 +223,25 @@ router.Use(async (ctx, next) => {
 });
 
 router.Use(Router.middleware.errorBoundary(
-    Responder.html('<div class="error-page"><div class="error-code">Error</div><p class="error-msg">Something went wrong. Try refreshing.</p></div>')
+    Out.html('<div class="error-page"><div class="error-code">Error</div><p class="error-msg">Something went wrong. Try refreshing.</p></div>')
 ));
 
 router.afterEach(Router.middleware.pageTitle('Oja · Agbero'));
 router.afterEach(Router.middleware.scrollTop);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-router.Get('/login', Responder.component('pages/login.html'));
+router.Get('/login', Out.component('pages/login.html'));
 
 const app = router.Group('/');
 app.Use(auth.middleware('protected', '/login'));
 
-app.Get('dashboard', Responder.component('pages/dashboard.html'));
-app.Get('firewall',  Responder.component('pages/firewall.html'));
-app.Get('logs',      Responder.component('pages/logs.html'));
-app.Get('settings',  Responder.component('pages/settings.html'));
+app.Get('dashboard', Out.component('pages/dashboard.html'));
+app.Get('firewall',  Out.component('pages/firewall.html'));
+app.Get('logs',      Out.component('pages/logs.html'));
+app.Get('settings',  Out.component('pages/settings.html'));
 
 app.Route('hosts', hosts => {
-    hosts.Get('/', Responder.component('pages/hosts.html'));
+    hosts.Get('/', Out.component('pages/hosts.html'));
 
     hosts.Route('{id}', host => {
         host.Use(async (ctx, next) => {
@@ -249,13 +249,13 @@ app.Route('hosts', hosts => {
             if (!ctx.host) return ctx.redirect('/hosts');
             await next();
         });
-        host.Get('/', Responder.fn(async (container, ctx) =>
-            Responder.component('pages/host-detail.html', ctx.host)
+        host.Get('/', Out.fn(async (container, ctx) =>
+            Out.component('pages/host-detail.html', ctx.host)
         ));
     });
 });
 
-router.NotFound(Responder.html(`
+router.NotFound(Out.html(`
     <div class="error-page">
         <div class="error-code">404</div>
         <p class="error-msg">Page not found</p>

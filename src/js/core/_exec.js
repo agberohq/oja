@@ -59,13 +59,21 @@ export function execScripts(container, sourceUrl) {
             //   import { x } from './y.js'   — static named import
             //   import './y.js'               — side-effect import
             //   import('./y.js')              — dynamic import
+            //
+            // The `from` regex is anchored to only match after an `import`
+            // statement boundary (start of line, or after ; or newline).
+            // This prevents false matches inside string literals such as:
+            //   const msg = "imported from './assets/img.png'";
+            // Without the anchor, that string would be incorrectly rewritten.
             const body = old.textContent
-                .replace(/\bfrom\s+(['"])([^'"]+)\1/g, (m, q, s) =>
-                    s.startsWith('.') ? `from ${q}${_abs(s, base)}${q}` : m)
+                .replace(/((?:^|\n|;)\s*import\s+[\w*{][^;]*?)\bfrom\s+(['"])([^'"]+)\2/gm,
+                    (m, prefix, q, s) =>
+                        s.startsWith('.') ? `${prefix}from ${q}${_abs(s, base)}${q}` : m)
                 .replace(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g, (m, q, s) =>
                     s.startsWith('.') ? `import(${q}${_abs(s, base)}${q})` : m)
-                .replace(/\bimport\s+(['"])([^'"]+)\1/g, (m, q, s) =>
-                    s.startsWith('.') ? `import ${q}${_abs(s, base)}${q}` : m);
+                .replace(/((?:^|\n|;)\s*)import\s+(['"])([^'"]+)\2/gm,
+                    (m, prefix, q, s) =>
+                        s.startsWith('.') ? `${prefix}import ${q}${_abs(s, base)}${q}` : m);
 
             // Prepend container retrieval — first thing the module does is
             // grab its scoped container and remove the global reference.

@@ -82,11 +82,24 @@ const _levels = new Map(); // name → () => bool
 
 // ─── Session state ────────────────────────────────────────────────────────────
 
-let _expiryTimer   = null;
-let _warningTimer  = null;
-let _onStartHooks  = [];
-let _onRenewHooks  = [];
-let _onExpiryHooks = [];
+const _hooks = new Map([
+    ['start', []],
+    ['renew', []],
+    ['expiry', []],
+    ['refresh', []]
+]);
+
+const _timers = new Map([
+    ['expiry', null],
+    ['warning', null],
+    ['refresh', null]
+]);
+
+let _refreshInProgress = false;
+let _refreshSubscribers = [];
+
+const REFRESH_THRESHOLD = 5 * 60 * 1000;
+const REFRESH_BUFFER = 30 * 1000;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -120,11 +133,10 @@ export const auth = {
             }
 
             if (!check()) {
-                // Save where the user was trying to go
                 _metaStore.set('intendedPath',   ctx.path);
                 _metaStore.set('intendedParams', ctx.params);
                 ctx.redirect(redirectTo);
-                return; // do not call next()
+                return;
             }
 
             await next();
@@ -179,30 +191,32 @@ export const auth = {
          *
          *   await auth.session.start(jwt);
          */
-        async start(token) {
+        async start(token, refreshToken = null) {
             await _tokenStore.setAsync('token', token);
+            if (refreshToken) {
+                await _tokenStore.setAsync('refresh_token', refreshToken);
+            }
             _metaStore.set('startedAt', Date.now());
 
             const payload = _decodeJWT(token);
             if (payload?.exp) {
-                _metaStore.set('exp', payload.exp * 1000);
-                _startExpiryWatch(payload.exp * 1000);
+                const expMs = payload.exp * 1000;
+                _metaStore.set('exp', expMs);
+                _startExpiryWatch(expMs);
+                _startRefreshWatch(expMs);
             }
 
             emit('auth:start', { token });
-            for (const fn of _onStartHooks) {
-                try { await fn(token); } catch (e) {
-                    console.warn('[oja/auth] OnStart hook error:', e);
-                }
-            }
+            _runHooks('start', token, refreshToken);
         },
 
         /**
          * End the session — clear token, stop timers, fire hooks.
          */
         async end() {
-            _stopExpiryWatch();
+            _stopAllTimers();
             await _tokenStore.clear('token');
+            await _tokenStore.clear('refresh_token');
             _metaStore.clear('exp');
             _metaStore.clear('startedAt');
             _metaStore.clear('payload');
@@ -215,22 +229,24 @@ export const auth = {
          *
          *   await auth.session.renew(newJwt);
          */
-        async renew(newToken) {
-            _stopExpiryWatch();
+        async renew(newToken, newRefreshToken = null) {
+            _stopAllTimers();
             await _tokenStore.setAsync('token', newToken);
+
+            if (newRefreshToken) {
+                await _tokenStore.setAsync('refresh_token', newRefreshToken);
+            }
 
             const payload = _decodeJWT(newToken);
             if (payload?.exp) {
-                _metaStore.set('exp', payload.exp * 1000);
-                _startExpiryWatch(payload.exp * 1000);
+                const expMs = payload.exp * 1000;
+                _metaStore.set('exp', expMs);
+                _startExpiryWatch(expMs);
+                _startRefreshWatch(expMs);
             }
 
             emit('auth:renew', { token: newToken });
-            for (const fn of _onRenewHooks) {
-                try { await fn(newToken); } catch (e) {
-                    console.warn('[oja/auth] OnRenew hook error:', e);
-                }
-            }
+            _runHooks('renew', newToken, newRefreshToken);
         },
 
         /**
@@ -239,8 +255,8 @@ export const auth = {
          */
         isActive() {
             const exp = _metaStore.get('exp');
-            if (!exp) return false;                   // no session started
-            if (Date.now() >= exp) return false;      // expired
+            if (!exp) return false;
+            if (Date.now() >= exp) return false;
             return true;
         },
 
@@ -293,15 +309,14 @@ export const auth = {
          *       router.navigate(dest);
          *   });
          */
-        OnStart(fn) { _onStartHooks.push(fn); return auth; },
+        OnStart(fn) { _addHook('start', fn); return auth; },
 
         /**
          * Called after session.renew() — use to update api token.
          *
          *   auth.session.OnRenew((newToken) => api.setToken(newToken));
          */
-        OnRenew(fn) { _onRenewHooks.push(fn); return auth; },
-
+        OnRenew(fn) { _addHook('renew', fn); return auth; },
 
         /**
          * Called when session expires — use to redirect and notify.
@@ -311,18 +326,144 @@ export const auth = {
          *       router.navigate('/login');
          *   });
          */
-        OnExpiry(fn) { _onExpiryHooks.push(fn); return auth; }
+        OnExpiry(fn) { _addHook('expiry', fn); return auth; },
+
+        /**
+         * Called when token is about to expire (5 minutes before).
+         * Use to show warning or trigger silent refresh.
+         */
+        OnRefresh(fn) { _addHook('refresh', fn); return auth; },
+
+        /**
+         * Manually trigger token refresh.
+         * Returns true if refresh succeeded, false otherwise.
+         */
+        async refresh() {
+            if (_refreshInProgress) {
+                return new Promise(resolve => {
+                    _refreshSubscribers.push(resolve);
+                });
+            }
+
+            _refreshInProgress = true;
+
+            try {
+                const refreshToken = await _tokenStore.getAsync('refresh_token');
+                if (!refreshToken) {
+                    throw new Error('No refresh token available');
+                }
+
+                emit('auth:refresh:start');
+
+                const result = await this._executeRefresh(refreshToken);
+                await this.renew(result.token, result.refreshToken || refreshToken);
+
+                _refreshSubscribers.forEach(resolve => resolve(true));
+                emit('auth:refresh:success', result);
+
+                return true;
+            } catch (error) {
+                console.warn('[oja/auth] Token refresh failed:', error);
+                _refreshSubscribers.forEach(resolve => resolve(false));
+                emit('auth:refresh:failed', { error: error.message });
+
+                if (error.fatal) {
+                    await this.end();
+                }
+
+                return false;
+            } finally {
+                _refreshInProgress = false;
+                _refreshSubscribers = [];
+            }
+        },
+
+        async _executeRefresh(refreshToken) {
+            const response = await fetch('/auth/refresh', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + refreshToken
+                }
+            });
+
+            if (!response.ok) {
+                const error = new Error(`Refresh failed: ${response.status}`);
+                error.fatal = response.status === 401 || response.status === 403;
+                throw error;
+            }
+
+            return response.json();
+        },
+
+        /**
+         * Retrieve the raw refresh token string (async, decrypted).
+         */
+        async refreshToken() {
+            return _tokenStore.getAsync('refresh_token');
+        },
+
+        /**
+         * How many milliseconds until the next automatic refresh attempt.
+         */
+        timeUntilRefresh() {
+            const exp = _metaStore.get('exp');
+            if (!exp) return Infinity;
+            const refreshAt = exp - REFRESH_THRESHOLD;
+            return Math.max(0, refreshAt - Date.now());
+        }
     }
 };
+
+// ─── Hook management ──────────────────────────────────────────────────────────
+
+function _addHook(type, fn) {
+    if (!_hooks.has(type)) return;
+    _hooks.get(type).push(fn);
+}
+
+function _runHooks(type, ...args) {
+    const hooks = _hooks.get(type);
+    if (!hooks) return;
+
+    for (const fn of hooks) {
+        try { fn(...args); } catch (e) {
+            console.warn(`[oja/auth] ${type} hook error:`, e);
+        }
+    }
+}
+
+// ─── Timer management ─────────────────────────────────────────────────────────
+
+function _setTimer(type, fn, delay) {
+    _clearTimer(type);
+    if (delay <= 0) {
+        fn();
+        return;
+    }
+    _timers.set(type, setTimeout(fn, delay));
+}
+
+function _clearTimer(type) {
+    const timer = _timers.get(type);
+    if (timer) {
+        clearTimeout(timer);
+        _timers.set(type, null);
+    }
+}
+
+function _stopAllTimers() {
+    for (const type of _timers.keys()) {
+        _clearTimer(type);
+    }
+}
 
 // ─── Expiry watch ─────────────────────────────────────────────────────────────
 
 function _startExpiryWatch(expMs) {
-    _stopExpiryWatch();
-
-    const now        = Date.now();
-    const msLeft     = expMs - now;
-    const warnBefore = 5 * 60 * 1000; // warn 5 minutes before expiry
+    const now = Date.now();
+    const msLeft = expMs - now;
+    const warnBefore = 5 * 60 * 1000;
 
     if (msLeft <= 0) {
         _handleExpiry();
@@ -331,27 +472,51 @@ function _startExpiryWatch(expMs) {
 
     const warnAt = msLeft - warnBefore;
     if (warnAt > 0) {
-        _warningTimer = setTimeout(() => {
+        _setTimer('warning', () => {
             emit('auth:expiring', { ms: warnBefore, expiresAt: expMs });
         }, warnAt);
     }
 
-    _expiryTimer = setTimeout(_handleExpiry, msLeft);
+    _setTimer('expiry', _handleExpiry, msLeft);
 }
 
-function _stopExpiryWatch() {
-    clearTimeout(_expiryTimer);
-    clearTimeout(_warningTimer);
-    _expiryTimer  = null;
-    _warningTimer = null;
+function _startRefreshWatch(expMs) {
+    const now = Date.now();
+    const refreshAt = expMs - REFRESH_THRESHOLD;
+    const msUntilRefresh = refreshAt - now;
+
+    if (msUntilRefresh <= 0) {
+        _handleRefresh();
+        return;
+    }
+
+    _setTimer('refresh', _handleRefresh, msUntilRefresh);
 }
 
 async function _handleExpiry() {
     await auth.session.end();
     emit('auth:expired');
-    for (const fn of _onExpiryHooks) {
-        try { await fn(); } catch (e) {
-            console.warn('[oja/auth] OnExpiry hook error:', e);
+    _runHooks('expiry');
+}
+
+async function _handleRefresh() {
+    if (!auth.session.isActive()) return;
+
+    emit('auth:expiring', {
+        ms: REFRESH_THRESHOLD,
+        expiresAt: _metaStore.get('exp')
+    });
+
+    const hooks = _hooks.get('refresh');
+    for (const fn of hooks) {
+        try {
+            const shouldRefresh = await fn();
+            if (shouldRefresh !== false) {
+                await auth.session.refresh();
+                break;
+            }
+        } catch (e) {
+            console.warn('[oja/auth] refresh hook error:', e);
         }
     }
 }
@@ -380,11 +545,12 @@ function _decodeJWT(token) {
 // ─── Listen for api:unauthorized ─────────────────────────────────────────────
 
 listen('api:unauthorized', async () => {
-    if (auth.session.isActive()) {
+    if (!auth.session.isActive()) return;
+
+    const refreshed = await auth.session.refresh();
+    if (!refreshed) {
         await auth.session.end();
         emit('auth:expired');
-        for (const fn of _onExpiryHooks) {
-            try { await fn(); } catch {}
-        }
+        _runHooks('expiry');
     }
 });

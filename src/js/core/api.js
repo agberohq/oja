@@ -50,7 +50,7 @@
  *   api:online        → connection restored
  */
 
-import { jsonCodec } from './codecs/json.js';
+import { jsonCodec } from '../codecs/json.js';
 
 export class Api {
     /**
@@ -77,6 +77,22 @@ export class Api {
         this._onlineFn      = null;
         this._beforeHooks   = [];
         this._afterHooks    = [];
+
+        // New features
+        this._queueWhenOffline = false;
+        this._offlineQueue = [];
+        this._csrfToken = null;
+        this._refreshToken = null;
+        this._refreshEndpoint = '/auth/refresh';
+        this._isRefreshing = false;
+        this._refreshSubscribers = [];
+        this._retryStrategies = {
+            '429': true,
+            '503': true,
+            '504': true,
+        };
+
+        this._setupOnlineDetection();
     }
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -101,6 +117,70 @@ export class Api {
 
     isAuthenticated() {
         return !!(this._token || this._basic);
+    }
+
+    // ─── New security methods ─────────────────────────────────────────────────
+
+    /**
+     * Configure retry behavior for specific HTTP status codes.
+     * @param {number|Object} statusCode - Status code or map of status codes
+     * @param {boolean} shouldRetry - Whether to retry (ignored if first param is object)
+     */
+    retryWhen(statusCode, shouldRetry = true) {
+        if (typeof statusCode === 'object') {
+            Object.assign(this._retryStrategies, statusCode);
+        } else {
+            this._retryStrategies[statusCode] = shouldRetry;
+        }
+        return this;
+    }
+
+    /**
+     * Enable or disable offline queueing for mutations.
+     * When enabled, POST/PUT/PATCH/DELETE requests are queued while offline.
+     */
+    queueWhenOffline(enable = true) {
+        this._queueWhenOffline = enable;
+        return this;
+    }
+
+    /**
+     * Set CSRF token for request safety.
+     * Token is automatically added to non-GET requests as X-CSRF-Token header.
+     */
+    withCsrf(token) {
+        this._csrfToken = token;
+        return this;
+    }
+
+    /**
+     * Configure refresh token for automatic 401 handling.
+     * When a 401 occurs, the SDK will attempt to refresh the token and retry.
+     */
+    withRefreshToken(token, endpoint = '/auth/refresh') {
+        this._refreshToken = token;
+        this._refreshEndpoint = endpoint;
+        return this;
+    }
+
+    /**
+     * Flush all queued offline requests.
+     * Called automatically when connection is restored.
+     */
+    async flushQueue() {
+        if (!this._offlineQueue.length) return;
+
+        const queue = [...this._offlineQueue];
+        this._offlineQueue = [];
+
+        for (const item of queue) {
+            try {
+                await this._request(item.path, item.method, item.body, item.options);
+            } catch (e) {
+                console.warn('[oja/api] Failed to replay queued request:', item, e);
+                this._offlineQueue.push(item);
+            }
+        }
     }
 
     // ─── Hooks ────────────────────────────────────────────────────────────────
@@ -152,36 +232,97 @@ export class Api {
         if (this._token)      headers['Authorization'] = 'Bearer ' + this._token;
         else if (this._basic) headers['Authorization'] = 'Basic '  + this._basic;
 
-        // Codec content type (skipped for raw uploads and GET)
+        if (this._csrfToken && method !== 'GET' && method !== 'HEAD') {
+            headers['X-CSRF-Token'] = this._csrfToken;
+        }
+
+        if (!navigator.onLine && this._queueWhenOffline && method !== 'GET') {
+            this._offlineQueue.push({ path, method, body, options });
+            this._setOnline(false);
+            _emit('api:queued', { path, method });
+            return new Promise(resolve => {
+                window.addEventListener('online', () => this.flushQueue(), { once: true });
+            });
+        }
+
+        if (this._refreshToken && !options._skipRefresh) {
+            return this._requestWithRefresh(path, method, body, options);
+        }
+
+        return this._executeRequest(path, method, body, options);
+    }
+
+    async _requestWithRefresh(path, method, body, options) {
+        try {
+            return await this._executeRequest(path, method, body, options);
+        } catch (error) {
+            if (error.status !== 401) throw error;
+
+            if (this._isRefreshing) {
+                return new Promise(resolve => {
+                    this._refreshSubscribers.push(resolve);
+                });
+            }
+
+            this._isRefreshing = true;
+
+            try {
+                const newToken = await this._refreshTokenRequest();
+                this.setToken(newToken);
+                this._refreshSubscribers.forEach(resolve => resolve());
+                this._refreshSubscribers = [];
+                return this._executeRequest(path, method, body, { ...options, _skipRefresh: true });
+            } finally {
+                this._isRefreshing = false;
+            }
+        }
+    }
+
+    async _refreshTokenRequest() {
+        const res = await fetch(this._refreshEndpoint, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + this._refreshToken }
+        });
+        if (!res.ok) throw new Error('Token refresh failed');
+        const { token } = await res.json();
+        return token;
+    }
+
+    async _executeRequest(path, method, body = null, options = {}) {
+        const headers = {};
+
+        if (this._token)      headers['Authorization'] = 'Bearer ' + this._token;
+        else if (this._basic) headers['Authorization'] = 'Basic '  + this._basic;
+
+        if (this._csrfToken && method !== 'GET' && method !== 'HEAD') {
+            headers['X-CSRF-Token'] = this._csrfToken;
+        }
+
         if (body !== null && !options.raw) {
             headers['Content-Type'] = this._codec.contentType;
             headers['Accept']       = this._codec.contentType;
         }
 
-        // Merge any extra headers passed per-request
         if (options.headers) Object.assign(headers, options.headers);
 
         const opts = { method, headers };
 
-        // Encode body
         if (body !== null) {
             if (options.raw || body instanceof FormData) {
-                opts.body = body; // browser handles multipart
-                delete opts.headers['Content-Type']; // let browser set boundary
+                opts.body = body;
+                delete opts.headers['Content-Type'];
             } else {
                 const encoded = await Promise.resolve(this._codec.encode(body));
                 opts.body = encoded;
             }
         }
 
-        // Run beforeRequest hooks
         for (const fn of this._beforeHooks) {
             try { await fn(path, method, opts); } catch (e) {
                 console.warn('[oja/api] beforeRequest hook error:', e);
             }
         }
 
-        // Abort controller for timeout
         const controller = new AbortController();
         const timeoutId  = setTimeout(() => controller.abort(), this._timeout);
         opts.signal = controller.signal;
@@ -210,35 +351,37 @@ export class Api {
 
         const elapsedMs = Date.now() - startMs;
 
-        // Run afterResponse hooks
         for (const fn of this._afterHooks) {
             try { await fn(path, method, res, elapsedMs); } catch (e) {
                 console.warn('[oja/api] afterResponse hook error:', e);
             }
         }
 
-        // Handle status codes
         if (res.status === 401) {
             _emit('api:unauthorized', { path, method });
-            return null;
+            throw Object.assign(new Error('Unauthorized'), { status: 401 });
         }
 
-        if (res.status === 204) return true;  // No Content
+        if (res.status === 204) return true;
+
         if (res.status === 404) return null;
 
         if (res.status >= 500) {
             _emit('api:error', { status: res.status, path, method });
-            return null;
+            if (this._retryStrategies[res.status] && attempt < this._retries) {
+                attempt++;
+                await _wait(this._retryDelay * attempt);
+                return this._executeRequest(path, method, body, options);
+            }
+            throw Object.assign(new Error(`Server error: ${res.status}`), { status: res.status });
         }
 
-        // Decode response body using codec
         return this._decode(res);
     }
 
     async _decode(res) {
         const ct = res.headers.get('content-type') || '';
 
-        // MessagePack response
         if (ct.includes('msgpack') || this._codec.binaryType === 'binary') {
             try {
                 const buf = await res.arrayBuffer();
@@ -249,7 +392,6 @@ export class Api {
             }
         }
 
-        // Text / JSON response — always use JSON codec decode for safety
         try {
             const text = await res.text();
             if (!text.trim()) return null;
@@ -266,11 +408,19 @@ export class Api {
         if (!online && this._offlineFn) this._offlineFn();
         _emit(online ? 'api:online' : 'api:offline');
     }
+
+    _setupOnlineDetection() {
+        if (typeof window === 'undefined') return;
+        window.addEventListener('online', () => {
+            this._setOnline(true);
+            this.flushQueue();
+        });
+        window.addEventListener('offline', () => this._setOnline(false));
+    }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function _emit(name, detail = {}) {
+    if (typeof document === 'undefined') return;
     document.dispatchEvent(new CustomEvent(name, { detail }));
 }
 

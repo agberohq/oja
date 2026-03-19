@@ -48,6 +48,25 @@
  *   Custom:   template.filter('slug', s => s.toLowerCase().replace(/ /g,'-'))
  *   Usage:    {{.name | slug}} or {{.ts | date}} or {{.val | default "n/a"}}
  *
+ * ─── Internationalization (i18n) ─────────────────────────────────────────────
+ *
+ *   {{t "welcome.message"}}                          → translate key
+ *   {{t "user.greeting" .name}}                      → with interpolation
+ *   {{t "items.count" .count | pluralize "item"}}    → with pluralization
+ *   {{.count | pluralize "item"}}                     → standalone pluralize
+ *
+ *   // Configure in app.js
+ *   template.i18n({
+ *       locale: 'fr',
+ *       fallback: 'en',
+ *       messages: {
+ *           'welcome.message': 'Bienvenue',
+ *           'user.greeting': 'Bonjour, {0}',
+ *           'items.count': '{0} élément(s)'
+ *       },
+ *       pluralize: (count, word) => count === 1 ? word : word + 's'
+ *   });
+ *
  * ─── API ─────────────────────────────────────────────────────────────────────
  *
  *   render(html, data)              → string: process Go-style blocks + interpolate
@@ -56,6 +75,23 @@
  *   renderRaw(html, data)           → string: same as render but no XSS escaping
  *   template.filter(name, fn)       → register a custom filter
  */
+
+// ─── i18n configuration ───────────────────────────────────────────────────────
+
+let _i18n = {
+    locale: 'en',
+    fallback: 'en',
+    messages: {},
+    pluralize: (count, word, pluralForm) => {
+        if (typeof pluralForm === 'string') return pluralForm;
+        return count === 1 ? word : word + 's';
+    },
+    interpolate: (str, ...args) => {
+        return str.replace(/{(\d+)}/g, (match, index) => {
+            return args[index] !== undefined ? args[index] : match;
+        });
+    }
+};
 
 // ─── Filter registry ──────────────────────────────────────────────────────────
 
@@ -70,6 +106,9 @@ const _filters = new Map([
     ['default', (v, dflt) => (v !== undefined && v !== null && v !== '') ? v : (dflt ?? '')],
     ['trunc',   (s, n)    => { const str = String(s ?? ''); return str.length > n ? str.slice(0, n) + '…' : str; }],
     ['bytes',   (n)       => _formatBytes(Number(n) || 0)],
+    // i18n filters
+    ['t',       (key, ...args) => _translate(key, ...args)],
+    ['pluralize', (count, word, pluralForm) => _i18n.pluralize(count, word, pluralForm)],
 ]);
 
 // ─── Token cache ──────────────────────────────────────────────────────────────
@@ -124,7 +163,6 @@ export function each(container, name, items = [], options = {}) {
         return;
     }
 
-    // Clear previously rendered items
     container.querySelectorAll(`[data-each-item="${name}"]`).forEach(el => el.remove());
     container.querySelectorAll(`[data-each-empty="${name}"]`).forEach(el => el.remove());
 
@@ -132,7 +170,6 @@ export function each(container, name, items = [], options = {}) {
     const emptyEl   = container.querySelector(`[data-empty="${name}"]`);
     const loadingEl = container.querySelector(`[data-loading="${name}"]`);
 
-    // Apply filter → sort → map
     let list = options.filter ? items.filter(options.filter) : [...items];
     if (options.sort) list.sort(options.sort);
 
@@ -153,16 +190,84 @@ export function each(container, name, items = [], options = {}) {
     }
 }
 
+/**
+ * Register a custom filter for use in templates.
+ *
+ *   import { template } from '../oja/template.js';
+ *   template.filter('slug', s => s.toLowerCase().replace(/\s+/g, '-'));
+ *
+ *   // In HTML:
+ *   // {{.title | slug}}
+ */
+export const template = {
+    filter(name, fn) {
+        _filters.set(name, fn);
+        return this;
+    },
+    filters: _filters,
+
+    /**
+     * Configure internationalization settings.
+     *
+     * @param {Object} config
+     *   locale    : string              — current locale (default: 'en')
+     *   fallback  : string              — fallback locale (default: 'en')
+     *   messages  : Object              — key → translated string
+     *   pluralize : Function            — (count, word, pluralForm) => string
+     *   interpolate : Function          — (str, ...args) => string
+     */
+    i18n(config = {}) {
+        _i18n = { ..._i18n, ...config };
+        return this;
+    },
+
+    /**
+     * Get current i18n configuration.
+     */
+    getI18n() {
+        return { ..._i18n };
+    },
+
+    /**
+     * Add translation messages for a locale.
+     */
+    addMessages(locale, messages) {
+        if (!_i18n.messages[locale]) {
+            _i18n.messages[locale] = {};
+        }
+        Object.assign(_i18n.messages[locale], messages);
+        return this;
+    },
+
+    /**
+     * Set current locale.
+     */
+    setLocale(locale) {
+        _i18n.locale = locale;
+        return this;
+    }
+};
+
+// ─── Translation helper ───────────────────────────────────────────────────────
+
+function _translate(key, ...args) {
+    const localeMessages = _i18n.messages[_i18n.locale];
+    const fallbackMessages = _i18n.messages[_i18n.fallback];
+
+    let message = localeMessages?.[key] || fallbackMessages?.[key] || key;
+
+    if (args.length > 0) {
+        message = _i18n.interpolate(message, ...args);
+    }
+
+    return message;
+}
+
 // ─── Go-style block processor ─────────────────────────────────────────────────
-// Processes {{if}}, {{range}}, {{else}}, {{end}} as a string pre-processor
-// before HTML hits the DOM. Avoids fragile DOM surgery.
 
 function _processBlocks(html, data, escape) {
-    // Fast path — no Go syntax present
     if (!html.includes('{{')) return html;
-
-    const result = _evalTemplate(html, data, escape);
-    return result;
+    return _evalTemplate(html, data, escape);
 }
 
 function _evalTemplate(src, data, escape) {
@@ -177,12 +282,10 @@ function _evalTemplate(src, data, escape) {
             break;
         }
 
-        // Static text before {{
         if (open > i) out.push(src.slice(i, open));
 
         const close = src.indexOf('}}', open + 2);
         if (close === -1) {
-            // Unclosed — treat rest as static
             out.push(src.slice(open));
             break;
         }
@@ -190,14 +293,12 @@ function _evalTemplate(src, data, escape) {
         const expr = src.slice(open + 2, close).trim();
         i = close + 2;
 
-        // ── if block ──────────────────────────────────────────────────────────
         if (expr.startsWith('if ')) {
             const negated  = expr.startsWith('if not ');
             const pathStr  = negated ? expr.slice(7).trim() : expr.slice(3).trim();
             const val      = _resolve(data, pathStr);
             const truthy   = negated ? !val : !!val;
 
-            // Find matching {{else}} or {{end}} at same depth
             const { ifBody, elseBody, endIndex } = _extractBlock(src, i);
             i = endIndex;
 
@@ -205,11 +306,9 @@ function _evalTemplate(src, data, escape) {
             continue;
         }
 
-        // ── range block ───────────────────────────────────────────────────────
         if (expr.startsWith('range ')) {
             const rangeExpr = expr.slice(6).trim();
 
-            // {{range $h := .hosts}} or {{range .hosts}}
             let asVar  = '.';
             let pathStr = rangeExpr;
             const assignMatch = rangeExpr.match(/^\$?(\w+)\s*:=\s*(.+)$/);
@@ -232,10 +331,24 @@ function _evalTemplate(src, data, escape) {
                         ...data,
                         [asVar]: item,
                         '.':     item,
+                        // Generic accessors — convenient for simple single loops
                         Index:   index,
                         First:   index === 0,
                         Last:    index === list.length - 1,
                         Length:  list.length,
+                        // Scoped accessors prefixed with the loop variable name.
+                        // These survive nested loops — inner loop's Index does not
+                        // overwrite the outer loop's Index when you use these:
+                        //   {{range .hosts as host}}
+                        //     {{host_Index}} ← outer index, always accessible
+                        //     {{range .tags as tag}}
+                        //       {{tag_Index}} ← inner index
+                        //     {{end}}
+                        //   {{end}}
+                        [`${asVar}_Index`]:  index,
+                        [`${asVar}_First`]:  index === 0,
+                        [`${asVar}_Last`]:   index === list.length - 1,
+                        [`${asVar}_Length`]: list.length,
                     };
                     out.push(_evalTemplate(loopBody, ctx, escape));
                 });
@@ -243,7 +356,6 @@ function _evalTemplate(src, data, escape) {
             continue;
         }
 
-        // ── variable / pipeline ───────────────────────────────────────────────
         const pipeIdx = expr.indexOf('|');
         let   rawVal;
 
@@ -254,7 +366,19 @@ function _evalTemplate(src, data, escape) {
             for (const pipe of pipes) {
                 const [name, ...args] = pipe.split(/\s+/);
                 const fn = _filters.get(name);
-                if (fn) rawVal = fn(rawVal, ...args);
+                if (fn) {
+                    const processedArgs = args.map(arg => {
+                        if (arg.startsWith('"') && arg.endsWith('"')) {
+                            return arg.slice(1, -1);
+                        }
+                        if (arg.startsWith("'") && arg.endsWith("'")) {
+                            return arg.slice(1, -1);
+                        }
+                        const resolved = _resolve(data, arg);
+                        return resolved !== undefined ? resolved : arg;
+                    });
+                    rawVal = fn(rawVal, ...processedArgs);
+                }
             }
         } else {
             rawVal = _resolve(data, expr);
@@ -267,10 +391,6 @@ function _evalTemplate(src, data, escape) {
     return out.join('');
 }
 
-/**
- * Extract the body between current position and matching {{end}},
- * splitting at {{else}} if present. Handles nesting correctly.
- */
 function _extractBlock(src, start) {
     let depth    = 1;
     let i        = start;
@@ -295,7 +415,6 @@ function _extractBlock(src, start) {
                 const body    = src.slice(start, open);
                 const ifBody  = elseAt >= 0 ? src.slice(start, elseAt)    : body;
                 const elseBody= elseAt >= 0 ? src.slice(elseAt + 8, open) : '';
-                // 8 = length of "{{else}}"
                 return { ifBody, elseBody, endIndex: i };
             }
         } else if (expr === 'else' && depth === 1) {
@@ -303,7 +422,6 @@ function _extractBlock(src, start) {
         }
     }
 
-    // Malformed — return everything as body
     return { ifBody: src.slice(start), elseBody: '', endIndex: len };
 }
 
@@ -330,17 +448,14 @@ function _walkDOM(node, data) {
 
         if (n.nodeType !== Node.ELEMENT_NODE) continue;
 
-        // data-if
         if (n.dataset.if !== undefined) {
             n.style.display = _resolve(data, n.dataset.if) ? '' : 'none';
         }
 
-        // data-if-not
         if (n.dataset.ifNot !== undefined) {
             n.style.display = _resolve(data, n.dataset.ifNot) ? 'none' : '';
         }
 
-        // data-if-class="condition:class,condition2:class2"
         if (n.dataset.ifClass) {
             for (const pair of n.dataset.ifClass.split(',')) {
                 const [cond, cls] = pair.trim().split(':');
@@ -350,7 +465,6 @@ function _walkDOM(node, data) {
             }
         }
 
-        // data-bind="attr:key,attr2:key2"
         if (n.dataset.bind) {
             for (const binding of n.dataset.bind.split(',')) {
                 const [attr, key] = binding.trim().split(':');
@@ -363,7 +477,6 @@ function _walkDOM(node, data) {
             }
         }
 
-        // Interpolate non-directive attribute values
         for (const attr of Array.from(n.attributes)) {
             if (attr.name.startsWith('data-')) continue;
             if (attr.value.includes('{{')) {
@@ -384,13 +497,19 @@ function _renderBatch(container, tpl, name, asVar, list, mapFn) {
         const ctx   = {
             ...data,
             [asVar]: data,
+            // Generic accessors — convenient for simple single loops
             Index:  index,
             First:  index === 0,
             Last:   index === totalLen - 1,
             Length: totalLen,
+            // Scoped accessors prefixed with the loop variable name.
+            // These survive nested loops without being overwritten.
+            [`${asVar}_Index`]:  index,
+            [`${asVar}_First`]:  index === 0,
+            [`${asVar}_Last`]:   index === totalLen - 1,
+            [`${asVar}_Length`]: totalLen,
         };
 
-        // Process Go-style blocks in template HTML first
         const rawHTML   = tpl.innerHTML;
         const processed = render(rawHTML, ctx);
 
@@ -398,7 +517,6 @@ function _renderBatch(container, tpl, name, asVar, list, mapFn) {
         wrapper.innerHTML = processed;
         const clone     = wrapper.content.cloneNode(true);
 
-        // data-attribute directives on cloned DOM
         _walkDOM(clone, ctx);
 
         Array.from(clone.children).forEach(el => {
@@ -441,7 +559,6 @@ function _showSlot(slotEl, tpl, name, content, suffix) {
 
     if (!content) return;
 
-    // No slot in markup — inject one after the template
     const el = document.createElement('div');
     el.dataset[`eachEmpty`] = name;
     tpl.after(el);
@@ -452,35 +569,24 @@ function _applyContent(el, content) {
     if (typeof content === 'string') {
         el.innerHTML = content;
     } else if (content && typeof content.render === 'function') {
-        // Responder instance
         content.render(el);
     }
 }
 
 // ─── Path resolution ──────────────────────────────────────────────────────────
 
-/**
- * Resolve a dot/bracket path expression against a data object.
- *
- * Supports:
- *   user.name            → dot notation
- *   hosts[0].status      → bracket notation with array index
- *   routes[0].backends[1].url → deeply nested mixed notation
- *   .name                → leading dot stripped (Go template style)
- *
- * @param {Object} data
- * @param {string} expr
- */
 function _resolve(data, expr) {
-    // Remove leading dot — {{.name}} and {{name}} are equivalent
     const path = expr.replace(/^\$?\./, '');
     if (!path) return data;
 
-    // Split on dots, opening brackets, and closing brackets: hosts[0].status -> [hosts, 0, status]
     const keys = path.split(/\.|\[|\]/).filter(Boolean);
 
     return keys.reduce((acc, key) => {
         if (acc === null || acc === undefined) return undefined;
+        if (key.match(/^\d+$/)) {
+            const idx = parseInt(key, 10);
+            return Array.isArray(acc) ? acc[idx] : undefined;
+        }
         return acc[key];
     }, data);
 }
@@ -511,22 +617,3 @@ function _formatBytes(b) {
     const i = Math.floor(Math.log(b) / Math.log(k));
     return `${(b / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
 }
-
-// ─── Custom filter registration ───────────────────────────────────────────────
-
-/**
- * Register a custom filter for use in templates.
- *
- *   import { template } from '../oja/template.js';
- *   template.filter('slug', s => s.toLowerCase().replace(/\s+/g, '-'));
- *
- *   // In HTML:
- *   // {{.title | slug}}
- */
-export const template = {
-    filter(name, fn) {
-        _filters.set(name, fn);
-        return this; // chainable
-    },
-    filters: _filters
-};

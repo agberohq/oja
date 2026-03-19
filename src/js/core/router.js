@@ -12,7 +12,7 @@
  * ─── Basic usage ──────────────────────────────────────────────────────────────
  *
  *   import { Router } from '../oja/router.js';
- *   import { Responder } from '../oja/responder.js';
+ *   import { Out } from '../oja/out.js';
  *
  *   const r = new Router({ mode: 'hash', outlet: '#app' });
  *
@@ -24,28 +24,39 @@
  *   });
  *
  *   // Public routes
- *   r.Get('/login',  Responder.component('pages/login.html'));
- *   r.Get('/about',  Responder.component('pages/about.html'));
+ *   r.Get('/login',  Out.c('pages/login.html'));
+ *   r.Get('/about',  Out.c('pages/about.html'));
  *
  *   // Protected group — middleware applied to all routes inside
  *   const app = r.Group('/');
  *   app.Use(auth.middleware('protected', '/login'));
- *   app.Get('dashboard', Responder.component('pages/dashboard.html'));
- *   app.Get('hosts',     Responder.component('pages/hosts.html'));
+ *   app.Get('dashboard', Out.c('pages/dashboard.html'));
+ *   app.Get('hosts',     Out.c('pages/hosts.html'));
  *
  *   // Nested group with URL params
  *   app.Route('hosts/{id}', host => {
  *       host.Use(loadHostMiddleware);
- *       host.Get('/', Responder.component('pages/host-detail.html'));
+ *       host.Get('/', Out.c('pages/host-detail.html'));
  *   });
  *
  *   // Chain of responsibility on a single route
  *   r.Get('/audit', [requireAuth, requireAuditor,
- *       Responder.component('pages/audit.html')
+ *       Out.c('pages/audit.html')
  *   ]);
  *
- *   r.NotFound(Responder.component('pages/404.html'));
+ *   r.NotFound(Out.c('pages/404.html'));
  *   r.start('/login');
+ *
+ * ─── Prefetching ──────────────────────────────────────────────────────────────
+ *
+ *   // Prefetch a route when user hovers over link
+ *   router.prefetchOnHover('.nav-link', { delay: 100 });
+ *
+ *   // Prefetch multiple routes after initial load
+ *   router.prefetch(['/dashboard', '/hosts', '/firewall']);
+ *
+ *   // Prefetch with priority
+ *   router.prefetch('/critical-route', { priority: 'high', timeout: 5000 });
  *
  * ─── Middleware pattern ────────────────────────────────────────────────────────
  *
@@ -82,21 +93,38 @@
  */
 
 import { Store }     from './store.js';
-import { Responder } from './responder.js';
+import { Out } from './out.js';
 import { component } from './component.js';
 
 const _store = new Store('oja:router');
+
+// ─── Prefetching queue ────────────────────────────────────────────────────────
+
+const _prefetchQueue = new Set();
+const _prefetchCache = new Map(); // url -> { promise, timestamp, priority }
+const _prefetchLinks = new WeakMap(); // element -> { url, timeout }
+
+const PREFETCH_DEFAULTS = {
+    delay: 200,
+    timeout: 10000,
+    priority: 'low',
+    maxConcurrent: 3,
+};
+
+let _prefetchConfig = { ...PREFETCH_DEFAULTS };
+let _prefetchActive = 0;
 
 // ─── Route trie node ──────────────────────────────────────────────────────────
 
 class _RouteNode {
     constructor(segment = '') {
         this.segment    = segment;
-        this.responder  = null;       // Responder instance
-        this.middleware = [];         // middleware declared at this node
-        this.children   = new Map();  // static children: segment → node
-        this.paramChild = null;       // single param child node
-        this.paramName  = null;       // name of the param (e.g. 'id')
+        this.responder  = null;
+        this.middleware = [];
+        this.children   = new Map();
+        this.paramChild = null;
+        this.paramName  = null;
+        this.prefetch   = false; // Whether this route should be prefetched
     }
 }
 
@@ -107,31 +135,171 @@ export class Router {
      * @param {Object} options
      *   mode    : 'hash' | 'path'  — URL strategy (default: 'hash')
      *   outlet  : string           — CSS selector for page container (default: '#app')
-     *   loading : Responder        — shown immediately while page loads (default: none)
+     *   loading : Out              — shown immediately while page loads (default: none)
+     *   prefetch: boolean          — enable automatic prefetching (default: false)
      */
-    constructor({ mode = 'hash', outlet = '#app', loading = null } = {}) {
+    constructor({ mode = 'hash', outlet = '#app', loading = null, prefetch = false } = {}) {
         this._mode             = mode;
         this._outlet           = outlet;
         this._loadingResponder = loading;
         this._root             = new _RouteNode();
         this._globalMiddleware = [];
-        this._notFound         = Responder.html('<div class="oja-404"><h2>404</h2><p>Page not found</p></div>');
-        this._errorResponder   = Responder.html('<div class="oja-error"><h2>Error</h2><p>Something went wrong</p></div>');
+        this._notFound         = Out.html('<div class="oja-404"><h2>404</h2><p>Page not found</p></div>');
+        this._errorResponder   = Out.html('<div class="oja-error"><h2>Error</h2><p>Something went wrong</p></div>');
         this._current          = null;
         this._params           = {};
         this._started          = false;
         this._navId            = 0;
         this._beforeEach       = [];
         this._afterEach        = [];
+        this._prefetchEnabled  = prefetch;
+    }
+
+    // ─── Prefetching ─────────────────────────────────────────────────────────
+
+    /**
+     * Configure prefetching behavior.
+     *
+     *   router.configurePrefetch({
+     *       delay: 100,           // ms to wait before prefetching on hover
+     *       timeout: 5000,        // max time to wait for prefetch
+     *       maxConcurrent: 3,      // max concurrent prefetch requests
+     *       priority: 'high'       // default priority
+     *   });
+     */
+    configurePrefetch(config = {}) {
+        _prefetchConfig = { ..._prefetchConfig, ...config };
+        return this;
+    }
+
+    /**
+     * Prefetch specific routes.
+     * Returns a promise that resolves when all prefetches complete.
+     *
+     *   await router.prefetch(['/dashboard', '/hosts']);
+     *   router.prefetch('/critical-route', { priority: 'high' });
+     */
+    async prefetch(target, options = {}) {
+        const urls = Array.isArray(target) ? target : [target];
+        const opts = { ..._prefetchConfig, ...options };
+
+        const promises = urls.map(url => this._prefetchRoute(url, opts));
+        await Promise.allSettled(promises);
+        return this;
+    }
+
+    /**
+     * Enable prefetching on hover for matching links.
+     *
+     *   router.prefetchOnHover('.nav-link', { delay: 100 });
+     *   router.prefetchOnHover('[data-prefetch]');
+     */
+    prefetchOnHover(selector, options = {}) {
+        const opts = { ..._prefetchConfig, ...options };
+
+        const handler = (e) => {
+            const link = e.target.closest(selector);
+            if (!link) return;
+
+            if (_prefetchLinks.has(link)) {
+                clearTimeout(_prefetchLinks.get(link).timeout);
+            }
+
+            const timeout = setTimeout(() => {
+                const href = link.getAttribute('href') || link.dataset.href || link.dataset.page;
+                if (href) {
+                    const path = this._normalizePath(href);
+                    this._prefetchRoute(path, opts);
+                }
+            }, opts.delay);
+
+            _prefetchLinks.set(link, { url: link.href, timeout });
+        };
+
+        const cancelHandler = (e) => {
+            const link = e.target.closest(selector);
+            if (!link) return;
+
+            const data = _prefetchLinks.get(link);
+            if (data) {
+                clearTimeout(data.timeout);
+                _prefetchLinks.delete(link);
+            }
+        };
+
+        document.addEventListener('mouseenter', handler, { passive: true });
+        document.addEventListener('mouseleave', cancelHandler, { passive: true });
+
+        return () => {
+            document.removeEventListener('mouseenter', handler);
+            document.removeEventListener('mouseleave', cancelHandler);
+        };
+    }
+
+    async _prefetchRoute(path, options) {
+        if (_prefetchCache.has(path)) {
+            const cached = _prefetchCache.get(path);
+            if (Date.now() - cached.timestamp < 60000) {
+                return cached.promise;
+            }
+        }
+
+        if (_prefetchActive >= _prefetchConfig.maxConcurrent) {
+            _prefetchQueue.add({ path, options });
+            return;
+        }
+
+        _prefetchActive++;
+
+        const promise = (async () => {
+            try {
+                const match = this._match(path);
+                if (!match) return;
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), options.timeout);
+
+                if (match.responder && typeof match.responder.prefetch === 'function') {
+                    await match.responder.prefetch({ signal: controller.signal });
+                }
+
+                clearTimeout(timeoutId);
+
+                _prefetchCache.set(path, {
+                    promise,
+                    timestamp: Date.now(),
+                    priority: options.priority,
+                });
+
+                this._processPrefetchQueue();
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.warn(`[oja/router] Prefetch failed for ${path}:`, e);
+                }
+            } finally {
+                _prefetchActive--;
+                this._processPrefetchQueue();
+            }
+        })();
+
+        return promise;
+    }
+
+    _processPrefetchQueue() {
+        if (_prefetchQueue.size === 0) return;
+        if (_prefetchActive >= _prefetchConfig.maxConcurrent) return;
+
+        const [next] = _prefetchQueue;
+        _prefetchQueue.delete(next);
+        this._prefetchRoute(next.path, next.options);
+    }
+
+    _normalizePath(path) {
+        return path.replace(/^#/, '').split('?')[0] || '/';
     }
 
     // ─── Middleware ───────────────────────────────────────────────────────────
 
-    /**
-     * Add middleware to this router/group scope.
-     * Runs in order before the route's Responder renders.
-     * async (ctx, next) => { ... await next(); ... }
-     */
     Use(...middlewares) {
         for (const mw of middlewares.flat()) {
             if (typeof mw === 'function') this._globalMiddleware.push(mw);
@@ -151,7 +319,7 @@ export class Router {
 
     /**
      * Register a GET route.
-     * responderOrChain can be a Responder or [...middleware, Responder].
+     * responderOrChain can be an Out or [...middleware, Out].
      */
     Get(pattern, responderOrChain) {
         const { responder, middleware } = _unwrapChain(responderOrChain);
@@ -159,10 +327,14 @@ export class Router {
         return this;
     }
 
-    /** Not found handler — shown when no route matches. */
-    NotFound(responder) { this._notFound = responder; return this; }
+    /** Mark a route for automatic prefetching */
+    Prefetch(pattern) {
+        const node = this._findOrCreate(pattern);
+        node.prefetch = true;
+        return this;
+    }
 
-    /** Error handler — shown when middleware or render throws. */
+    NotFound(responder) { this._notFound = responder; return this; }
     Error(responder)    { this._errorResponder = responder; return this; }
 
     // ─── Grouping ─────────────────────────────────────────────────────────────
@@ -178,6 +350,7 @@ export class Router {
         group._globalMiddleware = [...this._globalMiddleware];
         group._notFound         = this._notFound;
         group._errorResponder   = this._errorResponder;
+        group._prefetchEnabled  = this._prefetchEnabled;
         if (fn) fn(group);
         return group;
     }
@@ -192,6 +365,7 @@ export class Router {
         sub._globalMiddleware = [...this._globalMiddleware];
         sub._notFound         = this._notFound;
         sub._errorResponder   = this._errorResponder;
+        sub._prefetchEnabled  = this._prefetchEnabled;
         fn(sub);
         return this;
     }
@@ -205,7 +379,6 @@ export class Router {
     setQuery(params = {}) {
         if (!this._current) return this;
 
-        // Ensure current path is stripped of existing query strings before appending
         const cleanPath = this._current.split('?')[0];
         const qs  = _buildQuery(params);
 
@@ -216,11 +389,13 @@ export class Router {
         return this;
     }
 
+    getQuery() {
+        const { query } = this._parseURL();
+        return query;
+    }
+
     // ─── Start ────────────────────────────────────────────────────────────────
 
-    /**
-     * Start the router — reads current URL, sets up history listeners.
-     */
     async start(defaultPath = '/') {
         if (this._started) return;
         this._started = true;
@@ -229,6 +404,32 @@ export class Router {
         window.addEventListener(eventName, () => this._handleURL(defaultPath));
 
         await this._handleURL(defaultPath);
+
+        if (this._prefetchEnabled) {
+            this._setupPrefetchDetection();
+        }
+    }
+
+    _setupPrefetchDetection() {
+        const observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    const link = entry.target;
+                    const href = link.getAttribute('href') || link.dataset.href || link.dataset.page;
+                    if (href) {
+                        const path = this._normalizePath(href);
+                        const node = this._match(path);
+                        if (node && node.prefetch) {
+                            this._prefetchRoute(path, { priority: 'low' });
+                        }
+                    }
+                }
+            }
+        });
+
+        document.querySelectorAll('[data-prefetch], a[data-page]').forEach(el => {
+            observer.observe(el);
+        });
     }
 
     async _handleURL(defaultPath = '/') {
@@ -243,25 +444,22 @@ export class Router {
      * Race-safe: only the most recent navigate() call is allowed to complete.
      */
     async navigate(path, options = {}) {
-        const currentNavId = ++this._navId; // Capture current navigation version
+        const currentNavId = ++this._navId;
         const [pathname, qs] = path.split('?');
         const query          = { ...options.query, ..._parseQuery(qs || '') };
         const container      = document.querySelector(this._outlet);
 
         if (!options._replace) this._pushURL(pathname, query);
 
-        // Emit navigate:start — ui.js uses this to show loading indicators
         document.dispatchEvent(new CustomEvent('oja:navigate:start', {
             detail: { path: pathname }
         }));
 
-        // Show loading Responder immediately if provided
         if (this._loadingResponder && container) {
             container.innerHTML = '';
             await this._loadingResponder.render(container, {});
         }
 
-        // RACE CHECK: Stop if user navigated elsewhere during initial phase
         if (currentNavId !== this._navId) return;
 
         const match = this._match(pathname);
@@ -274,14 +472,13 @@ export class Router {
             replace:  (to, opts) => this.navigate(to, { ...opts, _replace: true }),
         };
 
-        // SCOPED LIFECYCLE: Teardown outgoing page before rendering new one
         if (container) await component._runUnmount(container);
 
         if (!match) {
             for (const fn of this._beforeEach) await fn(ctx);
             await this._render(this._notFound, ctx);
             for (const fn of this._afterEach) await fn(ctx);
-            if (container) await component._runMount(container); // Mount 404
+            if (container) await component._runMount(container);
             return;
         }
 
@@ -292,7 +489,6 @@ export class Router {
             if (stop === false) return;
         }
 
-        // Build and deduplicate middleware chain
         const allMiddleware = [...this._globalMiddleware, ...match.middleware];
         const seen  = new Set();
         const chain = allMiddleware.filter(mw => {
@@ -315,12 +511,11 @@ export class Router {
 
             const result = await mw(ctx, next);
 
-            // RACE CHECK: middleware often hits network — check lock again
             if (currentNavId !== this._navId) return;
 
             if (result === false) { stopped = true; return; }
 
-            if (Responder.is(result)) {
+            if (Out.is(result)) {
                 await this._render(result, ctx);
                 stopped = true;
                 return;
@@ -359,15 +554,12 @@ export class Router {
 
         for (const fn of this._afterEach) await fn(ctx);
 
-        // SCOPED LIFECYCLE: Initialize incoming page after render
         if (container) await component._runMount(container);
 
-        // Notify final completion
         document.dispatchEvent(new CustomEvent('oja:navigate:end', {
             detail: { path: pathname, params: ctx.params }
         }));
 
-        // Legacy event kept for compatibility
         document.dispatchEvent(new CustomEvent('oja:navigate', {
             detail: { path: pathname, params: ctx.params }
         }));
@@ -377,7 +569,6 @@ export class Router {
         const container = document.querySelector(this._outlet);
         if (!container) return;
 
-        // Transitions
         container.classList.add('oja-leaving');
         await _wait(150);
         container.classList.remove('oja-leaving');
@@ -390,16 +581,13 @@ export class Router {
         container.classList.remove('oja-entering');
     }
 
-    /** Go back in browser history. */
     back() { window.history.back(); }
 
-    /** Force re-render the current route — re-runs full middleware chain. */
     async refresh() {
         if (!this._current) return;
         await this.navigate(this._current, { query: this._params, _replace: true });
     }
 
-    /** Navigate without adding a history entry. */
     async replace(path, options = {}) {
         await this.navigate(path, { ...options, _replace: true });
     }
@@ -436,10 +624,15 @@ export class Router {
 
     _updateNav(path) {
         document.querySelectorAll('[data-page]').forEach(el => {
-            el.classList.toggle('active', el.dataset.page === path);
+            const active = el.dataset.page === path;
+            el.classList.toggle('active', active);
+            el.setAttribute('aria-current', active ? 'page' : null);
         });
+
         document.querySelectorAll('[data-href]').forEach(el => {
-            el.classList.toggle('active', el.dataset.href === path);
+            const active = el.dataset.href === path;
+            el.classList.toggle('active', active);
+            el.setAttribute('aria-current', active ? 'page' : null);
         });
     }
 
@@ -509,7 +702,7 @@ Router.middleware = {
 
     /**
      * Error boundary — catches errors in the chain and renders error Responder.
-     *   r.Use(Router.middleware.errorBoundary(Responder.component('pages/error.html')));
+     *   r.Use(Router.middleware.errorBoundary(Out.c('pages/error.html')));
      */
     errorBoundary: (errorResponder) => async (ctx, next) => {
         try {
@@ -537,6 +730,20 @@ Router.middleware = {
         const container = document.querySelector(ctx.outlet);
         const title = container?.querySelector('[data-title]')?.dataset?.title;
         document.title = title ? `${title} — ${appName}` : appName;
+    },
+
+    /**
+     * Prefetch middleware — automatically prefetches linked routes
+     */
+    prefetch: (router) => async (ctx, next) => {
+        await next();
+        if (router._prefetchEnabled) {
+            const links = document.querySelectorAll('[data-page], [data-href]');
+            links.forEach(link => {
+                const path = link.dataset.page || link.dataset.href;
+                if (path) router._prefetchRoute(path, { priority: 'low' });
+            });
+        }
     }
 };
 
