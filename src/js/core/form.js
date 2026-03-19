@@ -850,6 +850,10 @@ export const form = {
             if (onChange) {
                 _dirtyListeners.get(el)?.delete(onChange);
             }
+            // Call dispose() to remove all DOM event listeners — without this,
+            // the input handlers remain attached permanently even after the form
+            // is removed from the DOM ("zombie" listeners).
+            _dirtyState.get(el)?.dispose?.();
             _dirtyState.delete(el);
             _dirtyListeners.delete(el);
         };
@@ -909,30 +913,46 @@ export const form = {
     _setupDirtyTracking(form) {
         if (_dirtyState.has(form)) return;
 
-        const formState = new Map();
+        const formState  = new Map();
+        const _listeners = []; // Track every listener so dispose() can remove them
 
         for (const [name, input] of this._getFormFields(form)) {
             const original = this._getFieldValue(input);
             formState.set(name, { original, current: original, isDirty: false });
 
-            const handler = () => {
-                this._updateDirtyState(form);
-            };
+            const handler = () => this._updateDirtyState(form);
 
-            if (input.type === 'radio' || input.type === 'checkbox') {
-                input.addEventListener('change', handler);
-            } else {
-                input.addEventListener('input', handler);
-                input.addEventListener('change', handler);
+            // Checkboxes and radios only fire 'change'; text inputs fire both
+            // 'input' (immediate) and 'change' (on blur / programmatic change).
+            const events = (input.type === 'radio' || input.type === 'checkbox')
+                ? ['change']
+                : ['input', 'change'];
+
+            for (const evt of events) {
+                input.addEventListener(evt, handler);
+                _listeners.push({ input, evt, handler });
             }
         }
 
-        _dirtyState.set(form, formState);
+        // Store both the field state and a dispose function that removes every
+        // listener. Without dispose(), destroying a form that was tracked leaves
+        // "zombie" handlers attached to every input indefinitely — the browser
+        // holds them in memory even if the DOM elements are removed.
+        _dirtyState.set(form, {
+            state:   formState,
+            dispose: () => {
+                for (const { input, evt, handler } of _listeners) {
+                    input.removeEventListener(evt, handler);
+                }
+            }
+        });
     },
 
     _updateDirtyState(form) {
-        const formState = _dirtyState.get(form);
-        if (!formState) return;
+        const entry = _dirtyState.get(form);
+        if (!entry) return;
+        // _dirtyState entries are { state: Map, dispose: fn }
+        const formState = entry.state || entry; // backwards-compat if ever called before setup
 
         for (const [name, input] of this._getFormFields(form)) {
             const current = this._getFieldValue(input);
