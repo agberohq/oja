@@ -50,7 +50,7 @@
  *   api:online        → connection restored
  */
 
-import { jsonCodec } from '../codecs/json.js';
+import { jsonCodec } from './codecs/json.js';
 
 export class Api {
     /**
@@ -256,7 +256,11 @@ export class Api {
         try {
             return await this._executeRequest(path, method, body, options);
         } catch (error) {
-            if (error.status !== 401) throw error;
+            // Network failures (fetch() rejection) arrive as TypeError with no
+            // .status property. We must not attempt a token refresh for those —
+            // there is no server response to have returned a 401, and the refresh
+            // request itself would also fail. Propagate immediately.
+            if (error instanceof TypeError || error.status !== 401) throw error;
 
             if (this._isRefreshing) {
                 return new Promise(resolve => {
@@ -272,6 +276,25 @@ export class Api {
                 this._refreshSubscribers.forEach(resolve => resolve());
                 this._refreshSubscribers = [];
                 return this._executeRequest(path, method, body, { ...options, _skipRefresh: true });
+            } catch (refreshError) {
+                // The refresh token itself failed — either it is expired, the
+                // /auth/refresh endpoint returned 401/403, or the network is down.
+                //
+                // In all cases the session is definitively dead. We must:
+                //   1. Clear all pending subscribers — they will never get a token.
+                //   2. Emit api:unauthorized so auth.js can trigger a clean logout.
+                //   3. Throw so the original caller's promise rejects.
+                //
+                // Without this block, a failed refresh propagates silently as an
+                // unhandled rejection that never reaches the Oja error boundary
+                // and never notifies auth.js — the app stays "logged in" with a
+                // dead session until the user manually refreshes the page.
+                this._refreshSubscribers.forEach(resolve => resolve(null));
+                this._refreshSubscribers = [];
+                this.setToken(null);
+
+                _emit('api:unauthorized', { path, method, reason: 'refresh_failed' });
+                throw refreshError;
             } finally {
                 this._isRefreshing = false;
             }
