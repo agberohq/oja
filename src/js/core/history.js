@@ -98,7 +98,7 @@ function _deepClone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-class HistoryStack {
+export class OjaHistory {
     constructor(namespace = 'default', maxSize = 100) {
         this.namespace = namespace;
         this.maxSize = maxSize;
@@ -395,7 +395,7 @@ export const history = {
      */
     namespace(name = 'default', maxSize = 100) {
         if (!_histories.has(name)) {
-            _histories.set(name, new HistoryStack(name, maxSize));
+            _histories.set(name, new OjaHistory(name, maxSize));
         }
         return _histories.get(name);
     },
