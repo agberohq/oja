@@ -827,7 +827,113 @@ export function enableTouchSupport() {
     };
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
+// Pointer-based resize handle for panels, sidebars, and console drawers.
+// Unlike draggable(), this tracks continuous pixel deltas — not HTML5 drag events.
+// Returns a destroy() function to remove all listeners.
+//
+//   dragdrop.resizable('#split-handle', {
+//       axis: 'horizontal',
+//       onResize: (delta, pointerEvent) => applyWidth(currentW + delta.x),
+//       onStart: () => document.body.style.userSelect = 'none',
+//       onEnd:   () => document.body.style.userSelect = '',
+//       cursor:  'col-resize',
+//   });
+export function resizable(target, options = {}) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) {
+        console.warn(`[oja/dragdrop] resizable target not found: ${target}`);
+        return { destroy: () => {} };
+    }
+
+    const {
+        axis     = 'horizontal',
+        onResize = null,
+        onStart  = null,
+        onEnd    = null,
+        cursor   = axis === 'horizontal' ? 'col-resize' : 'ns-resize',
+        minDelta = 0,
+    } = options;
+
+    let active   = false;
+    let originX  = 0;
+    let originY  = 0;
+    let lastX    = 0;
+    let lastY    = 0;
+
+    const onPointerDown = (e) => {
+        active  = true;
+        originX = e.clientX;
+        originY = e.clientY;
+        lastX   = e.clientX;
+        lastY   = e.clientY;
+
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('oja-resizing');
+
+        if (cursor) {
+            document.body.style.cursor    = cursor;
+            document.body.style.userSelect = 'none';
+        }
+
+        if (onStart) onStart(e);
+    };
+
+    const onPointerMove = (e) => {
+        if (!active) return;
+
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        const totalX = e.clientX - originX;
+        const totalY = e.clientY - originY;
+
+        if (onResize) {
+            const delta = {
+                x:      dx,
+                y:      dy,
+                totalX,
+                totalY,
+            };
+
+            if (axis === 'horizontal' && Math.abs(dx) >= minDelta) onResize(delta, e);
+            else if (axis === 'vertical' && Math.abs(dy) >= minDelta) onResize(delta, e);
+            else if (axis === 'both') onResize(delta, e);
+        }
+    };
+
+    const onPointerUp = (e) => {
+        if (!active) return;
+        active = false;
+
+        el.classList.remove('oja-resizing');
+
+        if (cursor) {
+            document.body.style.cursor     = '';
+            document.body.style.userSelect = '';
+        }
+
+        if (onEnd) onEnd(e);
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup',   onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+
+    return {
+        destroy() {
+            el.removeEventListener('pointerdown',   onPointerDown);
+            el.removeEventListener('pointermove',   onPointerMove);
+            el.removeEventListener('pointerup',     onPointerUp);
+            el.removeEventListener('pointercancel', onPointerUp);
+        },
+    };
+}
+
+// Export
 
 export const dragdrop = {
     reorder,
@@ -835,6 +941,7 @@ export const dragdrop = {
     draggable,
     dropTarget,
     sortable,
+    resizable,
     enableTouchSupport,
 };
 
