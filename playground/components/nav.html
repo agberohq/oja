@@ -1,0 +1,173 @@
+<nav class="topbar">
+    <div class="brand">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M10 2L18 7V13L10 18L2 13V7L10 2Z" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+            <path d="M10 6L14 8.5V13L10 15.5L6 13V8.5L10 6Z" fill="var(--accent)" opacity=".3"/>
+        </svg>
+        <span class="brand-name">Oja <em>Playground</em></span>
+        <div id="sync-dot" class="sync-dot" title="Synced"></div>
+    </div>
+
+    <div class="toolbar">
+        <button data-action="run" class="btn-run" title="Run  Ctrl+S">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M3 2l7 4-7 4V2z"/></svg>
+            Run
+        </button>
+
+        <div class="sep"></div>
+
+        <button data-action="new-file"      title="New file  Ctrl+N" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1H3a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6M8 1l4 4v1M8 1v4h4"/><path d="M5 9h4M7 7v4"/></svg>
+        </button>
+        <button data-action="examples"      title="Examples" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+        </button>
+        <button data-action="reset"         title="Clear Workspace" class="btn-icon" style="color:var(--danger)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3h12M4 3V2a1 1 0 011-1h4a1 1 0 011 1v1M5 6v5M9 6v5M2 3l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+        </button>
+
+        <div class="sep"></div>
+
+        <button data-action="export"        title="Export  Ctrl+E" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7 1v8M4 6l3 3 3-3M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2"/></svg>
+        </button>
+        <button data-action="import"        title="Import  Ctrl+I" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7 9V1M4 4l3-3 3 3M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2"/></svg>
+        </button>
+        <input type="file" id="import-input" accept=".json" style="display:none">
+
+        <div class="sep"></div>
+
+        <button data-action="toggle-sidebar" title="Files  Ctrl+B" class="btn-icon" id="sidebar-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="12" height="12" rx="1"/><path d="M5 1v12"/></svg>
+        </button>
+        <button data-action="toggle-layout"  title="Layout" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="12" height="12" rx="1"/><path d="M7 1v12"/></svg>
+        </button>
+        <button data-action="toggle-mobile"  title="Mobile view" class="btn-icon" id="mobile-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="1" width="6" height="12" rx="1.5"/><circle cx="7" cy="11" r=".8" fill="currentColor"/></svg>
+        </button>
+        <button data-action="pop-out"        title="Open in new tab" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2H2a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V8M8 1h5v5M13 1L7 7"/></svg>
+        </button>
+        <button data-action="toggle-theme"   title="Theme  Ctrl+\" class="btn-icon" id="theme-btn">
+            <svg id="theme-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.6 2.6l1 1M10.4 10.4l1 1M11.4 2.6l-1 1M3.6 10.4l-1 1"/></svg>
+            <svg id="theme-moon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" style="display:none"><path d="M11.5 9.5A6 6 0 015 3a.5.5 0 00-.7-.6A6 6 0 1011.1 10a.5.5 0 00.4-.5z"/></svg>
+        </button>
+    </div>
+</nav>
+
+<script type="module">
+    import { context, effect } from '../../src/oja.full.js';
+
+    const [theme]       = context('theme');
+    const [mobileView]  = context('mobile_view');
+    const[sidebarOpen] = context('sidebar_open');
+    const [files]       = context('files');
+
+    const syncDot   = find('#sync-dot');
+    const themeBtn  = find('#theme-btn');
+    const mobileBtn = find('#mobile-btn');
+    const sidebarBtn= find('#sidebar-btn');
+
+    // Theme icon swap
+    effect(() => {
+        const dark = theme() === 'dark';
+        find('#theme-sun',  { scope: document }).style.display  = dark  ? 'none'  : 'block';
+        find('#theme-moon', { scope: document }).style.display  = dark  ? 'block' : 'none';
+    });
+
+    // Mobile active state
+    effect(() => { mobileBtn.classList.toggle('active', mobileView()); });
+
+    // Sidebar active state
+    effect(() => { sidebarBtn.classList.toggle('active', sidebarOpen()); });
+
+    // Sync pulse on file change
+    let t;
+    effect(() => {
+        files();
+        syncDot.classList.add('syncing');
+        clearTimeout(t);
+        t = setTimeout(() => syncDot.classList.remove('syncing'), 700);
+    });
+</script>
+
+<style>
+    .topbar {
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .brand-name {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: -.2px;
+        color: var(--text-primary);
+    }
+    .brand-name em {
+        font-style: normal;
+        font-weight: 400;
+        color: var(--text-muted);
+        margin-left: 2px;
+    }
+    .sync-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--success);
+        transition: all .2s;
+        flex-shrink: 0;
+    }
+    .sync-dot.syncing {
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+    }
+    .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+    .sep {
+        width: 1px; height: 20px;
+        background: var(--border);
+        margin: 0 4px;
+        flex-shrink: 0;
+    }
+    .btn-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px;
+        background: none; border: none; border-radius: 6px;
+        color: var(--text-muted); cursor: pointer;
+        transition: color .15s, background .15s;
+    }
+    .btn-icon:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .btn-icon.active { color: var(--accent); background: var(--accent-subtle); }
+    .btn-run {
+        display: flex; align-items: center; gap: 6px;
+        padding: 0 12px; height: 30px;
+        background: var(--accent); color: #fff;
+        border: none; border-radius: 6px; cursor: pointer;
+        font-size: 12px; font-weight: 600;
+        font-family: var(--sans);
+        transition: background .15s, transform .1s;
+        letter-spacing: .02em;
+    }
+    .btn-run:hover { background: var(--accent-hover); }
+    .btn-run:active { transform: scale(.97); }
+    @media (max-width: 600px) {
+        .brand-name em { display: none; }
+        .btn-run span { display: none; }
+    }
+</style>

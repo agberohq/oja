@@ -1,0 +1,236 @@
+<div class="console-resize-handle" id="console-resize" title="Drag to resize"></div>
+<div class="console-bar" id="console-toggle">
+    <div class="console-left">
+        <span class="console-label">Console</span>
+        <span class="log-count" id="log-count" style="display:none"></span>
+    </div>
+    <div class="console-right" id="console-controls">
+        <div class="log-filters" id="log-filters">
+            <button class="filter active" data-f="all">all</button>
+            <button class="filter" data-f="log">log</button>
+            <button class="filter" data-f="info">info</button>
+            <button class="filter" data-f="warn">warn</button>
+            <button class="filter" data-f="error">error</button>
+        </div>
+        <button id="clear-btn" class="btn-icon-sm" title="Clear  Ctrl+L">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 3h8M4 3V2a1 1 0 011-1h2a1 1 0 011 1v1M5 6v3M7 6v3M3 3l.5 7a1 1 0 001 1h3a1 1 0 001-1L9 3"/></svg>
+        </button>
+        <button id="collapse-btn" class="btn-icon-sm" title="Toggle console">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" id="collapse-icon"><path d="M2 4l4 4 4-4"/></svg>
+        </button>
+    </div>
+</div>
+<div class="console-body" id="console-body">
+    <div class="log-empty">Console ready — run your code to see output.</div>
+</div>
+
+<script type="module">
+    import { context, effect, on, state } from '../../src/oja.full.js';
+
+    const [logs, setLogs] = context('logs');
+    const [open, setOpen] = context('console_open');
+    const [filter, setFilter] = state('all');
+
+    const wrap       = container;
+    const body       = find('#console-body');
+    const countEl    = find('#log-count');
+    const colIcon    = find('#collapse-icon');
+    const controls   = find('#console-controls');
+
+    effect(() => {
+        const isOpen = open();
+        body.style.display     = isOpen ? '' : 'none';
+        controls.style.display = isOpen ? '' : 'none';
+        colIcon.style.transform = isOpen ? '' : 'rotate(180deg)';
+    });
+
+    on('#collapse-btn', 'click', e => { e.stopPropagation(); setOpen(v => !v); });
+    on('#console-toggle', 'click', () => setOpen(v => !v));
+
+    // Stop filter/clear from bubbling to the toggle handler
+    on('#log-filters', 'click', e => e.stopPropagation());
+    on('#clear-btn',   'click', e => { e.stopPropagation(); setLogs([]); });
+
+    on('#log-filters', 'click', e => {
+        const btn = e.target.closest('[data-f]');
+        if (!btn) return;
+        setFilter(btn.dataset.f);
+        findAll('.filter').forEach(b => b.classList.toggle('active', b.dataset.f === btn.dataset.f));
+    });
+
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'l' && document.activeElement?.tagName !== 'INPUT') {
+            e.preventDefault();
+            setLogs([]);
+        }
+    });
+
+    effect(() => {
+        const all    = logs();
+        const f      = filter();
+        const shown  = f === 'all' ? all : all.filter(l => l.level === f);
+
+        const errors = all.filter(l => l.level === 'error').length;
+        const warns  = all.filter(l => l.level === 'warn').length;
+
+        if (all.length === 0) {
+            countEl.style.display = 'none';
+        } else if (errors > 0) {
+            countEl.textContent   = errors;
+            countEl.className     = 'log-count error';
+            countEl.style.display = 'inline-flex';
+        } else if (warns > 0) {
+            countEl.textContent   = warns;
+            countEl.className     = 'log-count warn';
+            countEl.style.display = 'inline-flex';
+        } else {
+            countEl.textContent   = all.length;
+            countEl.className     = 'log-count';
+            countEl.style.display = 'inline-flex';
+        }
+
+        if (shown.length === 0) {
+            const msg = all.length === 0
+                ? 'Console ready — run your code to see output.'
+                : `No ${f} messages.`;
+            body.innerHTML = `<div class="log-empty">${msg}</div>`;
+            return;
+        }
+
+        body.innerHTML = shown.map(log => {
+            const t   = new Date(log.timestamp).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const msg = (log.args || [String(log.message || '')]).map(renderArg).join(' ');
+            const stk = log.stack ? `<details class="log-stack"><summary>stack</summary><pre>${esc(log.stack)}</pre></details>` : '';
+            return `<div class="log log-${log.level}"><span class="log-t">${t}</span><span class="log-lv">${log.level}</span><span class="log-msg">${msg}${stk}</span></div>`;
+        }).join('');
+
+        body.scrollTop = body.scrollHeight;
+    });
+
+    function renderArg(a) {
+        if (a === null)      return `<i class="tv-null">null</i>`;
+        if (a === undefined) return `<i class="tv-undef">undefined</i>`;
+        if (typeof a === 'boolean') return `<span class="tv-bool">${a}</span>`;
+        if (typeof a === 'number')  return `<span class="tv-num">${a}</span>`;
+        if (typeof a === 'string')  return `<span class="tv-str">${esc(a)}</span>`;
+        if (Array.isArray(a)) {
+            if (a.length === 0) return `<span class="tv-dim">[]</span>`;
+            return `<details class="tv-obj"><summary class="tv-sum">Array(${a.length})</summary><div class="tv-body">${a.map((v,i) => `<div><span class="tv-key">${i}</span> ${renderArg(v)}</div>`).join('')}</div></details>`;
+        }
+        if (typeof a === 'object') {
+            const keys = Object.keys(a);
+            if (keys.length === 0) return `<span class="tv-dim">{}</span>`;
+            return `<details class="tv-obj"><summary class="tv-sum">{${keys.slice(0,3).join(', ')}${keys.length > 3 ? '…' : ''}}</summary><div class="tv-body">${keys.map(k => `<div><span class="tv-key">${esc(k)}</span> ${renderArg(a[k])}</div>`).join('')}</div></details>`;
+        }
+        return `<span>${esc(String(a))}</span>`;
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+</script>
+
+<style>
+    .console-resize-handle {
+        height: 4px;
+        background: var(--border);
+        cursor: ns-resize;
+        flex-shrink: 0;
+        transition: background .15s;
+    }
+    .console-resize-handle:hover,
+    .console-resize-handle.dragging {
+        background: var(--accent);
+    }
+    .console-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 28px;
+        padding: 0 8px 0 12px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        cursor: pointer;
+        user-select: none;
+    }
+    .console-left  { display: flex; align-items: center; gap: 8px; }
+    .console-right { display: flex; align-items: center; gap: 4px; }
+    .console-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--text-muted);
+    }
+    .log-count {
+        font-size: 10px; font-weight: 700;
+        min-width: 18px; height: 16px;
+        padding: 0 5px; border-radius: 8px;
+        background: var(--bg-hover); color: var(--text-secondary);
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .log-count.error { background: var(--danger-subtle); color: var(--danger); }
+    .log-count.warn  { background: var(--warn-subtle);   color: var(--warning); }
+    .log-filters { display: flex; align-items: center; gap: 2px; }
+    .filter {
+        padding: 2px 7px; font-size: 10px;
+        background: none; border: none; border-radius: 4px;
+        color: var(--text-muted); cursor: pointer;
+        font-family: var(--mono);
+        transition: color .12s, background .12s;
+    }
+    .filter:hover  { color: var(--text-secondary); background: var(--bg-hover); }
+    .filter.active { color: var(--accent); background: var(--accent-subtle); }
+    .btn-icon-sm {
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px;
+        background: none; border: none; border-radius: 4px;
+        color: var(--text-muted); cursor: pointer;
+        transition: color .15s, background .15s;
+    }
+    .btn-icon-sm:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .console-body {
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 4px 0;
+        height: 180px;
+    }
+    .log-empty {
+        color: var(--text-muted); padding: 16px 14px;
+        font-style: italic; font-size: 11px;
+    }
+    .log {
+        display: flex; gap: 10px;
+        padding: 3px 12px;
+        border-bottom: 1px solid var(--border);
+        align-items: baseline;
+        line-height: 1.4;
+    }
+    .log:hover { background: var(--bg-panel); }
+    .log-warn  { background: rgba(210,153,34,.04); }
+    .log-error { background: rgba(248,81,73,.06); }
+    .log-t  { color: var(--text-muted); font-size: 10px; flex-shrink: 0; min-width: 56px; }
+    .log-lv { flex-shrink: 0; width: 40px; font-weight: 700; font-size: 10px; text-transform: uppercase; }
+    .log-log   .log-lv { color: var(--text-muted); }
+    .log-info  .log-lv { color: var(--accent); }
+    .log-warn  .log-lv { color: var(--warning); }
+    .log-error .log-lv { color: var(--danger); }
+    .log-msg { flex: 1; word-break: break-word; white-space: pre-wrap; }
+    .tv-str  { color: var(--warning); }
+    .tv-num  { color: var(--success); }
+    .tv-bool { color: var(--accent); }
+    .tv-null, .tv-undef { color: var(--text-muted); font-style: italic; }
+    .tv-dim  { color: var(--text-muted); }
+    .tv-key  { color: var(--warning); margin-right: 4px; }
+    .tv-obj  { display: inline-block; }
+    .tv-sum  { cursor: pointer; color: var(--accent); }
+    .tv-sum:hover { text-decoration: underline; }
+    .tv-body { margin-left: 14px; padding: 2px 0 2px 8px; border-left: 1px solid var(--border); }
+    .log-stack summary { color: var(--text-muted); cursor: pointer; font-size: 10px; margin-top: 4px; }
+    .log-stack pre {
+        margin: 4px 0 0; padding: 8px; background: var(--bg-panel);
+        border-radius: 4px; font-size: 10px; overflow-x: auto; color: var(--text-secondary);
+    }
+</style>

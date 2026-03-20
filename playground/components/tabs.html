@@ -1,0 +1,214 @@
+<div class="tab-bar" id="tab-bar">
+    <div class="tabs-scroll" id="tabs-list"></div>
+    <button class="tab-new" data-action="new-file" title="New file  Ctrl+N">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1v10M1 6h10"/></svg>
+    </button>
+</div>
+
+<script type="module">
+    import { context, effect, on, emit } from '../../src/oja.full.js';
+
+    const [files]      = context('files');
+    const [activeFile, setActiveFile] = context('active_file');
+
+    const list = find('#tabs-list');
+
+    // Which files are "open" as tabs — stored locally (not context, per-session)
+    let openTabs = ['index.html'];
+
+    function getIcon(name) {
+        const ext = name.split('.').pop();
+        const colors = { js: '#f0c040', css: '#5ba4f5', html: '#f87060', json: '#a0c4a0', md: '#a0a4c0' };
+        return colors[ext] || '#888';
+    }
+
+    function renderTabs() {
+        const allFiles = files();
+        const active   = activeFile();
+
+        // Sync openTabs — remove deleted files, ensure active is present
+        openTabs = openTabs.filter(t => allFiles[t]);
+        if (active && allFiles[active] && !openTabs.includes(active)) {
+            openTabs.push(active);
+        }
+        // Always include index.html if it exists
+        if (allFiles['index.html'] && !openTabs.includes('index.html')) {
+            openTabs.unshift('index.html');
+        }
+
+        list.innerHTML = openTabs.map(path => {
+            const name  = path.split('/').pop();
+            const isActive = path === active;
+            const color = getIcon(name);
+            return `
+        <div class="tab ${isActive ? 'tab-active' : ''}" data-tab="${path}" title="${path}">
+            <span class="tab-dot" style="background:${color}"></span>
+            <span class="tab-name">${name}</span>
+            ${path !== 'index.html' ? `<button class="tab-close" data-close="${path}" title="Close">×</button>` : ''}
+        </div>`;
+        }).join('');
+
+        // Scroll active tab into view
+        const activeEl = list.querySelector('.tab-active');
+        if (activeEl) activeEl.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    }
+
+    // Reactive render
+    effect(() => { files(); activeFile(); renderTabs(); });
+
+    // Clicks
+    on(list, 'click', e => {
+        // Close tab (doesn't delete file, just removes from tab bar)
+        const closeBtn = e.target.closest('[data-close]');
+        if (closeBtn) {
+            e.stopPropagation();
+            const path = closeBtn.dataset.close;
+            openTabs = openTabs.filter(t => t !== path);
+            if (activeFile() === path) {
+                const fallback = openTabs[openTabs.length - 1] || 'index.html';
+                setActiveFile(fallback);
+            }
+            renderTabs();
+            return;
+        }
+        // Open tab
+        const tab = e.target.closest('[data-tab]');
+        if (tab) setActiveFile(tab.dataset.tab);
+    });
+
+    // Right-click context menu on tabs
+    on(list, 'contextmenu', e => {
+        const tab = e.target.closest('[data-tab]');
+        if (!tab) return;
+        e.preventDefault();
+        const path = tab.dataset.tab;
+
+        // Remove any existing menu
+        document.querySelector('.tab-ctx')?.remove();
+        const menu = document.createElement('div');
+        menu.className = 'tab-ctx';
+        menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:999`;
+        menu.innerHTML = `
+        <div class="ctx-item" data-ctx="copy">Copy path</div>
+        ${path !== 'index.html' ? `<div class="ctx-item" data-ctx="rename">Rename</div>` : ''}
+        ${path !== 'index.html' ? `<div class="ctx-item ctx-danger" data-ctx="delete">Delete</div>` : ''}
+    `;
+        document.body.appendChild(menu);
+
+        menu.addEventListener('click', async ev => {
+            const action = ev.target.closest('[data-ctx]')?.dataset.ctx;
+            if (action === 'copy') {
+                navigator.clipboard.writeText(path);
+            } else if (action === 'rename') {
+                // Use a simple inline prompt via modal
+                emit('file:rename-prompt', { path });
+            } else if (action === 'delete') {
+                emit('file:delete', { path });
+            }
+            menu.remove();
+        });
+        setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
+    });
+
+    // When a file is opened from sidebar, add it to tabs
+    import { listen } from '../../src/oja.full.js';
+    listen('file:open', ({ path }) => {
+        if (!openTabs.includes(path)) openTabs.push(path);
+        setActiveFile(path);
+    });
+</script>
+
+<style>
+    .tab-bar {
+        display: flex;
+        align-items: center;
+        background: var(--bg-main);
+        border-bottom: 1px solid var(--border);
+        height: 34px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    .tabs-scroll {
+        display: flex;
+        align-items: stretch;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex: 1;
+        scrollbar-width: none;
+        height: 100%;
+    }
+    .tabs-scroll::-webkit-scrollbar { display: none; }
+    .tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        height: 100%;
+        cursor: pointer;
+        border-right: 1px solid var(--border);
+        font-size: 11.5px;
+        font-family: var(--mono);
+        color: var(--text-muted);
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: color .15s, background .15s;
+        position: relative;
+        user-select: none;
+    }
+    .tab:hover { color: var(--text-secondary); background: var(--bg-panel); }
+    .tab-active {
+        color: var(--text-primary);
+        background: var(--bg-panel);
+    }
+    .tab-active::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 2px;
+        background: var(--accent);
+    }
+    .tab-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .tab-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+    .tab-close {
+        background: none; border: none; padding: 0 2px;
+        color: var(--text-muted); cursor: pointer; font-size: 14px;
+        line-height: 1; border-radius: 3px;
+        opacity: 0; transition: opacity .15s, color .15s;
+        margin-left: 2px;
+    }
+    .tab:hover .tab-close { opacity: .6; }
+    .tab-close:hover { opacity: 1 !important; color: var(--text-primary); }
+    .tab-new {
+        flex-shrink: 0;
+        width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        background: none; border: none; border-left: 1px solid var(--border);
+        color: var(--text-muted); cursor: pointer;
+        transition: color .15s, background .15s;
+    }
+    .tab-new:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+    /* Context menu */
+    .tab-ctx {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        box-shadow: 0 8px 32px rgba(0,0,0,.4);
+        padding: 4px 0;
+        min-width: 130px;
+    }
+    .ctx-item {
+        padding: 7px 14px;
+        font-size: 12px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        transition: background .1s, color .1s;
+    }
+    .ctx-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .ctx-danger { color: var(--danger); }
+    .ctx-danger:hover { background: var(--danger-subtle); color: var(--danger); }
+</style>
