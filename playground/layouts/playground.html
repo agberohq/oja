@@ -1,0 +1,158 @@
+<div class="pg-layout">
+    <header class="pg-nav" data-slot="nav"></header>
+
+    <div class="pg-body">
+        <aside class="pg-sidebar" data-slot="sidebar"></aside>
+
+        <div class="pg-main">
+            <div class="pg-tabs" data-slot="tabs"></div>
+
+            <div class="editor-preview">
+                <div class="editor-pane" data-slot="editor"></div>
+                <div class="split-handle" id="split-handle" title="Drag to resize"></div>
+                <div class="preview-pane" data-slot="preview"></div>
+            </div>
+
+            <div class="pg-console" data-slot="console"></div>
+        </div>
+    </div>
+</div>
+
+<div class="pg-modal-overlay" id="pg-modal">
+    <div class="pg-modal">
+        <div class="pg-modal-header">
+            <span data-modal-field="title" class="pg-modal-title"></span>
+            <button data-action="modal-close" class="pg-modal-close">✕</button>
+        </div>
+        <div class="pg-modal-body" data-modal-body></div>
+    </div>
+</div>
+
+<div class="pg-modal-overlay" id="confirmModal">
+    <div class="pg-modal">
+        <div class="pg-modal-body" style="padding:24px">
+            <!-- ADDED data-modal-field="message" -->
+            <p data-modal-field="message" style="margin:0; font-size:14px; color:var(--text-primary);"></p>
+        </div>
+        <div class="pg-modal-footer">
+            <!-- ADDED data-confirm-cancel and data-confirm-ok -->
+            <button id="confirm-cancel" data-confirm-cancel data-action="modal-close" class="btn-ghost">Cancel</button>
+            <button id="confirm-ok" data-confirm-ok class="btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .pg-layout {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+    .pg-nav { flex-shrink: 0; }
+    .pg-body {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        position: relative;
+    }
+    .pg-sidebar {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 240px;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.2s cubic-bezier(.4,0,.2,1);
+        background: var(--bg-panel);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .pg-sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.4); }
+    .pg-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
+    }
+    .pg-tabs { flex-shrink: 0; }
+    .editor-preview {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        min-height: 0;
+    }
+    .workspace[data-layout="vertical"] .editor-preview { flex-direction: column; }
+    .editor-pane {
+        flex-basis: 50%;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .preview-pane {
+        flex-basis: 50%;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .split-handle {
+        flex-shrink: 0;
+        width: 4px;
+        background: var(--border);
+        cursor: col-resize;
+        transition: background 0.15s;
+        position: relative;
+    }
+    .split-handle:hover, .split-handle.dragging {
+        background: var(--accent);
+    }
+    .workspace[data-layout="vertical"] .split-handle {
+        width: auto; height: 4px; cursor: row-resize;
+    }
+    .pg-console { flex-shrink: 0; }
+
+    .pg-modal-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.65);
+        backdrop-filter: blur(6px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .pg-modal-overlay.active { display: flex; }
+    .pg-modal {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        width: 420px;
+        max-width: 92vw;
+        box-shadow: 0 24px 64px rgba(0,0,0,.5);
+        overflow: hidden;
+    }
+    .pg-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+    }
+    .pg-modal-title { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+    .pg-modal-close {
+        background: none; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 14px; padding: 2px 6px;
+        border-radius: 4px; transition: color .15s, background .15s;
+    }
+    .pg-modal-close:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .pg-modal-body { padding: 20px; }
+    .pg-modal-footer {
+        display: flex; justify-content: flex-end; gap: 8px;
+        padding: 12px 20px; border-top: 1px solid var(--border);
+    }
+</style>
