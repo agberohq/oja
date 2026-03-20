@@ -1,6 +1,6 @@
 {
     "name": "oja",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Minimal zero-build JavaScript framework for multi-app SPAs",
     "author": "Agbero HQ <https://github.com/agberohq>",
     "license": "MIT",
