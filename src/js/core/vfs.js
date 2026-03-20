@@ -192,17 +192,29 @@ const WORKER_FN = function(self) {
         });
     }
 
+    // Tries oja.config.json then vfs.json (legacy) unless a specific manifest
+    // name is provided via opts.manifest. Normalises the result so callers
+    // always receive a plain { files: string[] } shape regardless of which
+    // format the project uses (oja schema: manifest.vfs.files, legacy: manifest.files).
     async function fetchManifest(base, manifestName) {
-        const url = base + manifestName;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Manifest not found: ${url}`);
-        return await res.json();
+        const candidates = manifestName
+            ? [manifestName]
+            : ['oja.config.json', 'vfs.json'];
+
+        for (const name of candidates) {
+            const res = await fetch(base + name);
+            if (!res.ok) continue;
+            const data = await res.json();
+            return { files: data.vfs?.files ?? data.files ?? [] };
+        }
+
+        throw new Error(`No manifest found at ${base} (tried: ${candidates.join(', ')})`);
     }
 
     // ── Mount ──────────────────────────────────────────────────────────────
 
     async function doMount(base, opts) {
-        const manifestName = opts.manifest || 'vfs.json';
+        const manifestName = opts.manifest || null;
         const force        = opts.force    || false;
 
         const manifest = await fetchManifest(base, manifestName);
@@ -239,7 +251,7 @@ const WORKER_FN = function(self) {
     // ── Sync (poll) ────────────────────────────────────────────────────────
 
     async function doSync(base, opts) {
-        const manifestName = opts.manifest || 'vfs.json';
+        const manifestName = opts.manifest || null;
         let   manifest;
 
         try {
@@ -478,8 +490,8 @@ export class VFS {
      *     Useful during development. Default: false.
      *
      *   manifest : string
-     *     Default manifest filename used by mount() and sync() when no manifest
-     *     option is passed to those calls. Default: 'vfs.json'.
+     *     Override the manifest filename for mount() and sync(). When omitted,
+     *     the cascade is: oja.config.json → vfs.json (legacy).
      *     Override per-call:  vfs.mount(base, { manifest: 'custom.json' })
      *
      *   onConflict : 'keep-local' | 'take-remote' | function(path, local, remote) => 'local'|'remote'
@@ -538,8 +550,9 @@ export class VFS {
 
         // Init is async — single Promise stored so ready() never polls.
         this.#readyPromise = this.#runner.request('init', { name }).then(() => {
-            this.#refreshCount();
+            return this.#refreshCount();
         });
+        this.#readyPromise.catch(() => {});
     }
 
     // ─── Core operations ──────────────────────────────────────────────────────
@@ -645,14 +658,15 @@ export class VFS {
 
     /**
      * Mount files from a remote URL into the VFS.
-     * The remote must have a vfs.json listing all files.
+     * Looks for oja.config.json then vfs.json (legacy) at the remote base.
+     * The oja.config.json format uses vfs.files; vfs.json uses a top-level files array.
      *
      *   await vfs.mount('https://raw.githubusercontent.com/me/repo/main/example/');
      *   await vfs.mount('https://example.com/app/', { poll: 60000, force: true });
      *
      * @param {string} base      — base URL (must end with /)
      * @param {object} [opts]
-     *   manifest : string  — manifest filename (default: vfs.json)
+     *   manifest : string  — override manifest filename (skips cascade)
      *   poll     : number  — poll interval in ms, 0 = no polling
      *   force    : boolean — re-fetch even if files exist locally
      */

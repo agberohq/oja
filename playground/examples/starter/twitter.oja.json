@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "name": "twitter",
+  "vfs": {
+    "files": [
+      "index.html",
+      "app.js",
+      "css/style.css",
+      "data/mock.js",
+      "layouts/main.html",
+      "components/compose.html",
+      "components/trend.html",
+      "components/tweet.html",
+      "components/who-to-follow.html",
+      "pages/404.html",
+      "pages/explore.html",
+      "pages/home.html",
+      "pages/login.html",
+      "pages/profile.html",
+      "pages/register.html",
+      "pages/tweet.html",
+      "services/auth.js"
+    ]
+  }
+}
