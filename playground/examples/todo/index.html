@@ -5,7 +5,21 @@
     <title>Todo</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@v0.0.8/build/oja.min.css">
     <style>
-
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#0f0f0f; color:#e8e8e8; font-family:system-ui; display:flex; justify-content:center; padding:48px 20px; }
+        .app { width:100%; max-width:480px; }
+        h1 { font-size:22px; margin-bottom:24px; }
+        .add-row { display:flex; gap:8px; margin-bottom:24px; }
+        input { flex:1; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; color:#e8e8e8; padding:10px 14px; font-size:14px; outline:none; }
+        input:focus { border-color:#555; }
+        button { padding:10px 18px; border-radius:8px; border:none; background:#e8e8e8; color:#0f0f0f; font-weight:600; cursor:pointer; font-size:14px; }
+        .task { display:flex; align-items:center; gap:12px; padding:12px 16px; background:#141414; border:1px solid #1e1e1e; border-radius:10px; margin-bottom:8px; }
+        .task.done span { opacity:0.4; text-decoration:line-through; }
+        .task span { flex:1; font-size:14px; }
+        .task-del { background:transparent; border:none; color:#555; cursor:pointer; padding:4px 8px; border-radius:4px; font-size:12px; }
+        .task-del:hover { color:#e8e8e8; background:#2a2a2a; }
+        input[type=checkbox] { accent-color:#e8e8e8; width:16px; height:16px; cursor:pointer; }
+        .empty { color:#444; font-size:13px; text-align:center; padding:32px 0; }
     </style>
 </head>
 <body>

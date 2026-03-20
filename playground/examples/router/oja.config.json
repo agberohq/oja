@@ -2,6 +2,6 @@
   "version": "1.0.0",
   "name": "router",
   "vfs": {
-    "files": ["index.html", "app.js"]
+    "files": ["index.html", "app.js", "pages/home.html", "pages/counter.html", "pages/about.html"]
   }
 }
