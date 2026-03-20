@@ -3,1126 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oja Playground</title>
+    <title>Oja Playground — Build with Oja</title>
+
+    <!-- CodeMirror for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-        :root {
-            --bg:        #0a0a0a;
-            --surface:   #111111;
-            --surface2:  #1a1a1a;
-            --border:    #222222;
-            --border2:   #2e2e2e;
-            --text:      #e8e8e8;
-            --text2:     #888888;
-            --text3:     #444444;
-            --accent:    #c8f542;
-            --accent2:   #a8d42a;
-            --error:     #ff5555;
-            --success:   #42f59a;
-            --mono:      'JetBrains Mono', monospace;
-            --sans:      'Syne', sans-serif;
-        }
-
-        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
-
-        /* ── Layout ── */
-        .app { display: grid; grid-template-rows: 48px 1fr; height: 100vh; }
-
-        /* ── Topbar ── */
-        .topbar {
-            display: flex; align-items: center; gap: 0;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-            padding: 0 16px;
-            position: relative; z-index: 10;
-        }
-        .logo {
-            font-family: var(--sans); font-weight: 800; font-size: 15px;
-            letter-spacing: -0.02em; color: var(--accent);
-            margin-right: 20px; white-space: nowrap;
-        }
-        .logo span { color: var(--text3); }
-
-        .topbar-tabs { display: flex; flex: 1; gap: 2px; overflow-x: auto; scrollbar-width: none; }
-        .topbar-tabs::-webkit-scrollbar { display: none; }
-
-        .tab {
-            display: flex; align-items: center; gap: 6px;
-            padding: 0 12px; height: 48px;
-            font-family: var(--mono); font-size: 11px;
-            color: var(--text2); cursor: pointer; white-space: nowrap;
-            border-bottom: 2px solid transparent;
-            transition: color 0.15s, border-color 0.15s;
-            position: relative;
-        }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-        .tab-close {
-            display: flex; align-items: center; justify-content: center;
-            width: 16px; height: 16px; border-radius: 3px;
-            opacity: 0; transition: opacity 0.15s, background 0.15s;
-            font-size: 10px; color: var(--text2);
-        }
-        .tab:hover .tab-close { opacity: 1; }
-        .tab-close:hover { background: var(--border2); color: var(--text); }
-
-        .tab-new {
-            display: flex; align-items: center; justify-content: center;
-            width: 32px; height: 48px; color: var(--text3);
-            cursor: pointer; font-size: 16px; flex-shrink: 0;
-            transition: color 0.15s;
-        }
-        .tab-new:hover { color: var(--accent); }
-
-        .topbar-actions { display: flex; gap: 8px; margin-left: 16px; }
-
-        .btn {
-            display: flex; align-items: center; gap: 6px;
-            padding: 6px 14px; border-radius: 6px; border: none;
-            font-family: var(--sans); font-size: 12px; font-weight: 600;
-            cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .btn-run {
-            background: var(--accent); color: #0a0a0a;
-        }
-        .btn-run:hover { background: var(--accent2); }
-        .btn-run:active { transform: scale(0.97); }
-        .btn-ghost {
-            background: transparent; color: var(--text2);
-            border: 1px solid var(--border2);
-        }
-        .btn-ghost:hover { color: var(--text); border-color: var(--text3); }
-
-        /* ── Main split ── */
-        .main { display: grid; grid-template-columns: 200px 1fr 1fr; overflow: hidden; }
-
-        /* ── File tree ── */
-        .filetree {
-            background: var(--surface);
-            border-right: 1px solid var(--border);
-            display: flex; flex-direction: column;
-            overflow: hidden;
-        }
-        .filetree-header {
-            padding: 12px 14px 8px;
-            font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
-            text-transform: uppercase; color: var(--text3);
-            display: flex; align-items: center; justify-content: space-between;
-        }
-        .filetree-add {
-            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-            border-radius: 4px; cursor: pointer; color: var(--text3); font-size: 14px;
-            transition: all 0.15s;
-        }
-        .filetree-add:hover { background: var(--border2); color: var(--accent); }
-
-        .filetree-list { flex: 1; overflow-y: auto; padding: 4px 0; }
-        .filetree-list::-webkit-scrollbar { width: 4px; }
-        .filetree-list::-webkit-scrollbar-track { background: transparent; }
-        .filetree-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-        .file-item {
-            display: flex; align-items: center; gap: 8px;
-            padding: 5px 14px; cursor: pointer;
-            font-family: var(--mono); font-size: 11px; color: var(--text2);
-            transition: all 0.1s; position: relative;
-        }
-        .file-item:hover { background: var(--surface2); color: var(--text); }
-        .file-item.active { background: var(--surface2); color: var(--accent); }
-        .file-item .file-icon { font-size: 10px; opacity: 0.5; flex-shrink: 0; }
-        .file-item .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .file-item .file-del {
-            opacity: 0; font-size: 10px; color: var(--text3);
-            padding: 2px 4px; border-radius: 3px; transition: all 0.1s;
-        }
-        .file-item:hover .file-del { opacity: 1; }
-        .file-item .file-del:hover { background: var(--border2); color: var(--error); }
-
-        .filetree-section {
-            padding: 8px 14px 4px;
-            font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
-            text-transform: uppercase; color: var(--text3);
-        }
-
-        /* ── Editor pane ── */
-        .editor-pane {
-            display: flex; flex-direction: column;
-            border-right: 1px solid var(--border);
-            overflow: hidden; position: relative;
-        }
-        .editor-wrap { flex: 1; overflow: hidden; position: relative; }
-
-        textarea.code-editor {
-            width: 100%; height: 100%;
-            background: var(--bg); color: var(--text);
-            border: none; outline: none; resize: none;
-            font-family: var(--mono); font-size: 13px; line-height: 1.7;
-            padding: 20px; tab-size: 4;
-            caret-color: var(--accent);
-            scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
-        }
-        textarea.code-editor::-webkit-scrollbar { width: 6px; }
-        textarea.code-editor::-webkit-scrollbar-track { background: transparent; }
-        textarea.code-editor::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-
-        .editor-status {
-            display: flex; align-items: center; gap: 12px;
-            padding: 5px 16px;
-            border-top: 1px solid var(--border);
-            font-family: var(--mono); font-size: 10px; color: var(--text3);
-            background: var(--surface);
-        }
-        .status-dot {
-            width: 6px; height: 6px; border-radius: 50%;
-            background: var(--text3); flex-shrink: 0;
-            transition: background 0.3s;
-        }
-        .status-dot.saved  { background: var(--success); }
-        .status-dot.unsaved { background: var(--accent); }
-
-        /* ── Preview pane ── */
-        .preview-pane { display: flex; flex-direction: column; overflow: hidden; }
-        .preview-toolbar {
-            display: flex; align-items: center; gap: 8px;
-            padding: 0 14px; height: 36px;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-        }
-        .preview-toolbar-left { display: flex; gap: 6px; }
-        .traffic-light {
-            width: 10px; height: 10px; border-radius: 50%;
-        }
-        .tl-red    { background: #ff5f57; }
-        .tl-yellow { background: #ffbd2e; }
-        .tl-green  { background: #28c840; }
-
-        .preview-url {
-            flex: 1; background: var(--surface2); border: 1px solid var(--border2);
-            border-radius: 5px; padding: 3px 10px;
-            font-family: var(--mono); font-size: 10px; color: var(--text3);
-        }
-        .preview-reload {
-            width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-            border-radius: 5px; cursor: pointer; color: var(--text3); font-size: 13px;
-            transition: all 0.15s;
-        }
-        .preview-reload:hover { background: var(--surface2); color: var(--text); }
-
-        iframe#preview {
-            flex: 1; border: none; background: #fff;
-        }
-
-        /* ── Console ── */
-        .console-panel {
-            border-top: 1px solid var(--border);
-            max-height: 160px; overflow-y: auto;
-            font-family: var(--mono); font-size: 11px;
-            background: var(--surface);
-            scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
-        }
-        .console-panel::-webkit-scrollbar { width: 4px; }
-        .console-panel::-webkit-scrollbar-thumb { background: var(--border2); }
-        .console-line {
-            display: flex; gap: 10px; padding: 3px 14px;
-            border-bottom: 1px solid var(--border);
-            line-height: 1.5;
-        }
-        .console-line:last-child { border-bottom: none; }
-        .console-time { color: var(--text3); flex-shrink: 0; }
-        .console-type { flex-shrink: 0; width: 40px; }
-        .console-line.log  .console-type { color: var(--text2); }
-        .console-line.warn .console-type { color: #ffd700; }
-        .console-line.err  .console-type { color: var(--error); }
-        .console-line.info .console-type { color: #64b5f6; }
-        .console-msg { color: var(--text); word-break: break-all; }
-
-        .console-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 4px 14px; border-bottom: 1px solid var(--border);
-            font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
-            text-transform: uppercase; color: var(--text3);
-            background: var(--surface);
-            position: sticky; top: 0; z-index: 1;
-        }
-        .console-clear {
-            cursor: pointer; color: var(--text3); font-size: 9px;
-            transition: color 0.15s;
-        }
-        .console-clear:hover { color: var(--text); }
-
-        /* ── Dialogs ── */
-        .dialog-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.75);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 100; opacity: 0; pointer-events: none;
-            transition: opacity 0.2s;
-        }
-        .dialog-overlay.open { opacity: 1; pointer-events: all; }
-        .dialog {
-            background: var(--surface); border: 1px solid var(--border2);
-            border-radius: 12px; padding: 24px; width: 340px;
-            transform: translateY(8px); transition: transform 0.2s;
-        }
-        .dialog-overlay.open .dialog { transform: translateY(0); }
-        .dialog h3 { font-size: 14px; font-weight: 700; margin-bottom: 16px; }
-        .dialog input {
-            width: 100%; background: var(--bg); border: 1px solid var(--border2);
-            border-radius: 6px; padding: 8px 12px; color: var(--text);
-            font-family: var(--mono); font-size: 12px; outline: none;
-            transition: border-color 0.15s; margin-bottom: 12px;
-        }
-        .dialog input:focus { border-color: var(--accent); }
-        .dialog-hint { font-size: 11px; color: var(--text3); margin-bottom: 14px; }
-        .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
-
-        /* ── Empty state ── */
-        .empty-editor {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100%; color: var(--text3); gap: 12px;
-        }
-        .empty-editor .icon { font-size: 32px; opacity: 0.3; }
-        .empty-editor p { font-size: 12px; }
-
-        /* ── Toast ── */
-        .toast-area { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
-        .toast {
-            background: var(--surface2); border: 1px solid var(--border2);
-            border-radius: 8px; padding: 10px 16px;
-            font-size: 12px; color: var(--text);
-            animation: toast-in 0.2s ease forwards;
-            display: flex; align-items: center; gap: 8px;
-        }
-        .toast.success { border-left: 3px solid var(--success); }
-        .toast.error   { border-left: 3px solid var(--error); }
-        @keyframes toast-in {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<div class="app">
-    <!-- Topbar -->
+<div class="playground">
+    <!-- Top Navigation Bar -->
     <div class="topbar">
-        <div class="logo">oja <span>playground</span></div>
-        <div class="topbar-tabs" id="tab-bar"></div>
-        <div class="tab-new" id="btn-new-tab" title="New file">+</div>
-        <div class="topbar-actions">
-            <button class="btn btn-ghost" id="btn-examples">Examples</button>
-            <button class="btn btn-run" id="btn-run">▶ Run</button>
+        <div class="logo">
+            Oja <span>playground · reactive SPA framework</span>
+        </div>
+        <div class="toolbar">
+            <button class="btn" id="newFileBtn" title="Create new file">
+                <span>📄</span> New file
+            </button>
+            <button class="btn btn-primary" id="runBtn">
+                <span>▶</span> Run
+            </button>
+            <button class="btn" id="examplesBtn">
+                <span>📦</span> Examples
+            </button>
+            <button class="btn" id="themeToggleBtn" title="Toggle theme">
+                <span>🌙</span>
+            </button>
         </div>
     </div>
 
-    <!-- Main -->
-    <div class="main">
-        <!-- File tree -->
-        <div class="filetree">
-            <div class="filetree-header">
-                Files
-                <div class="filetree-add" id="btn-new-file" title="New file">+</div>
+    <!-- Main Split: Sidebar + Editor -->
+    <div class="main-split">
+        <!-- File Tree Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>📁 Files</span>
+                <span class="add-file-btn" id="addFileSidebar" title="New file">+</span>
             </div>
-            <div class="filetree-list" id="file-list"></div>
-        </div>
-
-        <!-- Editor -->
-        <div class="editor-pane">
-            <div class="editor-wrap">
-                <div class="empty-editor" id="empty-hint">
-                    <div class="icon">⌨</div>
-                    <p>Select a file to edit</p>
-                </div>
-                <textarea class="code-editor" id="editor" spellcheck="false" style="display:none"></textarea>
-            </div>
-            <div class="editor-status">
-                <div class="status-dot" id="status-dot"></div>
-                <span id="status-text">—</span>
-                <span style="margin-left:auto" id="cursor-pos"></span>
+            <div class="file-list" id="fileTree"></div>
+            <div class="sidebar-footer">
+                <div class="file-stats" id="fileStats"></div>
             </div>
         </div>
 
-        <!-- Preview + Console -->
-        <div class="preview-pane">
-            <div class="preview-toolbar">
-                <div class="preview-toolbar-left">
-                    <div class="traffic-light tl-red"></div>
-                    <div class="traffic-light tl-yellow"></div>
-                    <div class="traffic-light tl-green"></div>
-                </div>
-                <div class="preview-url">blob://oja-playground</div>
-                <div class="preview-reload" id="btn-reload" title="Reload">↺</div>
+        <!-- Editor Panel with Tabs -->
+        <div class="editor-panel">
+            <div class="tabs" id="tabBar"></div>
+            <div class="editor-wrapper">
+                <textarea id="editorTextarea"></textarea>
             </div>
-            <iframe id="preview" sandbox="allow-scripts allow-same-origin"></iframe>
-            <div class="console-panel" id="console-panel">
-                <div class="console-header">
-                    Console
-                    <span class="console-clear" id="btn-clear-console">clear</span>
+            <div class="editor-status" id="editorStatus">
+                <span id="cursorPosition">Ln 1, Col 1</span>
+                <span id="fileType"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Split: Preview + Console -->
+    <div class="bottom-split">
+        <!-- Live Preview -->
+        <div class="preview-area">
+            <div class="preview-header">
+                <span>🖥️ Live Preview</span>
+                <span class="status-badge" id="previewStatus">● auto-run</span>
+            </div>
+            <div class="preview-frame">
+                <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups"></iframe>
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="console-area">
+            <div class="console-header">
+                <span>📟 Console</span>
+                <div class="console-actions">
+                    <span class="console-clear" id="clearConsoleBtn" title="Clear console">clear</span>
+                    <span class="console-pause" id="pauseConsoleBtn" title="Pause logging">⏸</span>
                 </div>
+            </div>
+            <div class="console-logs" id="consoleLogs">
+                <div class="console-empty">✓ Ready — console output will appear here</div>
+            </div>
+            <div class="console-filter">
+                <button class="filter-chip active" data-level="all">All</button>
+                <button class="filter-chip" data-level="log">Log</button>
+                <button class="filter-chip" data-level="info">Info</button>
+                <button class="filter-chip" data-level="warn">Warn</button>
+                <button class="filter-chip" data-level="error">Error</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- New file dialog -->
-<div class="dialog-overlay" id="dialog-new">
+<!-- New File Dialog -->
+<div class="dialog-overlay" id="newFileDialog">
     <div class="dialog">
-        <h3>New file</h3>
-        <input type="text" id="new-file-name" placeholder="pages/home.html" autocomplete="off">
-        <div class="dialog-hint">Use paths like <code>pages/home.html</code> or <code>components/card.html</code></div>
+        <h3>Create new file</h3>
+        <input type="text" id="newFileName" placeholder="pages/home.html" autocomplete="off">
+        <div class="dialog-hint">Use paths like index.html, app.js, or components/card.html</div>
         <div class="dialog-actions">
-            <button class="btn btn-ghost" id="btn-dialog-cancel">Cancel</button>
-            <button class="btn btn-run" id="btn-dialog-create">Create</button>
+            <button class="btn" id="cancelDialog">Cancel</button>
+            <button class="btn btn-primary" id="confirmDialog">Create</button>
         </div>
     </div>
 </div>
 
-<!-- Examples dialog -->
-<div class="dialog-overlay" id="dialog-examples">
-    <div class="dialog" style="width:400px">
-        <h3>Load example</h3>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px" id="example-list"></div>
+<!-- Examples Dialog -->
+<div class="dialog-overlay" id="examplesDialog">
+    <div class="dialog dialog-large">
+        <h3>📦 Load example</h3>
+        <div id="exampleList" class="example-grid"></div>
         <div class="dialog-actions">
-            <button class="btn btn-ghost" id="btn-examples-cancel">Cancel</button>
+            <button class="btn" id="closeExamples">Close</button>
         </div>
     </div>
 </div>
 
-<div class="toast-area" id="toast-area"></div>
-
-<script type="module">
-    // ─── IndexedDB virtual filesystem ─────────────────────────────────────────────
-
-    const DB_NAME    = 'oja-playground';
-    const DB_VERSION = 1;
-    const STORE      = 'files';
-
-    async function openDB() {
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = (e) => {
-                e.target.result.createObjectStore(STORE, { keyPath: 'path' });
-            };
-            req.onsuccess = (e) => resolve(e.target.result);
-            req.onerror   = (e) => reject(e.target.error);
-        });
-    }
-
-    async function dbGet(path) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx  = db.transaction(STORE, 'readonly');
-            const req = tx.objectStore(STORE).get(path);
-            req.onsuccess = (e) => resolve(e.target.result || null);
-            req.onerror   = (e) => reject(e.target.error);
-        });
-    }
-
-    async function dbPut(path, content) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx  = db.transaction(STORE, 'readwrite');
-            const req = tx.objectStore(STORE).put({ path, content, updatedAt: Date.now() });
-            req.onsuccess = () => resolve();
-            req.onerror   = (e) => reject(e.target.error);
-        });
-    }
-
-    async function dbDelete(path) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx  = db.transaction(STORE, 'readwrite');
-            const req = tx.objectStore(STORE).delete(path);
-            req.onsuccess = () => resolve();
-            req.onerror   = (e) => reject(e.target.error);
-        });
-    }
-
-    async function dbAll() {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx  = db.transaction(STORE, 'readonly');
-            const req = tx.objectStore(STORE).getAll();
-            req.onsuccess = (e) => resolve(e.target.result);
-            req.onerror   = (e) => reject(e.target.error);
-        });
-    }
-
-    // ─── State ────────────────────────────────────────────────────────────────────
-
-    let files       = {};   // path → content (in-memory mirror of IndexedDB)
-    let activeFile  = null;
-    let openTabs    = [];   // ordered list of open paths
-    let unsaved     = new Set();
-    let blobUrls    = {};   // path → blob URL (for import resolution)
-
-    // ─── Boot ─────────────────────────────────────────────────────────────────────
-
-    async function boot() {
-        const rows = await dbAll();
-        if (rows.length === 0) {
-            await loadExample(EXAMPLES[0]);
-        } else {
-            rows.forEach(r => { files[r.path] = r.content; });
-            const entryPath = rows.find(r => r.path === 'index.html')?.path || rows[0].path;
-            openTabs = [entryPath];
-            activeFile = entryPath;
-        }
-        renderAll();
-        run();
-    }
-
-    // ─── Rendering ────────────────────────────────────────────────────────────────
-
-    function renderAll() {
-        renderFileTree();
-        renderTabs();
-        renderEditor();
-    }
-
-    function renderFileTree() {
-        const list = document.getElementById('file-list');
-        const paths = Object.keys(files).sort();
-
-        list.innerHTML = '';
-        paths.forEach(path => {
-            const item = document.createElement('div');
-            item.className = 'file-item' + (path === activeFile ? ' active' : '');
-            item.dataset.path = path;
-
-            const icon = document.createElement('span');
-            icon.className = 'file-icon';
-            icon.textContent = iconForPath(path);
-
-            const name = document.createElement('span');
-            name.className = 'file-name';
-            name.textContent = path;
-
-            const del = document.createElement('span');
-            del.className = 'file-del';
-            del.textContent = '✕';
-            del.title = 'Delete file';
-            del.addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteFile(path);
-            });
-
-            item.appendChild(icon);
-            item.appendChild(name);
-            item.appendChild(del);
-            item.addEventListener('click', () => openFile(path));
-            list.appendChild(item);
-        });
-    }
-
-    function renderTabs() {
-        const bar = document.getElementById('tab-bar');
-        bar.innerHTML = '';
-        openTabs.forEach(path => {
-            const tab = document.createElement('div');
-            tab.className = 'tab' + (path === activeFile ? ' active' : '');
-
-            const dot = unsaved.has(path)
-                ? '<span style="color:var(--accent);margin-right:2px">●</span>'
-                : '';
-            tab.innerHTML = `${dot}<span>${path.split('/').pop()}</span><span class="tab-close">✕</span>`;
-
-            tab.addEventListener('click', (e) => {
-                if (e.target.classList.contains('tab-close')) {
-                    closeTab(path);
-                } else {
-                    openFile(path);
-                }
-            });
-            bar.appendChild(tab);
-        });
-    }
-
-    function renderEditor() {
-        const editor   = document.getElementById('editor');
-        const hint     = document.getElementById('empty-hint');
-        const statusTx = document.getElementById('status-text');
-        const dot      = document.getElementById('status-dot');
-
-        if (!activeFile || files[activeFile] === undefined) {
-            editor.style.display = 'none';
-            hint.style.display   = 'flex';
-            statusTx.textContent = '—';
-            dot.className        = 'status-dot';
-            return;
-        }
-
-        hint.style.display   = 'none';
-        editor.style.display = 'block';
-        editor.value         = files[activeFile];
-        statusTx.textContent = activeFile;
-        dot.className        = 'status-dot ' + (unsaved.has(activeFile) ? 'unsaved' : 'saved');
-    }
-
-    // ─── File operations ──────────────────────────────────────────────────────────
-
-    function openFile(path) {
-        saveCurrentEditorContent();
-        activeFile = path;
-        if (!openTabs.includes(path)) openTabs.push(path);
-        renderAll();
-    }
-
-    function closeTab(path) {
-        openTabs = openTabs.filter(p => p !== path);
-        if (activeFile === path) {
-            activeFile = openTabs[openTabs.length - 1] || null;
-        }
-        renderAll();
-    }
-
-    async function deleteFile(path) {
-        if (!confirm(`Delete ${path}?`)) return;
-        delete files[path];
-        await dbDelete(path);
-        openTabs  = openTabs.filter(p => p !== path);
-        unsaved.delete(path);
-        if (activeFile === path) activeFile = openTabs[openTabs.length - 1] || null;
-        renderAll();
-        toast('Deleted ' + path, 'error');
-    }
-
-    async function createFile(path, content = '') {
-        path = path.trim();
-        if (!path) return;
-        if (files[path] !== undefined) {
-            toast('File already exists', 'error');
-            return;
-        }
-        files[path] = content;
-        await dbPut(path, content);
-        openFile(path);
-        toast('Created ' + path);
-    }
-
-    function saveCurrentEditorContent() {
-        const editor = document.getElementById('editor');
-        if (activeFile && editor.style.display !== 'none') {
-            files[activeFile] = editor.value;
-        }
-    }
-
-    // Auto-save with debounce
-    let saveTimer = null;
-    document.getElementById('editor').addEventListener('input', (e) => {
-        if (!activeFile) return;
-        files[activeFile] = e.target.value;
-        unsaved.add(activeFile);
-        renderTabs();
-        document.getElementById('status-dot').className = 'status-dot unsaved';
-
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(async () => {
-            await dbPut(activeFile, files[activeFile]);
-            unsaved.delete(activeFile);
-            renderTabs();
-            document.getElementById('status-dot').className = 'status-dot saved';
-        }, 800);
-    });
-
-    // Cursor position
-    document.getElementById('editor').addEventListener('keyup', updateCursor);
-    document.getElementById('editor').addEventListener('click', updateCursor);
-    function updateCursor() {
-        const editor = document.getElementById('editor');
-        const pos    = editor.selectionStart;
-        const lines  = editor.value.substring(0, pos).split('\n');
-        const line   = lines.length;
-        const col    = lines[lines.length - 1].length + 1;
-        document.getElementById('cursor-pos').textContent = `Ln ${line}, Col ${col}`;
-    }
-
-    // Tab key inserts spaces
-    document.getElementById('editor').addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            const el    = e.target;
-            const start = el.selectionStart;
-            const end   = el.selectionEnd;
-            el.value    = el.value.substring(0, start) + '    ' + el.value.substring(end);
-            el.selectionStart = el.selectionEnd = start + 4;
-            el.dispatchEvent(new Event('input'));
-        }
-    });
-
-    // ─── Run ──────────────────────────────────────────────────────────────────────
-
-    function run() {
-        saveCurrentEditorContent();
-        revokeBlobUrls();
-        clearConsole();
-
-        // Build blob URL map — each file gets a stable URL so cross-file imports work
-        Object.keys(files).forEach(path => {
-            const mime = mimeFor(path);
-            const blob = new Blob([files[path]], { type: mime });
-            blobUrls[path] = URL.createObjectURL(blob);
-        });
-
-        const indexContent = files['index.html'];
-        if (!indexContent) {
-            appendConsole('err', 'No index.html found — create one to run your app');
-            return;
-        }
-
-        // Rewrite import paths in all JS/HTML files to use blob URLs
-        const rewritten = rewriteImports(indexContent, 'index.html');
-
-        const frame = document.getElementById('preview');
-
-        // Inject console bridge so iframe logs appear in our console panel
-        const bridgeScript = `<script>
-        const _c = window.console;
-        ['log','warn','error','info'].forEach(t => {
-            window.console[t] = (...a) => {
-                _c[t](...a);
-                window.parent.postMessage({ type: 'console', level: t, args: a.map(x => {
-                    try { return typeof x === 'object' ? JSON.stringify(x, null, 2) : String(x); }
-                    catch { return String(x); }
-                })}, '*');
-            };
-        });
-        window.addEventListener('error', e => {
-            window.parent.postMessage({ type: 'console', level: 'error', args: [e.message + ' (' + e.filename?.split('/').pop() + ':' + e.lineno + ')']}, '*');
-        });
-    <\/script>`;
-
-        frame.srcdoc = rewritten.replace('<head>', '<head>' + bridgeScript);
-    }
-
-    function rewriteImports(content, filePath) {
-        // Replace relative import paths with their blob URLs
-        return content.replace(
-            /((?:import\s+(?:[\w*{},\s]+from\s+)?|import\s*\()['"])([^'"]+)(['"]\)?)/g,
-            (match, prefix, path, suffix) => {
-                if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('//')) {
-                    return match;
-                }
-                const resolved = resolvePath(filePath, path);
-                if (blobUrls[resolved]) {
-                    return prefix + blobUrls[resolved] + suffix;
-                }
-                return match;
-            }
-        ).replace(
-            /(src|href)=(["'])([^"']+)\2/g,
-            (match, attr, q, path) => {
-                if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('//') || path.startsWith('#')) {
-                    return match;
-                }
-                const resolved = resolvePath(filePath, path);
-                if (blobUrls[resolved]) {
-                    return `${attr}=${q}${blobUrls[resolved]}${q}`;
-                }
-                return match;
-            }
-        );
-    }
-
-    function resolvePath(from, to) {
-        if (to.startsWith('/')) return to.slice(1);
-        const base  = from.split('/').slice(0, -1);
-        const parts = to.split('/');
-        for (const p of parts) {
-            if (p === '..') base.pop();
-            else if (p !== '.') base.push(p);
-        }
-        return base.join('/');
-    }
-
-    function revokeBlobUrls() {
-        Object.values(blobUrls).forEach(url => URL.revokeObjectURL(url));
-        blobUrls = {};
-    }
-
-    // ─── Console bridge ───────────────────────────────────────────────────────────
-
-    window.addEventListener('message', (e) => {
-        if (e.data?.type === 'console') {
-            appendConsole(e.data.level, e.data.args.join(' '));
-        }
-    });
-
-    function appendConsole(level, msg) {
-        const panel = document.getElementById('console-panel');
-        const line  = document.createElement('div');
-        const now   = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        line.className = `console-line ${level === 'error' ? 'err' : level}`;
-        line.innerHTML = `
-        <span class="console-time">${now}</span>
-        <span class="console-type">${level}</span>
-        <span class="console-msg">${escHtml(msg)}</span>
-    `;
-        panel.appendChild(line);
-        panel.scrollTop = panel.scrollHeight;
-    }
-
-    function clearConsole() {
-        const panel = document.getElementById('console-panel');
-        panel.innerHTML = `
-        <div class="console-header">
-            Console
-            <span class="console-clear" id="btn-clear-console">clear</span>
-        </div>
-    `;
-        document.getElementById('btn-clear-console').addEventListener('click', clearConsole);
-    }
-
-    function escHtml(s) {
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
-
-    // ─── Examples ─────────────────────────────────────────────────────────────────
-
-    const EXAMPLES = [
-        {
-            name: 'Counter',
-            description: 'state + effect',
-            files: {
-                'index.html': `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Counter</title>
-  <style>
-    body { font-family: system-ui; background: #0f0f0f; color: #e8e8e8;
-           display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { text-align: center; border: 1px solid #222; border-radius: 16px;
-            background: #141414; padding: 48px; }
-    .count { font-size: 96px; font-weight: 700; line-height: 1; margin-bottom: 24px; }
-    .btn { padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer;
-           font-size: 14px; margin: 0 6px; }
-    .btn-primary { background: #e8e8e8; color: #0f0f0f; font-weight: 600; }
-    .btn-secondary { background: #1a1a1a; color: #e8e8e8; border: 1px solid #2a2a2a; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="count" id="count">0</div>
-    <button class="btn btn-secondary" id="reset">Reset</button>
-    <button class="btn btn-primary" id="inc">+ Increment</button>
-  </div>
-  <script type="module">
-    import { state, effect, on } from 'https://cdn.jsdelivr.net/npm/oja-framework@latest/build/oja.core.esm.js';
-
-    const [count, setCount] = state(0);
-    const countEl = document.getElementById('count');
-
-    effect(() => { countEl.textContent = count(); });
-
-    document.getElementById('inc').addEventListener('click', () => setCount(n => n + 1));
-    document.getElementById('reset').addEventListener('click', () => setCount(0));
-  <\/script>
-</body>
-</html>`,
-            }
-        },
-        {
-            name: 'Todo List',
-            description: 'state + effect + form',
-            files: {
-                'index.html': `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Todo</title>
-  <style>
-    body { font-family: system-ui; background: #0f0f0f; color: #e8e8e8; margin: 0;
-           display: flex; justify-content: center; padding: 60px 20px; }
-    .app { width: 100%; max-width: 480px; }
-    h1 { font-size: 24px; margin-bottom: 24px; }
-    .add-row { display: flex; gap: 8px; margin-bottom: 24px; }
-    input[type=text] { flex: 1; background: #1a1a1a; border: 1px solid #2a2a2a;
-                       border-radius: 8px; color: #e8e8e8; padding: 10px 14px;
-                       font-size: 14px; outline: none; }
-    input[type=text]:focus { border-color: #555; }
-    button { padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
-             background: #e8e8e8; color: #0f0f0f; font-weight: 600; font-size: 14px; }
-    .task { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-            background: #141414; border: 1px solid #1e1e1e; border-radius: 10px;
-            margin-bottom: 8px; }
-    .task.done span { opacity: 0.4; text-decoration: line-through; }
-    .task span { flex: 1; font-size: 14px; }
-    .task-del { background: transparent; border: none; color: #555; cursor: pointer;
-                padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-    .task-del:hover { color: #e8e8e8; background: #2a2a2a; }
-    input[type=checkbox] { accent-color: #e8e8e8; width: 16px; height: 16px; cursor: pointer; }
-    .empty { color: #444; font-size: 13px; text-align: center; padding: 32px 0; }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <h1>Tasks</h1>
-    <div class="add-row">
-      <input type="text" id="new-task" placeholder="Add a task…">
-      <button id="add-btn">Add</button>
-    </div>
-    <div id="task-list"></div>
-  </div>
-  <script type="module">
-    import { state, effect } from 'https://cdn.jsdelivr.net/npm/oja-framework@latest/build/oja.core.esm.js';
-
-    const [tasks, setTasks] = state([]);
-    const listEl = document.getElementById('task-list');
-    const input  = document.getElementById('new-task');
-
-    effect(() => {
-      const all = tasks();
-      if (all.length === 0) {
-        listEl.innerHTML = '<div class="empty">No tasks yet</div>';
-        return;
-      }
-      listEl.innerHTML = '';
-      all.forEach((task, i) => {
-        const div = document.createElement('div');
-        div.className = 'task' + (task.done ? ' done' : '');
-        div.innerHTML = \`
-          <input type="checkbox" \${task.done ? 'checked' : ''} data-i="\${i}">
-          <span>\${task.text}</span>
-          <button class="task-del" data-i="\${i}">✕</button>
-        \`;
-        listEl.appendChild(div);
-      });
-    });
-
-    document.getElementById('add-btn').addEventListener('click', () => {
-      const text = input.value.trim();
-      if (!text) return;
-      setTasks([...tasks(), { text, done: false }]);
-      input.value = '';
-    });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('add-btn').click();
-    });
-
-    listEl.addEventListener('change', (e) => {
-      if (!e.target.dataset.i) return;
-      const i = +e.target.dataset.i;
-      setTasks(tasks().map((t, idx) => idx === i ? { ...t, done: !t.done } : t));
-    });
-
-    listEl.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('task-del')) return;
-      const i = +e.target.dataset.i;
-      setTasks(tasks().filter((_, idx) => idx !== i));
-    });
-  <\/script>
-</body>
-</html>`,
-            }
-        },
-        {
-            name: 'Context + Router',
-            description: 'multi-page app with shared state',
-            files: {
-                'index.html': `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Oja Router Demo</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui; background: #0f0f0f; color: #e8e8e8; min-height: 100vh; }
-    nav { display: flex; gap: 4px; padding: 16px 24px; border-bottom: 1px solid #1e1e1e;
-          background: #141414; }
-    nav a { padding: 6px 16px; border-radius: 6px; color: #666; text-decoration: none;
-            font-size: 13px; transition: all 0.15s; }
-    nav a:hover { color: #e8e8e8; background: #1e1e1e; }
-    nav a.oja-active { background: #e8e8e8; color: #0f0f0f; font-weight: 600; }
-    #outlet { padding: 40px 24px; }
-  </style>
-</head>
-<body>
-  <nav>
-    <a href="#/" data-page="/">Home</a>
-    <a href="#/counter" data-page="/counter">Counter</a>
-    <a href="#/about" data-page="/about">About</a>
-  </nav>
-  <div id="outlet"></div>
-  <script type="module" src="app.js"><\/script>
-</body>
-</html>`,
-                'app.js': `import { Router, Out, context } from 'https://cdn.jsdelivr.net/npm/oja-framework@latest/build/oja.core.esm.js';
-
-export const [count, setCount] = context('count', 0);
-
-const router = new Router({ mode: 'hash', outlet: '#outlet' });
-
-router.Get('/',        Out.component('pages/home.html'));
-router.Get('/counter', Out.component('pages/counter.html'));
-router.Get('/about',   Out.component('pages/about.html'));
-router.NotFound(Out.html('<p style="color:#666;padding:20px">404 — Not found</p>'));
-
-router.start('/');`,
-                'pages/home.html': `<h2 style="font-size:28px;margin-bottom:12px">Welcome to Oja</h2>
-<p style="color:#888;margin-bottom:24px">A zero-build reactive framework.</p>
-<a href="#/counter" style="color:#e8e8e8;font-size:14px">Go to counter →</a>`,
-                'pages/counter.html': `<h2 style="font-size:20px;margin-bottom:24px">Counter</h2>
-<div id="count" style="font-size:72px;font-weight:700;margin-bottom:24px">0</div>
-<div style="display:flex;gap:10px">
-  <button id="dec" style="padding:10px 20px;border-radius:8px;border:1px solid #2a2a2a;background:#1a1a1a;color:#e8e8e8;cursor:pointer;font-size:14px">−</button>
-  <button id="inc" style="padding:10px 20px;border-radius:8px;border:none;background:#e8e8e8;color:#0f0f0f;font-weight:600;cursor:pointer;font-size:14px">+</button>
-</div>
-<script type="module">
-  import { context, effect } from 'https://cdn.jsdelivr.net/npm/oja-framework@latest/build/oja.core.esm.js';
-  const [count, setCount] = context('count', 0);
-  const el = find('#count');
-  effect(() => { el.textContent = count(); });
-  find('#inc').addEventListener('click', () => setCount(n => n + 1));
-  find('#dec').addEventListener('click', () => setCount(n => n - 1));
-<\/script>`,
-                'pages/about.html': `<h2 style="font-size:20px;margin-bottom:12px">About</h2>
-<p style="color:#888;font-size:14px;line-height:1.7">
-  Oja is a minimal, zero-build JavaScript framework.<br>
-  Write HTML. Add state. Done.
-</p>`,
-            }
-        },
-    ];
-
-    async function loadExample(example) {
-        // Clear existing files
-        const existing = await dbAll();
-        for (const f of existing) await dbDelete(f.path);
-        files = {};
-
-        // Write new files
-        for (const [path, content] of Object.entries(example.files)) {
-            files[path] = content;
-            await dbPut(path, content);
-        }
-
-        openTabs  = ['index.html'];
-        activeFile = 'index.html';
-    }
-
-    // ─── UI wiring ────────────────────────────────────────────────────────────────
-
-    document.getElementById('btn-run').addEventListener('click', run);
-    document.getElementById('btn-reload').addEventListener('click', run);
-
-    document.getElementById('btn-new-file').addEventListener('click', openNewDialog);
-    document.getElementById('btn-new-tab').addEventListener('click', openNewDialog);
-
-    document.getElementById('btn-dialog-cancel').addEventListener('click', closeNewDialog);
-    document.getElementById('btn-dialog-create').addEventListener('click', async () => {
-        const name = document.getElementById('new-file-name').value.trim();
-        if (name) {
-            await createFile(name, defaultContent(name));
-            closeNewDialog();
-            run();
-        }
-    });
-
-    document.getElementById('new-file-name').addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') document.getElementById('btn-dialog-create').click();
-        if (e.key === 'Escape') closeNewDialog();
-    });
-
-    document.getElementById('btn-clear-console').addEventListener('click', clearConsole);
-
-    // Examples dialog
-    document.getElementById('btn-examples').addEventListener('click', () => {
-        const list = document.getElementById('example-list');
-        list.innerHTML = '';
-        EXAMPLES.forEach((ex, i) => {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-ghost';
-            btn.style.cssText = 'justify-content:space-between;width:100%;text-align:left';
-            btn.innerHTML = `<span>${ex.name}</span><span style="color:var(--text3);font-size:11px">${ex.description}</span>`;
-            btn.addEventListener('click', async () => {
-                closeExamplesDialog();
-                await loadExample(EXAMPLES[i]);
-                renderAll();
-                run();
-                toast('Loaded: ' + ex.name);
-            });
-            list.appendChild(btn);
-        });
-        document.getElementById('dialog-examples').classList.add('open');
-    });
-
-    document.getElementById('btn-examples-cancel').addEventListener('click', closeExamplesDialog);
-
-    document.getElementById('dialog-examples').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closeExamplesDialog();
-    });
-
-    document.getElementById('dialog-new').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closeNewDialog();
-    });
-
-    function openNewDialog() {
-        document.getElementById('new-file-name').value = '';
-        document.getElementById('dialog-new').classList.add('open');
-        setTimeout(() => document.getElementById('new-file-name').focus(), 50);
-    }
-    function closeNewDialog() {
-        document.getElementById('dialog-new').classList.remove('open');
-    }
-    function closeExamplesDialog() {
-        document.getElementById('dialog-examples').classList.remove('open');
-    }
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            run();
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-            e.preventDefault();
-            openNewDialog();
-        }
-    });
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-    function iconForPath(path) {
-        if (path.endsWith('.html')) return '⬡';
-        if (path.endsWith('.js'))   return '◆';
-        if (path.endsWith('.css'))  return '◈';
-        if (path.endsWith('.json')) return '❖';
-        return '·';
-    }
-
-    function mimeFor(path) {
-        if (path.endsWith('.js'))   return 'text/javascript';
-        if (path.endsWith('.css'))  return 'text/css';
-        if (path.endsWith('.json')) return 'application/json';
-        return 'text/html';
-    }
-
-    function defaultContent(path) {
-        if (path.endsWith('.html')) return `<!-- ${path} -->\n<div>\n    \n</div>\n`;
-        if (path.endsWith('.js'))   return `// ${path}\n`;
-        if (path.endsWith('.css'))  return `/* ${path} */\n`;
-        return '';
-    }
-
-    function toast(msg, type = 'success') {
-        const area = document.getElementById('toast-area');
-        const el   = document.createElement('div');
-        el.className = `toast ${type}`;
-        el.textContent = msg;
-        area.appendChild(el);
-        setTimeout(() => el.remove(), 2500);
-    }
-
-    // ─── Start ────────────────────────────────────────────────────────────────────
-
-    boot();
-</script>
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
