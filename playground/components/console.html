@@ -44,12 +44,13 @@
         colIcon.style.transform = isOpen ? '' : 'rotate(180deg)';
     });
 
-    on('#collapse-btn', 'click', e => { e.stopPropagation(); setOpen(v => !v); });
-    on('#console-toggle', 'click', () => setOpen(v => !v));
+    on('#collapse-btn', 'click', () => setOpen(v => !v));
+    on('#console-toggle', 'click', e => {
+        if (e.target.closest('#console-controls')) return;
+        setOpen(v => !v);
+    });
 
-    // Stop filter/clear from bubbling to the toggle handler
-    on('#log-filters', 'click', e => e.stopPropagation());
-    on('#clear-btn',   'click', e => { e.stopPropagation(); setLogs([]); });
+    on('#clear-btn',   'click', () => setLogs([]));
 
     on('#log-filters', 'click', e => {
         const btn = e.target.closest('[data-f]');
@@ -137,6 +138,7 @@
         cursor: ns-resize;
         flex-shrink: 0;
         transition: background .15s;
+        touch-action: none;
     }
     .console-resize-handle:hover,
     .console-resize-handle.dragging {

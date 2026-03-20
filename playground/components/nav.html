@@ -16,14 +16,16 @@
 
         <div class="sep"></div>
 
+        <button data-action="new-project"   title="New project" class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M1.5 2.5h4l1.5 2h5.5v7H1.5v-9z"/><path d="M7 6v4M5 8h4"/>
+            </svg>
+        </button>
         <button data-action="new-file"      title="New file  Ctrl+N" class="btn-icon">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1H3a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6M8 1l4 4v1M8 1v4h4"/><path d="M5 9h4M7 7v4"/></svg>
         </button>
         <button data-action="examples"      title="Examples" class="btn-icon">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
-        </button>
-        <button data-action="reset"         title="Clear Workspace" class="btn-icon" style="color:var(--danger)">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3h12M4 3V2a1 1 0 011-1h4a1 1 0 011 1v1M5 6v5M9 6v5M2 3l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
         </button>
 
         <div class="sep"></div>
@@ -62,7 +64,7 @@
 
     const [theme]       = context('theme');
     const [mobileView]  = context('mobile_view');
-    const[sidebarOpen] = context('sidebar_open');
+    const [sidebarOpen] = context('sidebar_open');
     const [files]       = context('files');
 
     const syncDot   = find('#sync-dot');

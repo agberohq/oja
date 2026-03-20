@@ -31,11 +31,9 @@
 <div class="pg-modal-overlay" id="confirmModal">
     <div class="pg-modal">
         <div class="pg-modal-body" style="padding:24px">
-            <!-- ADDED data-modal-field="message" -->
             <p data-modal-field="message" style="margin:0; font-size:14px; color:var(--text-primary);"></p>
         </div>
         <div class="pg-modal-footer">
-            <!-- ADDED data-confirm-cancel and data-confirm-ok -->
             <button id="confirm-cancel" data-confirm-cancel data-action="modal-close" class="btn-ghost">Cancel</button>
             <button id="confirm-ok" data-confirm-ok class="btn-danger">Delete</button>
         </div>
@@ -108,6 +106,7 @@
         cursor: col-resize;
         transition: background 0.15s;
         position: relative;
+        touch-action: none;
     }
     .split-handle:hover, .split-handle.dragging {
         background: var(--accent);

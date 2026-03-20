@@ -99,9 +99,10 @@ export { auth }                                           from './js/core/auth.j
 export { Channel, go, pipeline, fanOut, fanIn,
     merge, split }                                        from './js/core/channel.js';
 
-// ─── Background infrastructure ───────────────────────────────────────────────
+// Background infrastructure
 export { Runner }                                         from './js/core/runner.js';
 export { VFS }                                            from './js/core/vfs.js';
+export { sw }                                             from './js/core/sw.js';
 
 // ─── Plugin system ────────────────────────────────────────────────────────────
 export { plugin }                                         from './js/core/plugin.js';

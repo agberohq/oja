@@ -1,3 +1,4 @@
+// playground/app.js
 /**
  * Oja Playground — orchestrates VFS, Service Worker, layout mounting,
  * and all global reactive state. Components communicate via context + emit/listen.
@@ -12,20 +13,25 @@ import {
 
 // Canonical context keys
 export const [files,       setFiles]       = context('files', {});
-export const[activeFile,  setActiveFile]  = context.persist('active_file', 'index.html');
+export const [activeFile,  setActiveFile]  = context.persist('active_file', 'index.html');
 export const [logs,        setLogs]        = context('logs', []);
-export const [theme,       setTheme]       = context.persist('theme', 'dark');
-export const [layoutMode,  setLayoutMode]  = context.persist('layout_mode', 'horizontal');
-export const [mobileView,  setMobileView]  = context.persist('mobile_view', false);
-export const [autoRefresh, setAutoRefresh] = context.persist('auto_refresh', true);
+export const[theme,       setTheme]       = context.persist('theme', 'dark');
+export const[layoutMode,  setLayoutMode]  = context.persist('layout_mode', 'horizontal');
+export const[mobileView,  setMobileView]  = context.persist('mobile_view', false);
+export const[autoRefresh, setAutoRefresh] = context.persist('auto_refresh', true);
 export const[panelSplit,  setPanelSplit]  = context.persist('panel_split', 50);
 export const[consoleOpen, setConsoleOpen] = context.persist('console_open', true);
-export const [consoleH,    setConsoleH]    = context.persist('console_height', 180);
+export const[consoleH,    setConsoleH]    = context.persist('console_height', 180);
 export const[sidebarOpen, setSidebarOpen] = context('sidebar_open', false);
 export const [sidebarPin,  setSidebarPin]  = context.persist('sidebar_pin', false);
 export const [savedState,  setSavedState]  = state(null);
 
 export const isDirty = derived(() => JSON.stringify(files()) !== savedState());
+
+const BLANK_PROJECT = {
+    'index.html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Blank Project</title>\n    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">\n    <style>body { padding: 20px; font-family: system-ui; background: #0f0f0f; color: #e8e8e8; }</style>\n</head>\n<body>\n    <h1>New Project</h1>\n    <p>Start coding...</p>\n</body>\n</html>`
+};
+const BLANK_PROJECT_STR = JSON.stringify(BLANK_PROJECT);
 
 let _vfs = null;
 
@@ -133,6 +139,7 @@ async function runPreview() {
         notify.warn('No index.html to preview.');
         return;
     }
+    setLogs([]); // Automatically clear logs on every run so old state isn't visually injected back
     await syncToWorker();
     emit('preview:run', { url: `./preview-zone/index.html?t=${Date.now()}` });
     setSavedState(JSON.stringify(files()));
@@ -178,10 +185,9 @@ async function loadExample(dir) {
     }
 }
 
-// Wipes the VFS, resets all state, and loads a blank starter project.
-// Awaits syncToWorker before running preview so the SW has the new file before the iframe fetches it.
-async function resetWorkspace() {
-    const ok = await modal.confirm('Delete everything and start a blank project?');
+// Replaces the old resetWorkspace. Functions as a true "New Project" action.
+async function createNewProject() {
+    const ok = await modal.confirm('Create a new blank project? Current files will be lost.');
     if (!ok) return;
 
     await _vfs.clear();
@@ -189,30 +195,14 @@ async function resetWorkspace() {
     setLogs([]);
     localStorage.removeItem('pg_expanded');
 
-    const blankFile = {
-        'index.html': `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Blank Project</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
-    <style>body { padding: 20px; font-family: system-ui; background: #0f0f0f; color: #e8e8e8; }</style>
-</head>
-<body>
-    <h1>New Project</h1>
-    <p>Start coding...</p>
-</body>
-</html>`
-    };
-
-    await _vfs.write('index.html', blankFile['index.html']);
-    setFiles(blankFile);
+    await _vfs.write('index.html', BLANK_PROJECT['index.html']);
+    setFiles(BLANK_PROJECT);
     setActiveFile('index.html');
-    setSavedState(JSON.stringify(blankFile));
+    setSavedState(BLANK_PROJECT_STR);
 
     await syncToWorker();
     runPreview();
-    notify.success('Database deleted. Starting fresh.');
+    notify.success('New project created.');
 }
 
 async function createFile(name) {
@@ -295,7 +285,13 @@ async function importProject(file) {
 
 function encodeToURL() {
     try {
-        const encoded = btoa(encodeURIComponent(JSON.stringify(files())));
+        const stateStr = JSON.stringify(files());
+        // Do not pollute the URL if it's just the blank project
+        if (stateStr === BLANK_PROJECT_STR) {
+            history.replaceState({}, '', window.location.pathname);
+            return;
+        }
+        const encoded = btoa(encodeURIComponent(stateStr));
         history.replaceState({}, '', `#state=${encoded}`);
     } catch (_) {}
 }
@@ -357,7 +353,7 @@ function setupEffects() {
 function setupEvents() {
     on('[data-action="run"]',            'click', () => runPreview());
     listen('preview:force',              () => runPreview());
-    on('[data-action="reset"]',          'click', () => resetWorkspace());
+    on('[data-action="new-project"]',    'click', () => createNewProject());
     on('[data-action="new-file"]',       'click', () => openNewFileModal());
     on('[data-action="examples"]',       'click', () => openExamplesModal());
     on('[data-action="toggle-theme"]',   'click', () => setTheme(t => t === 'dark' ? 'light' : 'dark'));
@@ -377,11 +373,29 @@ function setupEvents() {
     });
 
     on('[data-action="modal-close"]',  'click', () => modal.close());
-    on('[data-action="create-file"]',  'click', () => {
+
+    // Form submission handlers for modals (allows pressing Enter to submit)
+    on('#new-file-form', 'submit', (e) => {
+        e.preventDefault();
         const val = document.getElementById('new-file-input')?.value?.trim();
         if (val) createFile(val);
         modal.close();
     });
+
+    on('#rename-form', 'submit', (e, el) => {
+        e.preventDefault();
+        const path = el.dataset.path;
+        const name = path.split('/').pop();
+        const newName = document.getElementById('rename-input')?.value?.trim();
+        if (newName && newName !== name) {
+            const parts = path.split('/');
+            parts.pop();
+            const newPath = parts.length ? parts.join('/') + '/' + newName : newName;
+            renameFile(path, newPath);
+        }
+        modal.close();
+    });
+
     on('[data-action="load-example"]', 'click', (e, el) => {
         loadExample(el.dataset.ex);
         modal.close();
@@ -438,6 +452,7 @@ function setupResize() {
         px => {
             const clamped = Math.max(60, Math.min(500, px));
             setConsoleH(clamped);
+            if (!consoleOpen()) setConsoleOpen(true);
         },
         'console'
     );
@@ -447,12 +462,22 @@ function makeResizable(handle, onResize, mode) {
     if (!handle) return;
     let active = false;
 
+    const endDrag = () => {
+        if (!active) return;
+        active = false;
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = '');
+    };
+
     handle.addEventListener('pointerdown', e => {
         active = true;
         handle.setPointerCapture(e.pointerId);
         handle.classList.add('dragging');
         document.body.style.userSelect = 'none';
         document.body.style.cursor = mode === 'console' ? 'ns-resize' : 'row-resize';
+        document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none');
     });
 
     handle.addEventListener('pointermove', e => {
@@ -467,26 +492,22 @@ function makeResizable(handle, onResize, mode) {
         }
     });
 
-    handle.addEventListener('pointerup', () => {
-        active = false;
-        handle.classList.remove('dragging');
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-    });
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
 }
 
 function openNewFileModal() {
     modal.open('pg-modal', {
         body: Out.html(`
-            <div style="display:flex;flex-direction:column;gap:12px">
+            <form id="new-file-form" style="display:flex;flex-direction:column;gap:12px">
                 <input id="new-file-input" class="modal-input" placeholder="e.g. components/card.html" autofocus>
                 <div class="modal-hint">
                     <span class="hint-tag">.html</span> component &nbsp;
                     <span class="hint-tag">.js</span> module &nbsp;
                     <span class="hint-tag">.css</span> styles
                 </div>
-                <button class="btn-primary" data-action="create-file">Create</button>
-            </div>
+                <button type="submit" class="btn-primary">Create</button>
+            </form>
         `)
     });
     setTimeout(() => document.getElementById('new-file-input')?.focus(), 50);
@@ -494,7 +515,8 @@ function openNewFileModal() {
 
 function openExamplesModal() {
     const EXAMPLES =[
-        { id: 'starter',   label: 'Starter',   sub: 'state · effect · component' },
+        { id: 'blank',     label: 'Blank',      sub: 'empty project' },
+        { id: 'starter',   label: 'Starter',    sub: 'state · effect · component' },
         { id: 'todo',      label: 'Todo',       sub: 'list · reactivity' },
         { id: 'router',    label: 'Router',     sub: 'multi-page SPA' },
         { id: 'guestbook', label: 'Guestbook',  sub: 'form · validation' },
@@ -520,27 +542,17 @@ function openRenameModal(path) {
     const name = path.split('/').pop();
     modal.open('pg-modal', {
         body: Out.html(`
-            <div style="display:flex;flex-direction:column;gap:12px">
+            <form id="rename-form" data-path="${path}" style="display:flex;flex-direction:column;gap:12px">
                 <label style="font-size:11px;color:var(--text-muted)">Rename "${name}"</label>
                 <input id="rename-input" class="modal-input" value="${name}" autofocus>
-                <button class="btn-primary" id="do-rename">Rename</button>
-            </div>
+                <button type="submit" class="btn-primary">Rename</button>
+            </form>
         `)
     });
     setTimeout(() => {
         const input = document.getElementById('rename-input');
         input?.focus();
         input?.select();
-        document.getElementById('do-rename')?.addEventListener('click', () => {
-            const newName = input?.value?.trim();
-            if (newName && newName !== name) {
-                const parts = path.split('/');
-                parts.pop();
-                const newPath = parts.length ? parts.join('/') + '/' + newName : newName;
-                renameFile(path, newPath);
-            }
-            modal.close();
-        });
     }, 50);
 }
 

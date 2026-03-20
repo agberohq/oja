@@ -1,23 +1,687 @@
-<div class="page">
-    <h1>Counter</h1>
-    <div id="counter-value" style="font-size: 48px; margin: 20px 0;">0</div>
-    <button id="inc-btn" style="padding: 10px 20px; margin-right: 10px;">+</button>
-    <button id="reset-btn" style="padding: 10px 20px;">Reset</button>
-    <p style="margin-top: 20px;"><a href="#/">← Back to Home</a></p>
-</div>
-<script type="module">
-    import { context } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+<!-- pages/counter.html -->
+<div class="page counter-page">
+    <div class="counter-container">
+        <div class="counter-header">
+            <span class="counter-icon">🎮</span>
+            <h1>Interactive <span class="gradient-text">Counter Studio</span></h1>
+            <p class="counter-subtitle">Experience Oja's reactive state in action</p>
+        </div>
 
+        <div class="counter-card">
+            <div class="counter-display">
+                <div class="counter-value-wrapper">
+                    <span id="counter-value" class="counter-value">0</span>
+                    <div class="counter-badge">
+                        <span id="counter-parity" class="parity-badge">Even</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="counter-controls">
+                <button id="inc-btn" class="counter-btn inc-btn">
+                    <span class="btn-icon">+</span>
+                    <span>Increment</span>
+                </button>
+                <button id="dec-btn" class="counter-btn dec-btn">
+                    <span class="btn-icon">-</span>
+                    <span>Decrement</span>
+                </button>
+                <button id="reset-btn" class="counter-btn reset-btn">
+                    <span class="btn-icon">⟳</span>
+                    <span>Reset</span>
+                </button>
+                <button id="double-btn" class="counter-btn double-btn">
+                    <span class="btn-icon">×2</span>
+                    <span>Double</span>
+                </button>
+            </div>
+
+            <div class="counter-stats">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">Current Value</span>
+                        <strong id="stat-value" class="stat-value">0</strong>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Total Clicks</span>
+                        <strong id="total-clicks" class="stat-value">0</strong>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Max Reached</span>
+                        <strong id="max-value" class="stat-value">0</strong>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Session Changes</span>
+                        <strong id="change-count" class="stat-value">0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="counter-chart">
+                <canvas id="value-history" width="300" height="80" style="width:100%; height:80px"></canvas>
+                <div class="chart-caption">Last 20 values</div>
+            </div>
+
+            <div class="counter-actions">
+                <button id="undo-btn" class="action-btn" disabled>
+                    <span>↩️</span> Undo
+                </button>
+                <button id="redo-btn" class="action-btn" disabled>
+                    <span>↪️</span> Redo
+                </button>
+                <button id="save-preset-btn" class="action-btn">
+                    <span>💾</span> Save Preset
+                </button>
+            </div>
+        </div>
+
+        <div class="counter-footer">
+            <a href="#/" class="back-link">← Back to Home</a>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { context, state, effect, derived, batch } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+    import { history } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+
+    // Get the shared counter from context
     const [count, setCount] = context('count', 0);
+
+    // Local reactive state
+    const [totalClicks, setTotalClicks] = state(0);
+    const [maxValue, setMaxValue] = state(0);
+    const [changeCount, setChangeCount] = state(0);
+    const [historyValues, setHistoryValues] = state([0]); // Track last 20 values
+
+    // Derived state: parity, double, square, etc.
+    const parity = derived(() => count() % 2 === 0 ? 'Even' : 'Odd');
+    const isPositive = derived(() => count() > 0);
+    const isNegative = derived(() => count() < 0);
+    const doubleValue = derived(() => count() * 2);
+    const squareValue = derived(() => count() * count);
+    const colorClass = derived(() => {
+        const val = count();
+        if (val > 0) return 'positive';
+        if (val < 0) return 'negative';
+        return 'zero';
+    });
+
+    // DOM elements
     const el = document.getElementById('counter-value');
+    const statEl = document.getElementById('stat-value');
+    const parityEl = document.getElementById('counter-parity');
+    const totalClicksEl = document.getElementById('total-clicks');
+    const maxValueEl = document.getElementById('max-value');
+    const changeCountEl = document.getElementById('change-count');
+    const undoBtn = document.getElementById('undo-btn');
+    const redoBtn = document.getElementById('redo-btn');
+    const canvas = document.getElementById('value-history');
 
     // Update display when count changes
-    const updateDisplay = () => { el.textContent = count(); };
-    updateDisplay();
+    const updateDisplay = () => {
+        const value = count();
+        el.textContent = value;
+        statEl.textContent = value;
+        parityEl.textContent = parity();
+
+        // Update color class
+        el.className = `counter-value ${colorClass()}`;
+
+        // Add animation effect
+        el.classList.add('pulse');
+        setTimeout(() => el.classList.remove('pulse'), 200);
+
+        // Update max value
+        if (value > maxValue()) {
+            setMaxValue(value);
+        }
+    };
+
+    // Update stats display
+    effect(() => {
+        totalClicksEl.textContent = totalClicks();
+        maxValueEl.textContent = maxValue();
+        changeCountEl.textContent = changeCount();
+    });
+
+    // Track history and draw chart
+    effect(() => {
+        const currentHistory = [...historyValues()];
+        // Keep last 20 values
+        if (currentHistory.length > 20) {
+            currentHistory.shift();
+        }
+        setHistoryValues(currentHistory);
+        drawChart(currentHistory);
+    });
+
+    // Draw mini chart of value history
+    function drawChart(values) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+
+        // Set canvas dimensions
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.clearRect(0, 0, width, height);
+
+        if (values.length < 2) return;
+
+        const max = Math.max(...values, 1);
+        const min = Math.min(...values, -1);
+        const range = Math.max(Math.abs(max), Math.abs(min)) || 1;
+
+        const stepX = width / (values.length - 1);
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#667eea';
+        ctx.lineWidth = 2;
+
+        // Draw line
+        values.forEach((val, i) => {
+            const x = i * stepX;
+            const y = height / 2 - (val / range) * (height / 2 - 10);
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        ctx.stroke();
+
+        // Draw zero line
+        ctx.beginPath();
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        const zeroY = height / 2;
+        ctx.moveTo(0, zeroY);
+        ctx.lineTo(width, zeroY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw dots
+        values.forEach((val, i) => {
+            const x = i * stepX;
+            const y = height / 2 - (val / range) * (height / 2 - 10);
+            ctx.beginPath();
+            ctx.fillStyle = val > 0 ? '#4caf50' : val < 0 ? '#ff6b6b' : '#667eea';
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    // Undo/Redo with history
+    effect(() => {
+        const currentHistory = historyValues();
+        const currentCount = count();
+
+        // Update history if count changed
+        if (currentHistory[currentHistory.length - 1] !== currentCount) {
+            const newHistory = [...currentHistory, currentCount];
+            setHistoryValues(newHistory);
+        }
+
+        // Update button states
+        undoBtn.disabled = currentHistory.length <= 1;
+        redoBtn.disabled = false; // Simplified - real undo/redo would need more state
+    });
+
+    function addToHistory(value) {
+        const current = historyValues();
+        setHistoryValues([...current, value]);
+    }
+
+    function undo() {
+        const currentHistory = historyValues();
+        if (currentHistory.length > 1) {
+            const previousValue = currentHistory[currentHistory.length - 2];
+            setCount(previousValue);
+            setHistoryValues(currentHistory.slice(0, -1));
+            setChangeCount(changeCount() + 1);
+            notifyChange('undone');
+        }
+    }
+
+    function redo() {
+        // Simplified - full undo/redo would need a forward stack
+        notifyChange('redo attempted - full history implementation would go here');
+    }
+
+    function notifyChange(action) {
+        // Could emit an event for debugging
+        console.log(`[counter] ${action} to ${count()}`);
+    }
+
+    // Button handlers with batch updates
+    document.getElementById('inc-btn').onclick = () => {
+        batch(() => {
+            setCount(n => n + 1);
+            setTotalClicks(totalClicks() + 1);
+            setChangeCount(changeCount() + 1);
+        });
+        addToHistory(count());
+        // Add visual feedback
+        const btn = document.getElementById('inc-btn');
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+    };
+
+    document.getElementById('dec-btn').onclick = () => {
+        batch(() => {
+            setCount(n => n - 1);
+            setTotalClicks(totalClicks() + 1);
+            setChangeCount(changeCount() + 1);
+        });
+        addToHistory(count());
+        const btn = document.getElementById('dec-btn');
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+    };
+
+    document.getElementById('reset-btn').onclick = () => {
+        batch(() => {
+            setCount(0);
+            setChangeCount(changeCount() + 1);
+        });
+        addToHistory(0);
+        const btn = document.getElementById('reset-btn');
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+    };
+
+    document.getElementById('double-btn').onclick = () => {
+        batch(() => {
+            setCount(n => n * 2);
+            setTotalClicks(totalClicks() + 1);
+            setChangeCount(changeCount() + 1);
+        });
+        addToHistory(count());
+        const btn = document.getElementById('double-btn');
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+    };
+
+    undoBtn.onclick = undo;
+    redoBtn.onclick = redo;
+
+    // Save preset - demonstrates localStorage with context
+    document.getElementById('save-preset-btn').onclick = async () => {
+        const value = count();
+        try {
+            localStorage.setItem('saved_counter_value', value);
+            showTempMessage('Preset saved!', '#4caf50');
+        } catch (e) {
+            showTempMessage('Failed to save', '#ff6b6b');
+        }
+    };
+
+    // Load saved preset on page load
+    (function loadPreset() {
+        try {
+            const saved = localStorage.getItem('saved_counter_value');
+            if (saved !== null && saved !== undefined) {
+                const parsed = parseInt(saved, 10);
+                if (!isNaN(parsed)) {
+                    setTimeout(() => {
+                        batch(() => {
+                            setCount(parsed);
+                            setChangeCount(changeCount() + 1);
+                        });
+                        showTempMessage('Preset loaded!', '#4caf50');
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            // Ignore
+        }
+    })();
+
+    function showTempMessage(msg, color) {
+        const msgDiv = document.createElement('div');
+        msgDiv.textContent = msg;
+        msgDiv.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${color};
+            color: white;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        `;
+        document.body.appendChild(msgDiv);
+        setTimeout(() => msgDiv.style.opacity = '1', 10);
+        setTimeout(() => {
+            msgDiv.style.opacity = '0';
+            setTimeout(() => msgDiv.remove(), 300);
+        }, 2000);
+    }
 
     // Watch for changes from other tabs/pages
-    setInterval(updateDisplay, 100);
+    let lastKnownValue = count();
+    setInterval(() => {
+        const current = count();
+        if (current !== lastKnownValue) {
+            lastKnownValue = current;
+            updateDisplay();
+        }
+    }, 100);
 
-    document.getElementById('inc-btn').onclick = () => setCount(n => n + 1);
-    document.getElementById('reset-btn').onclick = () => setCount(0);
+    // Initial display
+    updateDisplay();
+    addToHistory(0);
 </script>
+
+<style>
+    .counter-page {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 60vh;
+        animation: fadeInUp 0.5s ease-out;
+        padding: 20px;
+    }
+
+    .counter-container {
+        max-width: 650px;
+        width: 100%;
+    }
+
+    .counter-header {
+        text-align: center;
+        margin-bottom: 32px;
+    }
+
+    .counter-icon {
+        font-size: 48px;
+        display: inline-block;
+        margin-bottom: 16px;
+        animation: bounce 2s ease-in-out infinite;
+    }
+
+    .counter-header h1 {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+
+    .counter-subtitle {
+        color: #888;
+        font-size: 14px;
+    }
+
+    .gradient-text {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .counter-card {
+        background: rgba(30, 30, 30, 0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 32px;
+        padding: 32px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .counter-display {
+        margin-bottom: 24px;
+        text-align: center;
+    }
+
+    .counter-value-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+
+    .counter-value {
+        font-size: 96px;
+        font-weight: 700;
+        transition: all 0.2s ease;
+        display: inline-block;
+        font-family: 'Monaco', 'Menlo', monospace;
+    }
+
+    .counter-value.positive {
+        background: linear-gradient(135deg, #4caf50, #8bc34a);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .counter-value.negative {
+        background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .counter-value.zero {
+        background: linear-gradient(135deg, #e8e8e8, #a0a0a0);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .counter-value.pulse {
+        transform: scale(1.1);
+        text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+    }
+
+    .counter-badge {
+        position: absolute;
+        top: -15px;
+        right: -50px;
+    }
+
+    .parity-badge {
+        background: rgba(102, 126, 234, 0.2);
+        border: 1px solid rgba(102, 126, 234, 0.5);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #667eea;
+    }
+
+    .counter-controls {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+    }
+
+    .counter-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 40px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: inherit;
+    }
+
+    .inc-btn {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+    }
+
+    .dec-btn {
+        background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+        color: white;
+    }
+
+    .reset-btn {
+        background: rgba(255, 255, 255, 0.1);
+        color: #e8e8e8;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .double-btn {
+        background: rgba(76, 175, 80, 0.2);
+        color: #4caf50;
+        border: 1px solid rgba(76, 175, 80, 0.5);
+    }
+
+    .counter-btn:hover {
+        transform: translateY(-2px);
+    }
+
+    .inc-btn:hover {
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    .dec-btn:hover {
+        box-shadow: 0 10px 25px rgba(255, 107, 107, 0.4);
+    }
+
+    .reset-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .double-btn:hover {
+        background: rgba(76, 175, 80, 0.3);
+        box-shadow: 0 10px 25px rgba(76, 175, 80, 0.2);
+    }
+
+    .btn-icon {
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .counter-stats {
+        margin-bottom: 24px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+    }
+
+    .stat-card {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        padding: 12px;
+        text-align: center;
+    }
+
+    .stat-label {
+        display: block;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 600;
+        color: #667eea;
+    }
+
+    .counter-chart {
+        margin-bottom: 24px;
+        padding: 16px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 16px;
+    }
+
+    .counter-chart canvas {
+        display: block;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+    }
+
+    .chart-caption {
+        text-align: center;
+        font-size: 10px;
+        color: #666;
+        margin-top: 8px;
+    }
+
+    .counter-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .action-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: inherit;
+        color: #e8e8e8;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .action-btn:hover:not(:disabled) {
+        background: rgba(102, 126, 234, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .counter-footer {
+        margin-top: 32px;
+        text-align: center;
+    }
+
+    .back-link {
+        color: #888;
+        text-decoration: none;
+        transition: color 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .back-link:hover {
+        color: #667eea;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+</style>

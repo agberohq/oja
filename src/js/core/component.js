@@ -28,11 +28,23 @@
  *       component.interval(refresh, 3000); // auto-cleared on navigate
  *   });
  *
+ *   // Called after the module script has executed and onMount hooks have run.
+ *   // Use for logic that depends on the component being fully wired up.
+ *   component.onReady(() => {
+ *       runPreview();
+ *   });
+ *
  *   // Called automatically before the router navigates away.
  *   // Use for: closing WebSockets, dismissing banners, custom teardown.
  *   component.onUnmount(() => {
  *       sse.close();
  *       notify.dismissBanner();
+ *   });
+ *
+ *   // Called after the component has been fully removed from the DOM.
+ *   // Use for: analytics, cleanup confirmation, chaining teardowns.
+ *   component.onDead(() => {
+ *       analytics.track('component-removed');
  *   });
  *
  *   // Register a repeating timer — cleared automatically on navigate.
@@ -179,7 +191,7 @@ export let _activeElement = null;
 function _getScope(el) {
     if (!el) return null;
     if (!_scopes.has(el)) {
-        _scopes.set(el, { mount: [], unmount: [], intervals: [], timeouts:[] });
+        _scopes.set(el, { mount: [], unmount: [], ready: [], dead: [], intervals: [], timeouts: [] });
     }
     return _scopes.get(el);
 }
@@ -292,10 +304,13 @@ export const component = {
             const prev = _activeElement;
             _activeElement = container;
             try {
-                execScripts(container, url, data);
+                await execScripts(container, url, data);
             } finally {
                 _activeElement = prev;
             }
+
+            await this._runMount(container);
+            await this._runReady(container);
 
             const ms = performance.now() - start;
             _trackRender(url, ms);
@@ -408,9 +423,25 @@ export const component = {
         return this;
     },
 
+    // Called after the component's module script has executed and onMount hooks
+    // have run. Use for logic that depends on the component being fully wired.
+    onReady(fn) {
+        const scope = _getScope(_activeElement);
+        if (scope) scope.ready.push(fn);
+        return this;
+    },
+
     onUnmount(fn) {
         const scope = _getScope(_activeElement);
         if (scope) scope.unmount.push(fn);
+        return this;
+    },
+
+    // Called after the component has been fully torn down and removed from the DOM.
+    // Use for analytics, cleanup confirmation, or chaining dependent teardowns.
+    onDead(fn) {
+        const scope = _getScope(_activeElement);
+        if (scope) scope.dead.push(fn);
         return this;
     },
 
@@ -452,6 +483,27 @@ export const component = {
             }
         }
     },
+
+    async _runReady(el) {
+        const scope = _scopes.get(el);
+        if (!scope) return;
+        for (const fn of scope.ready) {
+            try { await fn(); } catch (e) {
+                console.warn('[oja/component] onReady hook error:', e);
+            }
+        }
+    },
+
+    async _runDead(el, url) {
+        const scope = _scopes.get(el);
+        if (!scope) return;
+        for (const fn of scope.dead) {
+            try { await fn(); } catch (e) {
+                console.warn('[oja/component] onDead hook error:', e);
+            }
+        }
+        emit('component:dead', { url });
+    },
 };
 
 async function _teardownScope(el) {
@@ -467,7 +519,15 @@ async function _teardownScope(el) {
         }
     }
 
+    // Dead hooks run after the scope is removed — the component is fully gone
+    const deadHooks = [...(scope.dead || [])];
     _scopes.delete(el);
+
+    for (const fn of deadHooks) {
+        try { await fn(); } catch (e) {
+            console.warn('[oja/component] onDead hook error:', e);
+        }
+    }
 }
 
 function _resolve(target) {
