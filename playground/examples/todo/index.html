@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Todo</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@v0.0.8/build/oja.min.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { background:#0f0f0f; color:#e8e8e8; font-family:system-ui; display:flex; justify-content:center; padding:48px 20px; }
@@ -32,7 +32,7 @@
     <div id="list"></div>
 </div>
 <script type="module">
-    import { state, effect } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+    import { state, effect } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@v0.0.8/build/oja.core.esm.js';
 
     const [tasks, setTasks] = state([]);
     const inp  = document.getElementById('inp');

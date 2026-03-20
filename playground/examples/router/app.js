@@ -4,6 +4,7 @@ export const [count, setCount] = context('count', 0);
 
 const router = new Router({ mode: 'hash', outlet: '#app' });
 
+// Notice they correctly point to 'pages/...' now
 router.Get('/',        Out.component('pages/home.html'));
 router.Get('/counter', Out.component('pages/counter.html'));
 router.Get('/about',   Out.component('pages/about.html'));

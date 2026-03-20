@@ -2,133 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oja Playground — Build with Oja</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Oja Playground</title>
 
     <!-- CodeMirror -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-<div class="playground">
-    <div class="topbar">
-        <div class="logo">
-            Oja <span>playground · reactive SPA framework</span>
-        </div>
-        <div class="toolbar">
-            <button class="btn" id="newFileBtn" title="Create new file">
-                <span>📄</span> New file
-            </button>
-            <button class="btn btn-primary" id="runBtn">
-                <span>▶</span> Run
-            </button>
-            <button class="btn" id="examplesBtn">
-                <span>📦</span> Examples
-            </button>
-            <button class="btn" id="themeToggleBtn" title="Toggle theme">
-                <span>🌙</span>
-            </button>
-        </div>
-    </div>
+<body data-theme="dark">
 
-    <div class="main-split">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <span>📁 Files</span>
-                <span class="add-file-btn" id="addFileSidebar" title="New file">+</span>
-            </div>
-            <div class="file-list" id="fileTree"></div>
-            <div class="sidebar-footer">
-                <div class="file-stats" id="fileStats"></div>
-            </div>
-        </div>
+<div id="app"></div>
 
-        <div class="editor-panel">
-            <div class="tabs" id="tabBar"></div>
-            <div class="editor-wrapper">
-                <textarea id="editorTextarea"></textarea>
-            </div>
-            <div class="editor-status" id="editorStatus">
-                <span id="cursorPosition">Ln 1, Col 1</span>
-                <span id="fileType"></span>
-            </div>
-        </div>
-    </div>
-
-    <div class="bottom-split">
-        <div class="preview-area">
-            <div class="preview-header">
-                <span>🖥️ Live Preview</span>
-                <span class="status-badge" id="previewStatus">● auto-run</span>
-            </div>
-            <div class="preview-frame">
-                <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups"></iframe>
-            </div>
-        </div>
-
-        <div class="console-area">
-            <div class="console-header">
-                <span>📟 Console</span>
-                <div class="console-actions">
-                    <span class="console-clear" id="clearConsoleBtn" title="Clear console">clear</span>
-                    <span class="console-pause" id="pauseConsoleBtn" title="Pause logging">⏸</span>
-                </div>
-            </div>
-            <div class="console-logs" id="consoleLogs">
-                <div class="console-empty">✓ Ready — console output will appear here</div>
-            </div>
-            <div class="console-filter">
-                <button class="filter-chip active" data-level="all">All</button>
-                <button class="filter-chip" data-level="log">Log</button>
-                <button class="filter-chip" data-level="info">Info</button>
-                <button class="filter-chip" data-level="warn">Warn</button>
-                <button class="filter-chip" data-level="error">Error</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- New File Dialog -->
-<div class="dialog-overlay" id="newFileDialog">
-    <div class="dialog">
-        <h3>Create new file</h3>
-        <input type="text" id="newFileName" placeholder="pages/home.html" autocomplete="off">
-        <div class="dialog-hint">Use paths like index.html, app.js, or components/card.html</div>
-        <div class="dialog-actions">
-            <button class="btn" id="cancelDialog">Cancel</button>
-            <button class="btn btn-primary" id="confirmDialog">Create</button>
-        </div>
-    </div>
-</div>
-
-<!-- Examples Dialog -->
-<div class="dialog-overlay" id="examplesDialog">
-    <div class="dialog dialog-large">
-        <h3>📦 Load example</h3>
-        <div id="exampleList" class="example-grid"></div>
-        <div class="dialog-actions">
-            <button class="btn" id="closeExamples">Close</button>
-        </div>
-    </div>
-</div>
-
+<!-- CodeMirror core -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<!-- CodeMirror addons -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
