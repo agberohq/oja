@@ -50,6 +50,10 @@
  *       key: 'app-theme' // custom storage key (optional)
  *   });
  *
+ *   // Require — throws clearly if the key was never registered.
+ *   // Use in components to catch key typos or incorrect load order.
+ *   const [activeFile, setActiveFile] = context.require('active_file');
+ *
  *   // Typical global contexts for an admin dashboard:
  *   const [isOnline,   setOnline]   = context('online',   true);
  *   const [authUser,   setAuthUser] = context('authUser', null);
@@ -561,6 +565,15 @@ context.persist = (name, initialValue, options = {}) => {
 };
 
 context.has = (name) => _ctx.has(name);
+
+// Throws a clear error if the key has not been registered yet.
+// Use in components to catch context key typos or ordering bugs early.
+context.require = (name) => {
+    if (!_ctx.has(name)) {
+        throw new Error(`[oja/context] '${name}' is not registered. Call context('${name}', defaultValue) before subscribing.`);
+    }
+    return _ctx.get(name);
+};
 
 context.delete = (name) => _ctx.delete(name);
 
