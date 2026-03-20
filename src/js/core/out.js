@@ -90,10 +90,12 @@ const CACHE_MAX = 50;
 let _vfs = null;
 
 // Fetch an HTML file, checking the in-memory cache and VFS before hitting the network.
+// vfsOverride lets a single Out instance use a specific VFS without touching the global.
 // On a successful network fetch the result is written back to VFS for offline use.
 async function _fetchHTML(url, options = {}) {
-    const now    = Date.now();
-    const cached = _cache.get(url);
+    const now       = Date.now();
+    const cached    = _cache.get(url);
+    const activeVfs = options.vfsOverride !== undefined ? options.vfsOverride : _vfs;
 
     if (cached && (now - cached.timestamp) < CACHE_TTL && !options.bypassCache) {
         _cache.delete(url);
@@ -102,9 +104,9 @@ async function _fetchHTML(url, options = {}) {
         return cached.html;
     }
 
-    if (_vfs) {
+    if (activeVfs) {
         try {
-            const text = await _vfs.readText(url);
+            const text = await activeVfs.readText(url);
             if (text !== null) {
                 _cache.set(url, { html: text, timestamp: now, size: text.length });
                 emit('out:vfs-hit', { url });
@@ -132,7 +134,7 @@ async function _fetchHTML(url, options = {}) {
         }
         _cache.set(url, { html, timestamp: now, size });
 
-        if (_vfs) _vfs.write(url, html);
+        if (activeVfs) activeVfs.write(url, html);
 
         emit('out:fetch-end', { url, ms: performance.now() - start, size });
         return html;
@@ -352,6 +354,9 @@ class _ComponentOut extends _Out {
         this._data       = data;
         this._lists      = lists;
         this._prefetched = false;
+        // options.vfs pins a specific VFS to this instance — no global side effect.
+        // When absent, _fetchHTML falls back to the globally registered _vfs.
+        this._vfs = options.vfs !== undefined ? options.vfs : undefined;
     }
 
     async render(container, context = {}) {
@@ -364,7 +369,10 @@ class _ComponentOut extends _Out {
         if (errorEl)   errorEl.style.display   = 'none';
 
         try {
-            const html = await _fetchHTML(this._payload, { bypassCache: this._options.bypassCache });
+            const html = await _fetchHTML(this._payload, {
+                bypassCache:  this._options.bypassCache,
+                vfsOverride:  this._vfs,
+            });
 
             container.innerHTML = templateRender(html, mergedData);
             fill(container, mergedData);
@@ -427,7 +435,11 @@ class _ComponentOut extends _Out {
     async prefetch(options = {}) {
         if (this._prefetched) return this;
         try {
-            await _fetchHTML(this._payload, { signal: options.signal, bypassCache: options.bypassCache });
+            await _fetchHTML(this._payload, {
+                signal:      options.signal,
+                bypassCache: options.bypassCache,
+                vfsOverride: this._vfs,
+            });
             this._prefetched = true;
             emit('out:component-prefetched', { url: this._payload });
         } catch (e) {

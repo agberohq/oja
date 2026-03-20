@@ -100,8 +100,9 @@ const WORKER_FN = function(self) {
     const DB_VERSION = 1;
     let   db         = null;
     let   ns         = '';            // namespace (VFS instance name)
-    const dirty      = new Set();     // paths modified locally since last sync
-    const pollTimers = new Map();     // base → timer id
+    const dirty           = new Set();     // paths modified locally since last sync
+    const pollTimers      = new Map();     // base → timer id
+    const conflictWaiters = new Map();     // path → resolve fn — awaited during sync
 
     // ── IndexedDB helpers ──────────────────────────────────────────────────
 
@@ -173,6 +174,22 @@ const WORKER_FN = function(self) {
             return await res.arrayBuffer();
         }
         return await res.text();
+    }
+
+    // Pause sync for a conflicting path until the main thread sends resolveConflict.
+    // Returns 'local' or 'remote'. Resolves immediately with 'local' if no handler
+    // is registered on the main thread (safe default — never loses local changes).
+    function waitForResolution(path) {
+        return new Promise(resolve => {
+            conflictWaiters.set(path, resolve);
+            // Safety timeout — if main thread never responds, keep local after 5s
+            setTimeout(() => {
+                if (conflictWaiters.has(path)) {
+                    conflictWaiters.delete(path);
+                    resolve('local');
+                }
+            }, 5000);
+        });
     }
 
     async function fetchManifest(base, manifestName) {
@@ -255,12 +272,17 @@ const WORKER_FN = function(self) {
                 const isDirty = dirty.has(path);
 
                 if (isDirty) {
-                    // Local modification — do not overwrite, flag conflict
-                    conflicts.push({ path, remote, local: existing.content });
+                    // Emit conflict and wait for main-thread resolution before deciding
+                    self.reply('conflict', { path, remote, local: existing.content });
+                    const resolution = await waitForResolution(path);
+                    if (resolution === 'remote') {
+                        await dbPut(path, remote, { remote: url, base });
+                        dirty.delete(path);
+                        updated.push(path);
+                    }
                     return;
                 }
 
-                // Clean file — only update if content changed
                 if (existing.content !== remote) {
                     await dbPut(path, remote, { remote: url, base });
                     updated.push(path);
@@ -381,6 +403,17 @@ const WORKER_FN = function(self) {
     self.on('clearDirty', async ({ path }) => {
         if (path) dirty.delete(path);
         else      dirty.clear();
+        return { ok: true };
+    });
+
+    // Called by main thread in response to a 'conflict' event.
+    // resolution: 'local' | 'remote'
+    self.on('resolveConflict', ({ path, resolution }) => {
+        const resolve = conflictWaiters.get(path);
+        if (resolve) {
+            conflictWaiters.delete(path);
+            resolve(resolution === 'remote' ? 'remote' : 'local');
+        }
         return { ok: true };
     });
 
@@ -697,17 +730,10 @@ export class VFS {
      * @param {object} [options] — same options as Out.component() — error, bypassCache
      */
     component(path, data = {}, lists = {}, options = {}) {
-        // Temporarily register this VFS, render, then restore previous registration.
-        // This is safe — rendering is synchronous after the async fetch, no interleaving.
-        return Out.fn(async (container, context) => {
-            const previous = Out.vfsGet();
-            Out.vfsUse(this);
-            try {
-                await Out.component(path, data, lists, options).render(container, context);
-            } finally {
-                Out.vfsUse(previous);
-            }
-        }, options);
+        // Pass this VFS instance directly into _ComponentOut via options.vfs.
+        // _fetchHTML reads options.vfsOverride per-call — no global state touched,
+        // so concurrent Out.list() renders each using their own VFS are safe.
+        return Out.component(path, data, lists, { ...options, vfs: this });
     }
 
     // Shorthand alias matching Out.c()
@@ -829,9 +855,26 @@ export class VFS {
     }
 
     #onConflict(data) {
-        if (this.options.debug) {
-            console.warn('[oja/vfs] conflict — keeping local:', data.path);
+        const policy = this.options.onConflict || 'keep-local';
+        let resolution = 'local';
+
+        if (policy === 'take-remote') {
+            resolution = 'remote';
+        } else if (typeof policy === 'function') {
+            try {
+                const result = policy(data.path, data.local, data.remote);
+                resolution = result === 'remote' ? 'remote' : 'local';
+            } catch (e) {
+                console.warn('[oja/vfs] onConflict function threw — keeping local:', e);
+                resolution = 'local';
+            }
         }
+
+        if (this.options.debug) {
+            console.warn(`[oja/vfs] conflict on ${data.path} — resolution: ${resolution}`);
+        }
+
+        this.#runner.send('resolveConflict', { path: data.path, resolution });
     }
 
     #emit(event, data) {
