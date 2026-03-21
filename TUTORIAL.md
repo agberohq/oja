@@ -897,3 +897,406 @@ router.start('/');
 ```
 
 Config is progressive enhancement. Start without it. Add it when your app needs centralised configuration.
+---
+
+## Part 17 — Engine: smart DOM updates
+
+The task board's notes list has been re-rendering on every update with a blunt
+`effect(() => { el.innerHTML = buildHtml(tasks()) })`. That works, but it
+destroys and rebuilds every DOM node every time a single task changes — focus
+is lost, scroll position jumps, and CSS transitions can't run on elements that
+no longer exist.
+
+The engine fixes all three problems without changing your data model.
+
+### Sharing the store
+
+The engine has its own isolated store by default. To connect it to your app's
+reactive state, call `engine.useStore(store)` once in `app.js`, before any
+routes are registered:
+
+```js
+import { engine, Store } from './build/oja.core.esm.js';
+
+const store = new Store('taskboard');
+engine.useStore(store);
+```
+
+Now `engine.set()` writes into the same store that the rest of your app reads
+from, and `data-oja-bind` attributes in HTML update automatically when state
+changes.
+
+### Replacing innerHTML with engine.list()
+
+Here is the notes list before:
+
+```js
+// pages/tasks.html — before
+const listEl = find('#task-list');
+
+effect(() => {
+    listEl.innerHTML = tasks().map(t => `
+        <div class="task-item" data-id="${t.id}">
+            <span>${t.text}</span>
+        </div>
+    `).join('');
+});
+```
+
+Every time `tasks()` changes, every node is destroyed and rebuilt. Here is
+the same thing with `engine.list()`:
+
+```js
+// pages/tasks.html — after
+import { engine, component } from '../../build/oja.core.esm.js';
+
+const listEl = find('#task-list');
+
+function renderTask(task, existing) {
+    const el = existing || document.createElement('div');
+    el.className = 'task-item';
+    el.dataset.id = task.id;
+    el.querySelector('span').textContent = task.text;
+    return el;
+}
+
+effect(() => {
+    engine.list(listEl, tasks(), {
+        key:    t => t.id,
+        render: renderTask,
+        empty:  () => {
+            const el = document.createElement('p');
+            el.className = 'empty-hint';
+            el.textContent = 'No tasks yet — press N to add one';
+            return el;
+        },
+    });
+});
+```
+
+`engine.list()` reconciles by key. When a task is added, only the new node is
+inserted. When one is removed, only that node is removed. Existing nodes are
+passed back to `render` as the second argument so you can update them in place.
+
+### Morphing the profile panel
+
+The profile page rebuilds a panel from server data on an interval. Before,
+it wiped and rebuilt the entire panel, losing any open tooltips or focused
+inputs. With `engine.morph()`:
+
+```js
+// pages/profile.html
+import { engine, component } from '../../build/oja.core.esm.js';
+
+async function refreshStats() {
+    const stats = await api.get('/me/stats');
+    const html  = buildStatsHtml(stats); // expensive string builder
+    await engine.morph(find('#stats-panel'), html);
+}
+
+component.interval(refreshStats, 5000);
+component.onMount(() => refreshStats());
+```
+
+`morph()` tree-diffs the existing panel against the new HTML, patching only
+nodes that changed. Focus and scroll position are preserved.
+
+If building the HTML string itself is expensive, use `shouldMorph()` to skip
+the build when the content hasn't changed:
+
+```js
+async function refreshStats() {
+    const stats = await api.get('/me/stats');
+    const html  = buildStatsHtml(stats);
+    if (!engine.shouldMorph(find('#stats-panel'), html)) return;
+    await engine.morph(find('#stats-panel'), html);
+}
+```
+
+`shouldMorph()` is for skipping an expensive build step — not for guarding
+`morph()` itself. `morph()` already short-circuits internally when HTML is
+identical to its last call.
+
+### Declarative bindings in HTML
+
+The task counter in the nav bar was previously wired by an effect:
+
+```js
+effect(() => {
+    find('#task-count').textContent = tasks().length;
+});
+```
+
+With the engine wired to the store, you can express this in HTML instead:
+
+```html
+<!-- layouts/main.html -->
+<span id="task-count" data-oja-bind="task.count"></span>
+```
+
+```js
+// app.js — write the store key whenever tasks change
+import { engine } from './build/oja.core.esm.js';
+
+effect(() => {
+    engine.set('task.count', tasks().length);
+});
+```
+
+For bindings inside a component, call `engine.scan(el)` inside `onMount` so
+it picks up `data-oja-bind` attributes without a global MutationObserver:
+
+```js
+component.onMount(el => {
+    engine.scan(el);
+});
+```
+
+For shell-level bindings that should be active across all routes, call
+`engine.enableAutoBind()` once in `app.js`. This starts a `MutationObserver`
+that scans new nodes automatically — use it sparingly.
+
+---
+
+## Part 18 — Search and autocomplete
+
+The task board has grown. There are enough tasks that finding one by scrolling
+is slow. This part adds a live search box that filters tasks as you type, then
+adds tag autocomplete on the task form.
+
+### Indexing the tasks
+
+```js
+// app.js — build the index once, update it when tasks change
+import { Search } from './build/oja.core.esm.js';
+
+export const taskSearch = new Search([], {
+    fields:  ['text', 'tag'],
+    weights: { text: 2, tag: 1 },
+});
+
+effect(() => {
+    taskSearch.clear();
+    for (const t of tasks()) taskSearch.add(t.id, t);
+});
+```
+
+The `Search` instance lives in `app.js` so any page can import it. The
+`effect` rebuilds the index whenever `tasks()` changes — adding, updating,
+and removing tasks all flow through the same path.
+
+### Wiring the search box
+
+```js
+// pages/tasks.html
+import { on, engine }     from '../../build/oja.core.esm.js';
+import { taskSearch }     from '../../app.js';
+
+const searchEl = find('#task-search');
+const listEl   = find('#task-list');
+
+function showTasks(items) {
+    engine.list(listEl, items, {
+        key:    t => t.id,
+        render: renderTask,
+        empty:  () => {
+            const el = document.createElement('p');
+            el.textContent = searchEl.value ? 'No matches' : 'No tasks yet';
+            return el;
+        },
+    });
+}
+
+// Initial render — show everything
+showTasks(tasks());
+
+// Filter on input
+on(searchEl, 'input', (e) => {
+    const q = e.target.value.trim();
+    if (!q) { showTasks(tasks()); return; }
+    const results = taskSearch.search(q);
+    showTasks(results.map(r => r.doc));
+});
+```
+
+The search box now filters the existing `engine.list()` reconciler — only
+changed nodes are patched, so the list never flickers.
+
+### Tag autocomplete on the form
+
+The task form has a tag input. Build a `Trie` from the tags already in use
+and attach autocomplete to it:
+
+```js
+// components/task-form.html
+import { Trie, form } from '../../build/oja.core.esm.js';
+import { tasks }      from '../../app.js';
+
+// Build a trie of every tag already in use
+const tagTrie = new Trie();
+for (const t of tasks()) {
+    if (t.tag) tagTrie.insert(t.tag);
+}
+
+const tagInput = find('#task-tag');
+
+// Path A — standalone
+import { autocomplete } from '../../build/oja.core.esm.js';
+const handle = autocomplete.attach(tagInput, {
+    source:   tagTrie,
+    limit:    6,
+    onSelect: (tag) => { tagInput.value = tag; },
+});
+
+// Path B — via form API (identical result)
+const handle = form.input(tagInput, {
+    source:   tagTrie,
+    limit:    6,
+    onSelect: (tag) => { tagInput.value = tag; },
+});
+
+// Clean up when the component unmounts
+import { component } from '../../build/oja.core.esm.js';
+component.onUnmount(() => handle.destroy());
+```
+
+Both paths attach the same suggestion list. Use `autocomplete.attach()` when
+the input is not part of a form handled by `form.on()`. Use `form.input()`
+when it is — it reads the resolved element the same way all other `form.*`
+methods do.
+
+### Fuzzy search
+
+If your users misspell tags, enable fuzzy matching on the `Search` instance:
+
+```js
+export const taskSearch = new Search([], {
+    fields:      ['text', 'tag'],
+    weights:     { text: 2, tag: 1 },
+    fuzzy:       true,
+    maxDistance: 1,
+});
+```
+
+`fuzzy: true` is per-instance. You can also override it per call:
+
+```js
+const results = taskSearch.search(q, { fuzzy: true, maxDistance: 2 });
+```
+
+---
+
+## Part 19 — Table
+
+The tasks page currently renders a plain list. Once a project has dozens of
+tasks, you want sortable columns, pagination, and row actions. `table.render()`
+adds all of this in one call without replacing the data flow you already have.
+
+### Basic table
+
+```js
+// pages/tasks.html
+import { table } from '../../build/oja.full.esm.js';
+
+const headers = [
+    { key: 'text',   label: 'Task',   sortable: true  },
+    { key: 'tag',    label: 'Tag',    sortable: true  },
+    { key: 'done',   label: 'Status', sortable: false },
+];
+
+const t = table.render(find('#task-table'), tasks(), headers, {
+    pageSize:   10,
+    onRowClick: (row) => openTaskDetail(row),
+});
+```
+
+That replaces the entire list. No template string, no `effect`, no manual
+`innerHTML`. The table handles sorting and pagination internally.
+
+### Updating when tasks change
+
+`table.render()` returns a handle. Call `t.update()` to push new data without
+rebuilding the table from scratch:
+
+```js
+effect(() => {
+    t.update(tasks());
+});
+```
+
+The sort state and current page are preserved across updates. Only the rows
+change.
+
+### Cell shapes
+
+Plain string and number values render as text. Pass a descriptor object when
+you need richer output:
+
+```js
+const rows = tasks().map(t => ({
+    text:   { value: t.text, onClick: () => openDetail(t) },
+    tag:    t.tag || '',
+    done:   { value: t.done ? 'Done' : 'Pending', badge: t.done ? 'success' : 'neutral' },
+}));
+```
+
+The `badge` shape applies a coloured chip. The `onClick` shape turns the cell
+into a clickable link without wrapping the whole row.
+
+### Row actions
+
+Add per-row action buttons via the `actions` option:
+
+```js
+const t = table.render(find('#task-table'), tasks(), headers, {
+    pageSize: 10,
+    actions: [
+        {
+            label:   'Complete',
+            onClick: (row) => markDone(row.id),
+        },
+        {
+            label:   'Delete',
+            onClick: (row) => deleteTask(row.id),
+            style:   'danger',
+        },
+    ],
+});
+```
+
+Actions appear as a column on the right. `style: 'danger'` applies the danger
+colour token from `oja.css`.
+
+### Remote data
+
+When tasks live on a server and are too large to load all at once, pass
+`fetchData` instead of rows. The table calls it on mount, on sort change, and
+on page change:
+
+```js
+const t = table.render(find('#task-table'), [], headers, {
+    pageSize: 25,
+    fetchData: async (page, size, sortKey, dir) => {
+        const res = await api.get(
+            `/tasks?page=${page}&size=${size}&sort=${sortKey}&dir=${dir}`
+        );
+        return { data: res.rows, total: res.total };
+    },
+});
+```
+
+`total` tells the table how many pages to show. `data` is the current page's
+rows. The local rows array passed as the second argument is ignored when
+`fetchData` is present.
+
+### Loading state
+
+```js
+t.setLoading(true);
+const fresh = await api.get('/tasks');
+t.update(fresh);
+t.setLoading(false);
+```
+
+`setLoading(true)` replaces the table body with the loading indicator defined
+by `loadingText` (default: `'Loading…'`).
