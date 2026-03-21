@@ -48,6 +48,15 @@
  *   // not just a single page render.
  *   layout.onUnmount(() => closeLayoutWebSocket());
  *
+ * ─── Layout-scoped timers ─────────────────────────────────────────────────────
+ *
+ *   // Repeating timer — cleared automatically when the layout is unmounted.
+ *   // Mirrors component.interval() but scoped to the layout lifetime.
+ *   layout.interval(pollMetrics, 2000);
+ *
+ *   // One-shot timer — also cleared on unmount.
+ *   layout.timeout(() => notify.warn('Slow load?'), 5000);
+ *
  * ─── Named slots ─────────────────────────────────────────────────────────────
  *
  *   await layout.slot('sidebar', Out.c('components/sidebar.html', { items }));
@@ -84,10 +93,10 @@ import { emit }          from './events.js';
 import { Out }           from './out.js';
 
 // Tracks the active layout per container element.
-const _active = new Map(); // containerEl → { url, unmountHooks, readyHooks }
+const _active = new Map(); // containerEl → { url, unmountHooks, readyHooks, intervals, timeouts }
 
-// Set during apply() so onUnmount/onReady called inside layout scripts
-// know which container's entry to register against.
+// Set during apply() so onUnmount/onReady/interval/timeout called inside layout
+// scripts know which container's entry to register against.
 let _currentContainer = null;
 
 export const layout = {
@@ -121,7 +130,7 @@ export const layout = {
         container.innerHTML = render(html, data);
         fill(container, data);
 
-        _active.set(container, { url, unmountHooks: [], readyHooks: [] });
+        _active.set(container, { url, unmountHooks: [], readyHooks: [], intervals: [], timeouts: [] });
         _currentContainer = container;
 
         await execScripts(container, url);
@@ -233,6 +242,42 @@ export const layout = {
     },
 
     /**
+     * Register a repeating timer scoped to the layout lifetime.
+     * Cleared automatically when the layout is unmounted — no manual cleanup needed.
+     * Must be called from inside a layout script. Mirrors component.interval().
+     *
+     *   layout.interval(pollMetrics, 2000);
+     *
+     * @param {Function} fn — function to call on each tick
+     * @param {number}   ms — interval in milliseconds
+     * @returns {number}    — interval ID (can be passed to clearInterval if needed early)
+     */
+    interval(fn, ms) {
+        const id    = setInterval(fn, ms);
+        const entry = _active.get(_currentContainer);
+        if (entry) entry.intervals.push(id);
+        return id;
+    },
+
+    /**
+     * Register a one-shot timer scoped to the layout lifetime.
+     * Cleared automatically when the layout is unmounted — no manual cleanup needed.
+     * Must be called from inside a layout script. Mirrors component.timeout().
+     *
+     *   layout.timeout(() => notify.warn('Slow load?'), 5000);
+     *
+     * @param {Function} fn — function to call after delay
+     * @param {number}   ms — delay in milliseconds
+     * @returns {number}    — timeout ID (can be passed to clearTimeout if needed early)
+     */
+    timeout(fn, ms) {
+        const id    = setTimeout(fn, ms);
+        const entry = _active.get(_currentContainer);
+        if (entry) entry.timeouts.push(id);
+        return id;
+    },
+
+    /**
      * Register a hook to run after layout scripts have executed.
      * When called inside a layout script, fires after apply() completes.
      * When called outside a layout script, fires on the next layout:mounted event.
@@ -328,6 +373,10 @@ async function _fetchLayout(url) {
 async function _teardown(container) {
     const entry = _active.get(container);
     if (!entry) return;
+
+    for (const id of entry.intervals) clearInterval(id);
+    for (const id of entry.timeouts)  clearTimeout(id);
+
     for (const fn of entry.unmountHooks) {
         try { await fn(); } catch (e) {
             console.warn('[oja/layout] onUnmount hook error:', e);

@@ -1,7 +1,0 @@
-{
-  "version": "1.0.0",
-  "name": "todo",
-  "vfs": {
-    "files": ["index.html"]
-  }
-}
