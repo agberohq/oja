@@ -154,7 +154,8 @@
 
 // ─── Dirty tracking state ─────────────────────────────────────────────────────
 
-import { Out } from '../core/out.js';
+import { Out }          from '../core/out.js';
+import { autocomplete } from './autocomplete.js';
 
 const _dirtyState = new WeakMap(); // form -> Map<fieldName, { original, current, isDirty }>
 const _dirtyListeners = new WeakMap(); // form -> Set<function>
@@ -1312,7 +1313,21 @@ export const form = {
         });
 
         return this;
-    }
+    },
+
+    /**
+     * Attach an autocomplete widget to an input element.
+     * Internally delegates to autocomplete.attach() — no duplicated rendering logic.
+     * Returns the { destroy, show, hide } handle from autocomplete.attach().
+     *
+     *   form.input('#tag-input', { source: trie, limit: 5, onSelect: (item) => setTag(item) });
+     *   form.input('#host-search', { source: search, fuzzy: true, onSelect: (r) => fill(r.doc) });
+     */
+    input(target, options = {}) {
+        const el = _resolve(target);
+        if (!el) return null;
+        return autocomplete.attach(el, options);
+    },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
