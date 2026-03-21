@@ -1,4 +1,3 @@
-// playground/app.js
 /**
  * Oja Playground — orchestrates VFS, Service Worker, layout mounting,
  * and all global reactive state. Components communicate via context + emit/listen.
@@ -28,10 +27,44 @@ export const[savedState,  setSavedState]  = state(null);
 
 export const isDirty = derived(() => JSON.stringify(files()) !== savedState());
 
-const BLANK_PROJECT = {
-    'index.html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Blank Project</title>\n    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">\n    <style>body { padding: 20px; font-family: system-ui; background: #0f0f0f; color: #e8e8e8; }</style>\n</head>\n<body>\n    <h1>New Project</h1>\n    <p>Start coding...</p>\n</body>\n</html>`
-};
-const BLANK_PROJECT_STR = JSON.stringify(BLANK_PROJECT);
+// Fetches examples/blank/index.html; falls back to a minimal inline template.
+let _blankCache = null;
+async function _fetchBlank() {
+    if (_blankCache) return _blankCache;
+    try {
+        const res = await fetch('./examples/blank/index.html');
+        if (res.ok) { _blankCache = await res.text(); return _blankCache; }
+    } catch (_) {}
+    _blankCache = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New Project</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0f0f0f; color: #e8e8e8; font-family: system-ui, sans-serif;
+               min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        #app { text-align: center; }
+        h1 { font-size: 1.5rem; margin-bottom: 8px; }
+        p  { color: #555; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <h1>New Project</h1>
+    <p>Start building with Oja.</p>
+</div>
+<script type="module">
+    import { state, effect } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+
+    // const [count, setCount] = state(0);
+    // effect(() => console.log(count()));
+</script>
+</body>
+</html>`;
+    return _blankCache;
+}
 
 let _vfs = null;
 
@@ -191,16 +224,18 @@ async function createNewProject() {
     const ok = await modal.confirm('Create a new blank project? Current files will be lost.');
     if (!ok) return;
 
+    const html    = await _fetchBlank();
+    const project = { 'index.html': html };
+
     await _vfs.clear();
-    // Strip hash so refresh does not restore previous state
     history.replaceState(null, '', window.location.pathname + window.location.search);
     setLogs([]);
     localStorage.removeItem('pg_expanded');
 
-    await _vfs.write('index.html', BLANK_PROJECT['index.html']);
-    setFiles(BLANK_PROJECT);
+    await _vfs.write('index.html', html);
+    setFiles(project);
     setActiveFile('index.html');
-    setSavedState(BLANK_PROJECT_STR);
+    setSavedState(JSON.stringify(project));
 
     await syncToWorker();
     runPreview();
@@ -397,8 +432,9 @@ function setupEvents() {
     });
 
     on('[data-action="load-example"]', 'click', (e, el) => {
-        loadExample(el.dataset.ex);
         modal.close();
+        if (el.dataset.ex === 'blank') { createNewProject(); return; }
+        loadExample(el.dataset.ex);
     });
 
     listen('vfs:save', async ({ path, content }) => {

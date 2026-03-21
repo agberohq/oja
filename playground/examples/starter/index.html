@@ -51,22 +51,26 @@
     <p class="hint" id="hint">Click increment to begin</p>
 </div>
 <script type="module">
-    import { state, effect } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
+    import { state, effect, derived } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.core.esm.js';
 
     const MAX = 10;
+
+    // state() — reactive value, returns [read, write]
     const [count, setCount] = state(0);
 
-    const countEl = document.getElementById('count');
-    const hintEl  = document.getElementById('hint');
-    const incBtn  = document.getElementById('inc');
-
-    effect(() => {
+    // derived() — computed value, auto-updates when dependencies change
+    const hint = derived(() => {
         const n = count();
-        countEl.textContent = n;
-        incBtn.disabled     = n >= MAX;
-        if (n === 0)      hintEl.textContent = 'Click increment to begin';
-        else if (n < MAX) hintEl.textContent = `${MAX - n} to go…`;
-        else              hintEl.textContent = '🎉 You made it!';
+        if (n === 0)      return 'Click increment to begin';
+        else if (n < MAX) return `${MAX - n} to go…`;
+        else              return '🎉 You made it!';
+    });
+
+    // effect() — runs whenever count() or hint() changes
+    effect(() => {
+        document.getElementById('count').textContent = count();
+        document.getElementById('hint').textContent  = hint();
+        document.getElementById('inc').disabled      = count() >= MAX;
     });
 
     document.getElementById('inc').addEventListener('click',   () => setCount(n => n + 1));
