@@ -57,6 +57,7 @@ export { Out, Responder }                                 from './js/core/out.js
 export { Router }                                         from './js/core/router.js';
 export { component }                                      from './js/core/component.js';
 export { layout }                                         from './js/core/layout.js';
+export { segment }                                        from './js/core/segment.js';
 export { animate }                                        from './js/core/animate.js';
 export { plugin }                                         from './js/core/plugin.js';
 
@@ -156,6 +157,7 @@ import { MsgPackCodec }                                               from './js
 import { Router }                                                     from './js/core/router.js';
 import { component }                                                  from './js/core/component.js';
 import { layout }                                                     from './js/core/layout.js';
+import { segment }                                                    from './js/core/segment.js';
 import { modal }                                                      from './js/ui/modal.js';
 import { notify }                                                     from './js/ui/notify.js';
 import { animate }                                                    from './js/core/animate.js';
@@ -206,7 +208,7 @@ export const Oja = {
     // Codecs
     JsonCodec, jsonCodec, MsgPackCodec,
     // UI
-    Router, component, layout, modal, notify, animate,
+    Router, component, layout, segment, modal, notify, animate,
     ui, find, findAll, findAllIn,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,

@@ -29,6 +29,7 @@
  *   Out.link(url, label?, options?)              — <a> anchor
  *   Out.fn(asyncFn, options?)                    — lazy async, called at render time
  *   Out.empty()                                  — renders nothing (explicit no-op)
+ *   Out.segment(name, data?)                     — render an in-document <template data-oja-segment>
  *
  * ─── Fluent API — Out.to() ────────────────────────────────────────────────────
  *
@@ -45,6 +46,7 @@
  *     .link(url, label?, options?)     — <a> anchor
  *     .fn(asyncFn)                     — custom async render function
  *     .empty()                         — clears the target
+ *     .segment(name, data?)            — render a registered in-document template
  *
  *   Composition methods — wrap an Out type in conditional or async logic:
  *     .cond(condFn, thenOut, elseOut?) — render thenOut or elseOut based on condFn()
@@ -166,6 +168,7 @@ import { emit }                                  from './events.js';
 import { effect }                                from './reactive.js';
 import { find }                                  from './ui.js';
 import { animate }                               from './animate.js';
+import { _segmentRender }                        from './segment.js';
 
 // Escape special HTML characters to prevent XSS in tagged template literals.
 // Used by createTagHandler when interpolating dynamic values into template strings.
@@ -804,6 +807,14 @@ class OutTarget {
         return this;
     }
 
+    segment(name, data = {}) {
+        if (!this._condition || this._condition()) {
+            const mergedData = { ...this._context, ...data };
+            this._render(new _SegmentOut(name, mergedData));
+        }
+        return this;
+    }
+
     cond(conditionFn, thenOut, elseOut) {
         if (!this._condition || this._condition()) this._render(new _IfOut(conditionFn, thenOut, elseOut));
         return this;
@@ -1060,6 +1071,19 @@ function createTagHandler(target) {
     };
 }
 
+// ─── Segment type ─────────────────────────────────────────────────────────────
+
+class _SegmentOut extends _Out {
+    constructor(name, data = {}) {
+        super('segment', name);
+        this._data = data;
+    }
+
+    async render(container, context = {}) {
+        await _segmentRender(container, this._payload, this._data, context);
+    }
+}
+
 // ─── Out public API ───────────────────────────────────────────────────────────
 
 export const Out = {
@@ -1115,6 +1139,13 @@ export const Out = {
 
     empty() {
         return new _EmptyOut();
+    },
+
+    // Render a named segment registered via <template data-oja-segment="name">.
+    // Auto-scans the document on first use — no setup required.
+    // For explicit control (scan, define, list) import { segment } from './segment.js'.
+    segment(name, data = {}) {
+        return new _SegmentOut(name, data);
     },
 
     // Conditional rendering — condition is evaluated at render time, not eagerly.
