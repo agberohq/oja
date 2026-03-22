@@ -53,7 +53,7 @@ export const encrypt = {
         const iv  = crypto.getRandomValues(new Uint8Array(12));
         const enc = new TextEncoder();
         const ct  = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv, additionalData: aad ? enc.encode(aad) : undefined },
+            { name: 'AES-GCM', iv, ...(aad ? { additionalData: enc.encode(aad) } : {}) },
             key,
             enc.encode(plaintext)
         );
@@ -78,7 +78,7 @@ export const encrypt = {
         const key = await _deriveKey(passphrase, salt);
 
         const dec = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv, additionalData: aad ? enc.encode(aad) : undefined },
+            { name: 'AES-GCM', iv, ...(aad ? { additionalData: enc.encode(aad) } : {}) },
             key,
             ct
         );

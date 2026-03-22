@@ -316,12 +316,18 @@ export const chart = {
             // Trend line over bar tops — matches the D3 line() pattern
             const linePts = currentValues.map((v, i) => `${(xS(i) + barW / 2).toFixed(1)},${yS(v).toFixed(1)}`).join(' ');
 
+            // opts.colors: string[] — per-bar colors for time-gradient effect.
+            // When provided, opts.colors[i] overrides opts.color for that bar.
+            // warnAt still overrides both when the value exceeds the threshold.
+            const colors = Array.isArray(opts.colors) ? opts.colors : null;
+
             const bars = currentValues.map((v, i) => {
-                const barColor = (warnAt !== null && v >= warnAt) ? 'var(--danger)' : color;
-                const y        = yS(v).toFixed(1);
-                const barH     = Math.max(1, bY - parseFloat(y)).toFixed(1);
+                const baseColor = colors?.[i] ?? color;
+                const barColor  = (warnAt !== null && v >= warnAt) ? 'var(--danger)' : baseColor;
+                const y         = yS(v).toFixed(1);
+                const barH      = Math.max(1, bY - parseFloat(y)).toFixed(1);
                 return `<rect x="${xS(i).toFixed(1)}" y="${y}" width="${barW.toFixed(1)}" height="${barH}"
-                    fill="${barColor}" fill-opacity="0.75" rx="1"/>`;
+                    fill="${barColor}" fill-opacity="0.85" rx="1"/>`;
             }).join('');
 
             el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
@@ -345,8 +351,14 @@ export const chart = {
         }
 
         return {
-            update(newValues) { currentValues = newValues; render(); },
-            destroy()         { resizeObserver?.disconnect(); },
+            // update(newValues, newOpts?) — newOpts merges into opts so per-call
+            // overrides like a fresh colors array take effect immediately.
+            update(newValues, newOpts) {
+                currentValues = newValues;
+                if (newOpts) Object.assign(opts, newOpts);
+                render();
+            },
+            destroy() { resizeObserver?.disconnect(); },
         };
     },
 
