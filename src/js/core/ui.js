@@ -143,6 +143,33 @@ export function findAll(selector, scope = document) {
     return Array.from(scope.querySelectorAll(selector));
 }
 
+/**
+ * query(selector, scope?) — scoped querySelector, never auto-injected.
+ *
+ * The safe alternative to the injected `find` when you need DOM queries inside
+ * component scripts. Because `query` is never part of the _exec.js preamble,
+ * importing it can never cause a "already declared" SyntaxError — regardless
+ * of what other names the script imports or declares.
+ *
+ *   import { query } from '../lib/oja.full.esm.js';
+ *
+ *   // Scoped to a container — only searches inside it:
+ *   const btn = query('.save-btn', container);
+ *
+ *   // Falls back to document when no scope given:
+ *   const modal = query('#loginModal');
+ *
+ * Unlike the injected `find`, query() does NOT support timeout-based waiting
+ * or a `required` option — use find() directly if you need those features.
+ *
+ * @param {string}   selector
+ * @param {Element}  [scope=document]
+ * @returns {Element|null}
+ */
+export function query(selector, scope = document) {
+    return (scope || document).querySelector(selector);
+}
+
 export function findAllIn(scope, selectors, options = {}) {
     const { required = false } = options;
 
