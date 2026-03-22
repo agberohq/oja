@@ -64,6 +64,7 @@ export { plugin }                                         from './js/core/plugin
 export {
     ui,
     find, findAll, findAllIn,
+    query,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
     matches, closest,
