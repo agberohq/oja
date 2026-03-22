@@ -1,4 +1,3 @@
-// src/js/core/ui.js
 /**
  * oja/ui.js
  * DOM interaction helpers — loading states, element utilities, themes, and widgets.
@@ -103,7 +102,7 @@ export function find(selector, options = {}) {
         return new Promise((resolve) => {
             const el = scope.querySelector(selector);
             if (el) {
-                resolve(el);
+                resolve(_renderable(el));
                 return;
             }
 
@@ -111,7 +110,7 @@ export function find(selector, options = {}) {
                 const el = scope.querySelector(selector);
                 if (el) {
                     obs.disconnect();
-                    resolve(el);
+                    resolve(_renderable(el));
                 }
             });
 
@@ -136,7 +135,7 @@ export function find(selector, options = {}) {
         console.warn(`[oja/ui] Required element not found: ${selector}`);
     }
 
-    return el;
+    return _renderable(el);
 }
 
 export function findAll(selector, scope = document) {
@@ -167,7 +166,8 @@ export function findAll(selector, scope = document) {
  * @returns {Element|null}
  */
 export function query(selector, scope = document) {
-    return (scope || document).querySelector(selector);
+    const el = (scope || document).querySelector(selector);
+    return _renderable(el);
 }
 
 export function findAllIn(scope, selectors, options = {}) {
@@ -210,7 +210,7 @@ export function createEl(tag, attrs = {}) {
         }
     }
 
-    return el;
+    return _renderable(el);
 }
 
 export function empty(target) {
@@ -289,6 +289,17 @@ class UiElement {
         this._originalTag = el.tagName.toLowerCase();
     }
 
+    /**
+     * Bridges Oja Responders to the element.
+     * Allows: ui('#b').render(Out.text('hello'))
+     */
+    render(responder) {
+        if (responder && typeof responder.render === 'function') {
+            responder.render(this._el);
+        }
+        return this;
+    }
+
     loading(message) {
         const msg = message ?? this._el.dataset.loading ?? '';
 
@@ -353,7 +364,8 @@ export function ui(target) {
             loading: function() { return this; },
             done:    function() { return this; },
             error:   function() { return this; },
-            reset:   function() { return this; }
+            reset:   function() { return this; },
+            render:  function() { return this; }
         };
     }
 
@@ -463,6 +475,22 @@ function _esc(str) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+/**
+ * Attaches Oja's .render method to a standard DOM element.
+ * Bridges the gap between ui.js helpers and Oja Responders.
+ */
+function _renderable(el) {
+    if (el && !el.render) {
+        el.render = function(responder) {
+            if (responder && typeof responder.render === 'function') {
+                responder.render(el);
+            }
+            return el;
+        };
+    }
+    return el;
 }
 
 ui.find = find;
