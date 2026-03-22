@@ -273,6 +273,20 @@ function _emergencyError(container, message) {
     } catch { /* ignore */ }
 }
 
+// Resolve an OutTarget target — accepts a CSS selector string or a DOM Element.
+// Returns the Element, or null with a console warning if not found.
+// Used by OutTarget._resolve() to lazily look up the target element.
+function _resolveTarget(target) {
+    if (!target) return null;
+    if (target instanceof Element) return target;
+    if (typeof target === 'string') {
+        const el = document.querySelector(target);
+        if (!el) console.warn(`[oja/out] target not found: ${target}`);
+        return el;
+    }
+    return null;
+}
+
 // ─── Base class ───────────────────────────────────────────────────────────────
 
 class _Out {
@@ -948,7 +962,16 @@ class OutTarget {
         return this._resolve();
     }
 
-    async render() {
+    async render(out) {
+        // When called with an Out argument — Out.to('#el').render(Out.text('hello')) —
+        // treat it as a render-into-target call, matching the el.render(out) pattern
+        // on _renderable elements. This makes Out.to() and find() symmetric.
+        // When called with no argument, behaves as the original terminal await helper.
+        if (_Out.is(out)) {
+            this._render(out);
+            if (this._pendingRender) await this._pendingRender;
+            return this;
+        }
         if (this._pendingRender) await this._pendingRender;
         return this._resolve();
     }

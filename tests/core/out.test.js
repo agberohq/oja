@@ -382,3 +382,45 @@ describe('Out — cacheStats() and clearCache()', () => {
         Out.clearCache();
     });
 });
+
+// ─── Out.to().render(out) — symmetry with el.render(out) ────────────────────
+
+describe('Out.to().render(Out)', () => {
+    let el;
+    afterEach(() => { cleanup(el); });
+
+    it('Out.to(el).render(Out.text()) renders into the target element', async () => {
+        el = makeContainer();
+        await Out.to(el).render(Out.text('hello'));
+        expect(el.textContent).toBe('hello');
+    });
+
+    it('Out.to(selector).render(Out.text()) resolves the selector and renders', async () => {
+        el = makeContainer();
+        el.id = 'out-to-render-sel';
+        await Out.to('#out-to-render-sel').render(Out.text('world'));
+        expect(el.textContent).toBe('world');
+    });
+
+    it('Out.to().render(Out.html()) renders HTML content', async () => {
+        el = makeContainer();
+        await Out.to(el).render(Out.html('<strong>bold</strong>'));
+        expect(el.innerHTML).toBe('<strong>bold</strong>');
+    });
+
+    it('Out.to().render() with no argument still works as the terminal await helper', async () => {
+        el = makeContainer();
+        const target = Out.to(el);
+        target.text('settled');
+        const resolved = await target.render();
+        expect(resolved).toBe(el);
+        expect(el.textContent).toBe('settled');
+    });
+
+    it('Out.to().render(Out) returns the OutTarget for chaining', async () => {
+        el = makeContainer();
+        const ret = await Out.to(el).render(Out.text('x'));
+        expect(typeof ret).toBe('object');
+        expect(ret).not.toBe(el);
+    });
+});
