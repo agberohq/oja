@@ -76,9 +76,9 @@
  *   });
  */
 
-import { render, each, fill } from './template.js';
-import { execScripts }        from './_exec.js';
-import { emit }               from './events.js';
+import { render, each, fill }          from './template.js';
+import { execScripts }                 from './_exec.js';
+import { emit, _setComponentScopeHook } from './events.js';
 
 const _cache = new Map();
 
@@ -188,13 +188,37 @@ function _trackRender(url, ms) {
 const _scopes = new WeakMap();
 export let _activeElement = null;
 
+// ─── Test helpers ─────────────────────────────────────────────────────────────
+// Exported only for use in tests — allow tests to set the active component
+// context and inspect scope state without going through the full mount pipeline.
+//
+// Named with a leading underscore and a _ForTest suffix to make it obvious
+// these are not part of the public API.
+
+export function _setActiveForTest(el) {
+    _activeElement = el;
+    if (el) _getScope(el); // ensure scope is created
+}
+
+export function _getScopeForTest(el) {
+    return _scopes.get(el) ?? null;
+}
+
 function _getScope(el) {
     if (!el) return null;
     if (!_scopes.has(el)) {
-        _scopes.set(el, { mount: [], unmount: [], ready: [], dead: [], intervals: [], timeouts: [] });
+        _scopes.set(el, { mount: [], unmount: [], ready: [], dead: [], intervals: [], timeouts: [], ons: [], controller: new AbortController() });
     }
     return _scopes.get(el);
 }
+
+// Install the scope hook into events.js so on() can auto-register its unsub
+// with the currently active component. Using a hook avoids a circular import
+// (events.js would otherwise need to import component.js).
+_setComponentScopeHook((unsub) => {
+    const scope = _getScope(_activeElement);
+    if (scope) scope.ons.push(unsub);
+});
 
 let _hooks = {
     entering: null,
@@ -459,6 +483,23 @@ export const component = {
         return id;
     },
 
+    /**
+     * AbortSignal tied to the current component's lifetime.
+     * Automatically aborted when the component unmounts.
+     * Use to cancel in-flight fetches when the user navigates away.
+     *
+     *   component.onMount(() => {
+     *       const data = await fetch('/api/hosts', { signal: component.signal })
+     *           .then(r => r.json());
+     *   });
+     *
+     * Returns null when called outside a mount context.
+     */
+    get signal() {
+        const scope = _getScope(_activeElement);
+        return scope?.controller?.signal ?? null;
+    },
+
     hooks(overrides = {}) {
         _hooks = { ..._hooks, ...overrides };
     },
@@ -512,6 +553,19 @@ async function _teardownScope(el) {
 
     for (const id of scope.intervals) clearInterval(id);
     for (const id of scope.timeouts)  clearTimeout(id);
+
+    // Abort any in-flight fetches that were given this component's signal.
+    // Fires before unmount hooks so hooks can react to the abort if needed.
+    scope.controller?.abort();
+
+    // Call each on() unsub registered during this component's lifetime.
+    // This removes delegated DOM listeners that would otherwise accumulate
+    // across navigations and fire multiple times on the same element.
+    for (const unsub of scope.ons) {
+        try { unsub(); } catch (e) {
+            console.warn('[oja/component] on() cleanup error:', e);
+        }
+    }
 
     for (const fn of scope.unmount) {
         try { await fn(); } catch (e) {

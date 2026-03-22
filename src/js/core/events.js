@@ -87,6 +87,21 @@
 const _registry = new Map(); // event → [{ selector, fn, original, options }]
 const _passiveEvents = new Set(['scroll', 'touchstart', 'touchmove', 'wheel']);
 
+// _componentScopeHook — set by component.js to avoid a circular import.
+// When set, on() calls this with the unsub function so the active component
+// scope can track and auto-clean it on unmount.
+// If no component is active (called from layout scripts or global code),
+// the hook is a no-op and the caller is responsible for cleanup.
+let _componentScopeHook = null;
+
+export function _setComponentScopeHook(fn) {
+    _componentScopeHook = fn;
+}
+
+function _registerWithActiveComponent(unsub) {
+    if (_componentScopeHook) _componentScopeHook(unsub);
+}
+
 /**
  * Attach an event listener. Accepts either a CSS selector (delegated, via document.body)
  * or a direct Element reference (direct addEventListener on that element).
@@ -100,7 +115,10 @@ export function on(selector, eventName, fn, options = {}) {
 
     if (selector instanceof EventTarget) {
         selector.addEventListener(eventName, fn, { passive, capture });
-        return { selector, eventName, fn };
+        // Return a callable unsub — mirrors the delegated-selector path.
+        const unsub = () => selector.removeEventListener(eventName, fn);
+        _registerWithActiveComponent(unsub);
+        return unsub;
     }
 
     if (!_registry.has(eventName)) {
@@ -125,7 +143,13 @@ export function on(selector, eventName, fn, options = {}) {
     if (!isDuplicate) {
         existing.push({ selector, fn, original: fn, options });
     }
-    return { selector, eventName, fn };
+
+    // Return a callable unsub that removes this specific entry from the registry.
+    // Also registers with the active component scope so it is called automatically
+    // on unmount — no manual cleanup needed inside component scripts.
+    const unsub = () => off(selector, eventName, fn);
+    _registerWithActiveComponent(unsub);
+    return unsub;
 }
 
 /**
