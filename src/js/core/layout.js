@@ -130,7 +130,8 @@ export const layout = {
         container.innerHTML = render(html, data);
         fill(container, data);
 
-        _active.set(container, { url, unmountHooks: [], readyHooks: [], intervals: [], timeouts: [] });
+        const controller = new AbortController();
+        _active.set(container, { url, unmountHooks: [], readyHooks: [], intervals: [], timeouts: [], controller });
         _currentContainer = container;
 
         await execScripts(container, url);
@@ -255,7 +256,15 @@ export const layout = {
     interval(fn, ms) {
         const id    = setInterval(fn, ms);
         const entry = _active.get(_currentContainer);
-        if (entry) entry.intervals.push(id);
+        if (entry) {
+            entry.intervals.push(id);
+        } else {
+            console.warn(
+                '[oja/layout] interval() called outside a layout script — ' +
+                'the timer will run forever and never be cleared. ' +
+                'Call layout.interval() synchronously at the top level of a layout script.'
+            );
+        }
         return id;
     },
 
@@ -273,7 +282,15 @@ export const layout = {
     timeout(fn, ms) {
         const id    = setTimeout(fn, ms);
         const entry = _active.get(_currentContainer);
-        if (entry) entry.timeouts.push(id);
+        if (entry) {
+            entry.timeouts.push(id);
+        } else {
+            console.warn(
+                '[oja/layout] timeout() called outside a layout script — ' +
+                'the timer will run and never be tracked for cleanup. ' +
+                'Call layout.timeout() synchronously at the top level of a layout script.'
+            );
+        }
         return id;
     },
 
@@ -306,7 +323,16 @@ export const layout = {
      */
     onUnmount(fn) {
         if (!_currentContainer) {
-            console.warn('[oja/layout] onUnmount() called outside a layout script');
+            console.warn(
+                '[oja/layout] onUnmount() called outside a layout script.\n' +
+                'layout.onUnmount(), layout.interval(), and layout.timeout() must be ' +
+                'called synchronously at the top level of a layout <script> tag — ' +
+                'not inside component.onMount(), setTimeout(), or any async callback.\n' +
+                'Oja captures the active layout context only while the script executes. ' +
+                'By the time any callback runs, that context is gone.\n' +
+                'Fix: move layout.onUnmount() to the root of the layout script, ' +
+                'before any async calls.'
+            );
             return this;
         }
         const entry = _active.get(_currentContainer);
@@ -336,6 +362,20 @@ export const layout = {
         const container = _resolve(target) || _lastContainer();
         if (!container) return null;
         return _active.get(container)?.url || null;
+    },
+
+    /**
+     * AbortSignal tied to the current layout's lifetime.
+     * Automatically aborted when the layout is unmounted.
+     * Use to cancel in-flight fetches when the user navigates away.
+     *
+     *   const data = await fetch('/api/data', { signal: layout.signal }).then(r => r.json());
+     *
+     * Returns null when called outside a layout script.
+     */
+    get signal() {
+        const entry = _active.get(_currentContainer);
+        return entry?.controller?.signal ?? null;
     },
 
     // Returns true if a layout is currently mounted in the given container.
@@ -373,6 +413,10 @@ async function _fetchLayout(url) {
 async function _teardown(container) {
     const entry = _active.get(container);
     if (!entry) return;
+
+    // Abort any in-flight fetches that were given this layout's signal.
+    // This fires before unmount hooks so hooks can react to the abort if needed.
+    entry.controller?.abort();
 
     for (const id of entry.intervals) clearInterval(id);
     for (const id of entry.timeouts)  clearTimeout(id);
