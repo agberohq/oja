@@ -66,6 +66,24 @@
  *
  *   // Cleanup when page navigates away
  *   component.onUnmount(() => worker.close());
+ *
+ * ─── Loading external scripts ─────────────────────────────────────────────────
+ *
+ *   // Pass CDN URLs via options.scripts — loaded before handlers run.
+ *   // This is the recommended alternative to calling self.importScripts()
+ *   // inside the worker function body (which is easy to forget and hard to debug).
+ *
+ *   const markdownWorker = new OjaWorker(
+ *       (self) => {
+ *           // marked is already loaded — no importScripts needed here
+ *           marked.setOptions({ gfm: true });
+ *           self.handle('parse', (content) => marked.parse(content));
+ *       },
+ *       {
+ *           scripts: ['https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js'],
+ *           name: 'markdown-parser',
+ *       }
+ *   );
  */
 
 import { debug } from '../utils/debug.js';
@@ -129,9 +147,12 @@ export class OjaWorker {
      *   ⚠️  Cannot access outer scope variables. Must be self-contained.
      *
      * @param {Object} options
-     *   name     : string  — debug name shown in console and debug timeline
-     *   onEvent  : fn      — called when worker pushes an event via self.send()
-     *   onError  : fn      — called on unhandled worker errors
+     *   name     : string    — debug name shown in console and debug timeline
+     *   scripts  : string[]  — URLs to load via importScripts() before handlers run
+     *                          Use for CDN libraries (marked, pako, etc.)
+     *                          Example: { scripts: ['https://cdn.../marked.min.js'] }
+     *   onEvent  : fn        — called when worker pushes an event via self.send()
+     *   onError  : fn        — called on unhandled worker errors
      */
     constructor(workerFn, options = {}) {
         this._name     = options.name    || `worker-${Math.random().toString(36).slice(2, 8)}`;
@@ -141,9 +162,17 @@ export class OjaWorker {
         this._nextId   = 0;
         this._closed   = false;
 
+        // Prepend importScripts() calls for any scripts listed in options.scripts.
+        // These execute before the user's worker function, so libraries are
+        // available when self.handle() handlers are registered.
+        const scripts = Array.isArray(options.scripts) ? options.scripts : [];
+        const importBlock = scripts.length
+            ? `importScripts(${scripts.map(s => JSON.stringify(s)).join(', ')});\n`
+            : '';
+
         // Serialize the worker function and combine with bootstrap
         const fnBody = workerFn.toString();
-        const src    = `${WORKER_BOOTSTRAP}\n;(${fnBody})(_api);`;
+        const src    = `${importBlock}${WORKER_BOOTSTRAP}\n;(${fnBody})(_api);`;
         const blob   = new Blob([src], { type: 'text/javascript' });
         const url    = URL.createObjectURL(blob);
 
