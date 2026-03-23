@@ -148,6 +148,7 @@
  * ─── Every Out instance has ───────────────────────────────────────────────────
  *
  *   out.render(container, context?)   — renders into a DOM element
+ *   await out.output()                 — renders to HTML string (no DOM mount, no scripts)
  *   out.type                          — string identifying the type
  *   out.clone(overrides?)             — returns new Out with merged options
  *   out.prefetch(options?)            — optional preload/prepare logic
@@ -310,6 +311,26 @@ class _Out {
 
     getText() {
         return null;
+    }
+
+    /**
+     * output() — render this Out to an HTML string without mounting into the DOM.
+     * Useful for imperative usage: third-party editors, SSR, testing, PDF export.
+     *
+     *   const card = Out.component('components/card.html', data);
+     *   const html = await card.output();
+     *   thirdPartyEditor.setContent(html);
+     *
+     *   // Or for simple Out types:
+     *   const html = await Out.html('<b>Hello</b>').output(); // → '<b>Hello</b>'
+     *
+     * Note: scripts inside components are NOT executed — output() is for HTML
+     * extraction only. For full mounting with reactivity, use render() instead.
+     */
+    async output() {
+        const div = document.createElement('div');
+        await this.render(div, {});
+        return div.innerHTML;
     }
 
     static is(value) {
