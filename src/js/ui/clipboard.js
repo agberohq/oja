@@ -104,7 +104,7 @@ const HAS_CLIPBOARD = !!(navigator.clipboard?.write);
 const HAS_PICKER = !!(navigator.clipboard?.read);
 
 // Fallback for older browsers
-let _fallbackTextarea = null;
+let _fallbackTextarea    = null;
 
 // ─── Core API ─────────────────────────────────────────────────────────────────
 
@@ -519,5 +519,96 @@ export const clipboard = {
         const div = document.createElement('div');
         div.innerHTML = html;
         return div.textContent || div.innerText || '';
+    },
+
+    // ─── Component copy / paste ───────────────────────────────────────────────
+    //
+    // Copy a mounted Oja component (its HTML snapshot + data snapshot) to an
+    // internal clipboard. Paste creates a new instance by calling onPaste with
+    // the saved data — the app decides where to mount it.
+    //
+    // Designed for design editors (ID card, canvas tools) where you need to
+    // duplicate elements with their current state.
+    //
+    //   // Copy — snapshot HTML + app-level data
+    //   clipboard.copyComponent('#card-element', {
+    //       data: () => getCardState(),          // called at copy time
+    //       component: 'components/card.html',   // optional: component path for re-mounting
+    //   });
+    //
+    //   // Paste — receives the saved snapshot
+    //   clipboard.pasteComponent({
+    //       onPaste: ({ html, data, component }) => {
+    //           addCanvasElement(data);           // restore app state
+    //       },
+    //   });
+    //
+    //   // Or wire to keyboard shortcuts:
+    //   keys({
+    //       'ctrl+c': () => clipboard.copyComponent('#selected'),
+    //       'ctrl+v': () => clipboard.pasteComponent({ onPaste: duplicateSelected }),
+    //   });
+    //
+    _componentClipboard: null,
+
+    copyComponent(target, options = {}) {
+        const el = typeof target === 'string' ? document.querySelector(target) : target;
+        if (!el) {
+            console.warn(`[oja/clipboard] copyComponent: element not found: ${target}`);
+            return false;
+        }
+
+        const {
+            data      = null,   // fn() → serialisable state snapshot
+            component = null,   // component URL for re-mounting
+        } = options;
+
+        const snapshot = {
+            html:      el.outerHTML,
+            data:      typeof data === 'function' ? data() : (data ?? null),
+            component,
+            copiedAt:  Date.now(),
+        };
+
+        this._componentClipboard = snapshot;
+
+        // Also write a text representation to the system clipboard (best-effort)
+        const text = el.textContent?.trim() || '';
+        if (text) {
+            navigator.clipboard?.writeText(text).catch(() => {});
+        }
+
+        return true;
+    },
+
+    pasteComponent(options = {}) {
+        const { onPaste = null } = options;
+        const snapshot = this._componentClipboard;
+
+        if (!snapshot) {
+            console.warn('[oja/clipboard] pasteComponent: nothing in component clipboard');
+            return false;
+        }
+
+        if (onPaste) {
+            onPaste({
+                html:      snapshot.html,
+                data:      snapshot.data ? structuredClone(snapshot.data) : null,
+                component: snapshot.component,
+                copiedAt:  snapshot.copiedAt,
+            });
+        }
+
+        return true;
+    },
+
+    /** Returns true if there is a component snapshot available to paste */
+    hasComponent() {
+        return this._componentClipboard !== null;
+    },
+
+    /** Clear the internal component clipboard */
+    clearComponent() {
+        this._componentClipboard = null;
     },
 };
