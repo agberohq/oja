@@ -3,7 +3,7 @@
  *
  * Use this when you want everything in one import:
  *
- *   import { Router, Out, modal, chart, auth, pagination } from './oja.full.js';
+ *   import { Router, Out, modal, chart, auth, pagination, uploader, analytics } from './oja.full.js';
  *
  * For production apps that care about bundle size, import from specific layers:
  *
@@ -28,12 +28,12 @@
  *
  *   js/ui/  (UI patterns)
  *     modal, notify, clipboard, form, validate, autocomplete,
- *     table, tabs, canvas, dragdrop
+ *     table, tabs, canvas, dragdrop, popover, virtualList, mask
  *
  *   js/ext/ (opt-in features)
  *     auth, pagination, chart, history, channel, config,
  *     runner, vfs, sw, socket, worker, wasm, webrtc,
- *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter
+ *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter, uploader, analytics
  *
  *   js/utils/ (pure utilities)
  *     encrypt, logger, debug, adapter, search (Trie, Search),
@@ -54,6 +54,10 @@ export { table }                                          from './js/ui/table.js
 export { tabs }                                           from './js/ui/tabs.js';
 export { canvas }                                         from './js/ui/canvas.js';
 export { dragdrop }                                       from './js/ui/dragdrop.js';
+export { popover }                                        from './js/ui/popover.js';
+export { virtualList }                                    from './js/ui/virtual-list.js';
+export { mask }                                           from './js/ui/mask.js';
+export { clickmenu }                                           from './js/ui/clickmenu.js';
 
 // ─── Extension layer — js/ext/ ────────────────────────────────────────────────
 export { auth }                                           from './js/ext/auth.js';
@@ -75,6 +79,8 @@ export { pullToRefresh }                                  from './js/ext/pulltor
 export { cssVars }                                        from './js/ext/cssvars.js';
 export { lazy }                                           from './js/ext/lazy.js';
 export { exporter }                                       from './js/ext/export.js';
+export { uploader }                                       from './js/ext/uploader.js';
+export { analytics }                                      from './js/ext/analytics.js';
 
 // ─── Utilities — js/utils/ ────────────────────────────────────────────────────
 export { encrypt }                                        from './js/utils/encrypt.js';

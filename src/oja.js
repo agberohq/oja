@@ -89,6 +89,7 @@ export {
 
 // ─── Network ──────────────────────────────────────────────────────────────────
 export { Api }                                            from './js/core/api.js';
+export { runtime }                                        from './js/core/runtime.js';
 
 // ─── Codecs ───────────────────────────────────────────────────────────────────
 export { JsonCodec, jsonCodec }                           from './js/core/codecs/json.js';
