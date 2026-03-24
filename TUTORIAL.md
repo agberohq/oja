@@ -282,7 +282,7 @@ for all routes.
 ### Route parameters
 
 ```js
-router.Get('/task/:id', Out.component('pages/task-detail.html'));
+router.Get('/task/{id}', Out.component('pages/task-detail.html'));
 
 // Inside task-detail.html script:
 const taskId = props.params.id;
@@ -307,8 +307,8 @@ router.Use(async (ctx, next) => {
 });
 
 // Protect a group of routes
-const protected = router.Group('/');
-protected.Use(async (ctx, next) => {
+const app = router.Group('/');
+app.Use(async (ctx, next) => {
     if (!currentUser()) {
         ctx.redirect('/login');
         return;
@@ -316,8 +316,8 @@ protected.Use(async (ctx, next) => {
     await next();
 });
 
-protected.Get('/',        Out.component('pages/home.html'));
-protected.Get('/profile', Out.component('pages/profile.html'));
+app.Get('/',        Out.component('pages/home.html'));
+app.Get('/profile', Out.component('pages/profile.html'));
 ```
 
 ---
@@ -379,27 +379,52 @@ current route's link automatically.
 A component is any `.html` file. Mount it with `component.mount()` or
 `Out.component()`.
 
-### Injected variables
+### What your component script gets for free
 
-Every component script automatically receives:
+When Oja mounts a component, it runs the inline `<script type="module">` and
+injects three variables automatically. You don't import them. You don't declare
+them. They're just there.
 
-| Variable    | What it is                                      |
-|-------------|-------------------------------------------------|
-| `container` | The DOM element the component mounted into      |
-| `find`      | `querySelector` scoped to `container`           |
-| `findAll`   | `querySelectorAll` scoped to `container`        |
-| `props`     | Read-only proxy of the props passed at mount    |
+**`container`** is the DOM element the component was mounted into — the actual
+`<div>` or `<section>` on the page. Not a wrapper Oja invented. Not a shadow
+root. The real element that your router or `component.mount()` call pointed at.
 
-You do not declare these — Oja injects them. Declaring your own variable with
-the same name as an injected one causes a `SyntaxError`.
+**`find`** is `querySelector` scoped to that element. **`findAll`** is
+`querySelectorAll` scoped to that element.
 
-```js
-// ✗ Crashes — 'find' is already declared
-const find = document.querySelector.bind(document);
+Here's why this matters. Suppose you have the same component mounted twice on
+the same page:
 
-// ✓ find is already available — just use it
-const btn = find('#submit');
+```html
+<!-- components/status-badge.html -->
+<span class="badge">Loading…</span>
+
+<script type="module">
+  // ✗ WRONG — grabs the first .badge on the entire page
+  //   If two instances are mounted, they'll both update the same node
+  const badge = document.querySelector('.badge');
+  badge.textContent = props.status;
+
+  // ✓ RIGHT — scoped to THIS instance's element
+  const badge = find('.badge');
+  badge.textContent = props.status;
+</script>
 ```
+
+`find` and `findAll` make isolation automatic. Multiple instances of the same
+component never interfere with each other.
+
+| Variable    | What it is                                        |
+|-------------|---------------------------------------------------|
+| `container` | The DOM element this component was mounted into   |
+| `find`      | `querySelector` scoped to `container`             |
+| `findAll`   | `querySelectorAll` scoped to `container`          |
+| `props`     | Read-only proxy of the props passed at mount time |
+
+> **Never redeclare these names.** If you write `const find = ...` or
+> `const container = ...` in a component script, the browser throws
+> `SyntaxError: Identifier 'find' has already been declared`. They're already
+> in scope — just use them.
 
 ### Mounting a component from a page
 

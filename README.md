@@ -208,17 +208,6 @@ const el = DOM.find('#app');
 DOM.createEl('div', { class: 'card' });
 ```
 
-Or import everything under the `Oja` namespace:
-
-```js
-import { Oja } from '@agberohq/oja';
-
-Oja.state(0)
-Oja.Router
-Oja.notify.success('Done')
-Oja.Event.on('.btn', 'click', handler)
-```
-
 ---
 
 ## Core concepts
