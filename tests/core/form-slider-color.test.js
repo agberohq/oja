@@ -126,7 +126,7 @@ describe('form.colorPicker()', () => {
     });
 
     it('does not render swatch row when swatches is empty', () => {
-        form.colorPicker(el(), { swatches:[] });
+        form.colorPicker(el(), { swatches: [] });
         expect(document.querySelector('.oja-color-swatches')).toBeNull();
     });
 
