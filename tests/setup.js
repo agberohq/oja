@@ -47,9 +47,20 @@ class WorkerShim {
 
     onerror = null;
 
-    constructor(blobUrl) {
-        const src = _blobSources.get(blobUrl);
-        if (src === undefined) throw new Error(`[shim/Worker] unknown blob URL: ${blobUrl}`);
+    constructor(blobUrl, _options) {
+        // Resolve source from blob: shim registry OR data: URL directly.
+        let src;
+        if (blobUrl.startsWith('data:')) {
+            // data: URL — decode the source directly (used by inline-module mode).
+            // Format: data:text/javascript;charset=utf-8,<encoded-source>
+            // Module bootstrap uses self.onmessage (not bare onmessage), so we
+            // handle both assignment styles in the capture step below.
+            const encoded = blobUrl.slice(blobUrl.indexOf(',') + 1);
+            src = decodeURIComponent(encoded);
+        } else {
+            src = _blobSources.get(blobUrl);
+            if (src === undefined) throw new Error(`[shim/Worker] unknown blob URL: ${blobUrl}`);
+        }
 
         // Delivers worker responses to Runner's #route() on the next microtask,
         // matching real Worker async delivery without blocking the call stack.
@@ -59,11 +70,18 @@ class WorkerShim {
             });
         };
 
-        // Evaluate worker source synchronously. The bootstrap does
-        // `onmessage = async (e) => {...}` as a bare assignment; we capture it.
-        const wrapped = `'use strict';\nlet onmessage;\n${src}\n__capture__(onmessage);`;
-        const factory = new Function('postMessage', '__capture__', wrapped);
-        factory(workerPostMessage, (fn) => { this.#workerOnmessage = fn; });
+        // Evaluate worker source synchronously.
+        // Classic bootstrap assigns bare `onmessage = ...` (captured by let).
+        // Module bootstrap assigns `self.onmessage = ...` (captured via self proxy).
+        // We handle both: inject a `self` proxy and capture whichever is set.
+        const selfProxy = { onmessage: null };
+        const wrapped = `'use strict';
+let onmessage;
+const self = __self__;
+${src}
+__capture__(onmessage ?? self.onmessage);`;
+        const factory = new Function('postMessage', '__capture__', '__self__', wrapped);
+        factory(workerPostMessage, (fn) => { this.#workerOnmessage = fn; }, selfProxy);
     }
 
     // Called by Runner — runs the worker handler and lets it complete async
