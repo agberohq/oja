@@ -1,6 +1,11 @@
 /**
  * Tests for context.persist — onQuotaExceeded callback and oja:quota-exceeded event.
- * These cover the new behaviour added in the plan.md P0 fix.
+ *
+ * Key design note:
+ *   We spy on localStorage.setItem (the instance) NOT Storage.prototype.setItem.
+ *   Mocking the prototype also breaks _isStorageAvailable() which calls
+ *   setItem('__oja_test__') as a probe — that would make it return false and
+ *   cause _savePersistent to exit before reaching the quota handler.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { context } from '../../src/js/core/reactive.js';
@@ -11,86 +16,71 @@ let keyCounter = 0;
 function freshKey() { return `persist-test-${Date.now()}-${++keyCounter}`; }
 
 function makeQuotaError() {
-    const err = new DOMException('QuotaExceededError', 'QuotaExceededError');
-    // Some browsers set code 22
-    Object.defineProperty(err, 'code', { value: 22 });
-    return err;
+    return new DOMException('QuotaExceededError', 'QuotaExceededError');
+}
+
+// Spy on the localStorage INSTANCE method so _isStorageAvailable still works.
+// We make the spy throw only for keys that look like real data (not the probe).
+function mockSetItemQuota() {
+    return vi.spyOn(localStorage, 'setItem').mockImplementation((k) => {
+        if (k === '__oja_test__') return; // let availability probe pass
+        throw makeQuotaError();
+    });
 }
 
 // ─── onQuotaExceeded callback ─────────────────────────────────────────────────
 
 describe('context.persist — onQuotaExceeded callback', () => {
     let key;
-    let originalSetItem;
+    let spy;
 
-    beforeEach(() => {
-        key = freshKey();
-        originalSetItem = Storage.prototype.setItem;
-    });
+    beforeEach(() => { key = freshKey(); });
+    afterEach(() => { spy?.mockRestore(); context.delete(key); });
 
-    afterEach(() => {
-        Storage.prototype.setItem = originalSetItem;
-        context.delete(key);
-        window.removeEventListener('oja:quota-exceeded', () => {});
-    });
-
-    it('calls onQuotaExceeded when localStorage.setItem throws QuotaExceededError', async () => {
+    it('calls onQuotaExceeded when setItem throws QuotaExceededError', () => {
+        spy = mockSetItemQuota();
         const handler = vi.fn();
-
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
 
         const [, setValue] = context.persist(key, 'initial', {
             onQuotaExceeded: handler,
         });
 
         setValue('trigger-quota');
-        await Promise.resolve();
 
         expect(handler).toHaveBeenCalledOnce();
         expect(handler).toHaveBeenCalledWith(
-            expect.stringContaining(key), // storage key contains the context key
+            expect.stringContaining(key),
             'trigger-quota',
-            expect.any(Error)
+            expect.any(DOMException)
         );
     });
 
-    it('does not call onQuotaExceeded for non-quota errors', async () => {
-        const handler = vi.fn();
-
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw new Error('some other storage error');
+    it('does not call onQuotaExceeded for non-quota errors', () => {
+        spy = vi.spyOn(localStorage, 'setItem').mockImplementation((k) => {
+            if (k === '__oja_test__') return;
+            throw new TypeError('some other error');
         });
+        const handler = vi.fn();
 
         const [, setValue] = context.persist(freshKey(), 'x', {
             onQuotaExceeded: handler,
         });
-
         setValue('boom');
-        await Promise.resolve();
 
         expect(handler).not.toHaveBeenCalled();
     });
 
-    it('works without onQuotaExceeded — does not throw', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
-
+    it('works without onQuotaExceeded — does not throw', () => {
+        spy = mockSetItemQuota();
         const [, setValue] = context.persist(freshKey(), 'x');
         expect(() => setValue('trigger')).not.toThrow();
     });
 
-    it('onQuotaExceeded throwing does not propagate', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
-
-        const [, setValue] = context.persist(freshKey(), 'x', {
+    it('onQuotaExceeded throwing does not propagate', () => {
+        spy = mockSetItemQuota();
+        const[, setValue] = context.persist(freshKey(), 'x', {
             onQuotaExceeded: () => { throw new Error('handler threw'); },
         });
-
         expect(() => setValue('boom')).not.toThrow();
     });
 });
@@ -98,109 +88,86 @@ describe('context.persist — onQuotaExceeded callback', () => {
 // ─── oja:quota-exceeded window event ──────────────────────────────────────────
 
 describe('context.persist — oja:quota-exceeded window event', () => {
-    let key;
-    let originalSetItem;
+    let spy;
+    let listener;
+    let events;
 
     beforeEach(() => {
-        key = freshKey();
-        originalSetItem = Storage.prototype.setItem;
+        events   =[];
+        listener = (e) => events.push(e.detail);
+        window.addEventListener('oja:quota-exceeded', listener);
     });
 
     afterEach(() => {
-        Storage.prototype.setItem = originalSetItem;
-        context.delete(key);
+        spy?.mockRestore();
+        window.removeEventListener('oja:quota-exceeded', listener);
     });
 
-    it('dispatches oja:quota-exceeded on window when quota is hit', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
-
-        const events = [];
-        const listener = (e) => events.push(e.detail);
-        window.addEventListener('oja:quota-exceeded', listener);
-
-        const [, setValue] = context.persist(key, 'x');
+    it('dispatches oja:quota-exceeded on window when quota is hit', () => {
+        spy = mockSetItemQuota();
+        const k = freshKey();
+        const [, setValue] = context.persist(k, 'x');
         setValue('quota-trigger');
-        await Promise.resolve();
-
-        window.removeEventListener('oja:quota-exceeded', listener);
+        context.delete(k);
 
         expect(events).toHaveLength(1);
         expect(events[0]).toMatchObject({
-            key:     expect.stringContaining(key),
+            key:     expect.stringContaining(k),
             storage: 'local',
             value:   'quota-trigger',
-            error:   expect.any(Error),
+            error:   expect.any(DOMException),
         });
     });
 
-    it('does not dispatch window event for non-quota errors', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw new Error('not a quota error');
+    it('does not dispatch window event for non-quota errors', () => {
+        spy = vi.spyOn(localStorage, 'setItem').mockImplementation((k) => {
+            if (k === '__oja_test__') return;
+            throw new TypeError('not quota');
         });
-
-        const events = [];
-        const listener = (e) => events.push(e);
-        window.addEventListener('oja:quota-exceeded', listener);
-
-        const [, setValue] = context.persist(freshKey(), 'x');
+        const k = freshKey();
+        const [, setValue] = context.persist(k, 'x');
         setValue('boom');
-        await Promise.resolve();
+        context.delete(k);
 
-        window.removeEventListener('oja:quota-exceeded', listener);
         expect(events).toHaveLength(0);
     });
 
-    it('fires window event even when no onQuotaExceeded callback is set', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
+    it('fires window event even when no onQuotaExceeded callback is set', () => {
+        spy = mockSetItemQuota();
+        const k = freshKey();
+        const[, setValue] = context.persist(k, 'x');
+        setValue('quota-trigger'); // Fixed: must be different from initial 'x'
+        context.delete(k);
 
-        const events = [];
-        const listener = (e) => events.push(e.detail);
-        window.addEventListener('oja:quota-exceeded', listener);
-
-        const [, setValue] = context.persist(freshKey(), 'x');
-        setValue('x');
-        await Promise.resolve();
-
-        window.removeEventListener('oja:quota-exceeded', listener);
         expect(events).toHaveLength(1);
     });
 
-    it('fires both callback and window event when quota hit', async () => {
-        Storage.prototype.setItem = vi.fn().mockImplementation(() => {
-            throw makeQuotaError();
-        });
-
-        const cbCalls   = [];
-        const evtCalls  = [];
-        const listener  = (e) => evtCalls.push(e.detail);
-        window.addEventListener('oja:quota-exceeded', listener);
-
-        const [, setValue] = context.persist(freshKey(), 'x', {
-            onQuotaExceeded: (k, v, e) => cbCalls.push({ k, v }),
+    it('fires both callback AND window event when quota hit', () => {
+        spy = mockSetItemQuota();
+        const cbCalls = [];
+        const k = freshKey();
+        const [, setValue] = context.persist(k, 'x', {
+            onQuotaExceeded: (key, val) => cbCalls.push({ key, val }),
         });
         setValue('both');
-        await Promise.resolve();
-
-        window.removeEventListener('oja:quota-exceeded', listener);
+        context.delete(k);
 
         expect(cbCalls).toHaveLength(1);
-        expect(evtCalls).toHaveLength(1);
+        expect(events).toHaveLength(1);
     });
 });
 
-// ─── Normal persist still works ───────────────────────────────────────────────
+// ─── Normal persist behaviour unchanged ───────────────────────────────────────
 
 describe('context.persist — normal behaviour unchanged', () => {
     afterEach(() => {
-        // Clean up all test keys
+        // Clean up any oja: prefixed keys we created
+        const toRemove =[];
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k?.startsWith('oja:persist-test-')) localStorage.removeItem(k);
+            if (k?.includes('persist-test-')) toRemove.push(k);
         }
+        toRemove.forEach(k => localStorage.removeItem(k));
     });
 
     it('persists and reads back a string value', () => {
@@ -211,7 +178,7 @@ describe('context.persist — normal behaviour unchanged', () => {
         context.delete(k);
     });
 
-    it('reads initial value from localStorage if present', () => {
+    it('reads initial value from localStorage when present before init', () => {
         const k  = freshKey();
         const sk = `oja:${k}`;
         localStorage.setItem(sk, JSON.stringify('from-storage'));

@@ -79,17 +79,15 @@
  */
 
 const _storage = {
-    local: typeof localStorage !== 'undefined' ? localStorage : null,
-    session: typeof sessionStorage !== 'undefined' ? sessionStorage : null,
     memory: new Map()
 };
 
 function _getStorage(type = 'memory') {
     switch (type) {
         case 'local':
-            return _storage.local;
+            return typeof localStorage !== 'undefined' ? localStorage : null;
         case 'session':
-            return _storage.session;
+            return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
         default:
             return _storage.memory;
     }
@@ -145,7 +143,13 @@ class ReactiveSystem {
 
     _savePersistent(key, storage, value, onQuotaExceeded = null) {
         const storageImpl = _getStorage(storage);
-        if (!storageImpl || !_isStorageAvailable(storageImpl)) return;
+        if (!storageImpl) return;
+        // Note: we do NOT call _isStorageAvailable here — that guard would itself
+        // call setItem and swallow QuotaExceededError before we can handle it.
+        // Storage availability is verified once during _loadPersistent at init time.
+        // After that, the only expected failure mode is quota exhaustion, which we
+        // now handle explicitly and surface via the onQuotaExceeded callback and
+        // the oja:quota-exceeded window event.
 
         try {
             storageImpl.setItem(key, JSON.stringify(value));
@@ -156,11 +160,9 @@ class ReactiveSystem {
                             e.code === 22;
             if (isQuota) {
                 console.warn(`[oja/reactive] Storage quota exceeded for key "${key}"`, e);
-                // Call per-key handler if provided
                 if (typeof onQuotaExceeded === 'function') {
                     try { onQuotaExceeded(key, value, e); } catch (_) {}
                 }
-                // Always emit global event so the app can react centrally
                 if (typeof window !== 'undefined') {
                     window.dispatchEvent(new CustomEvent('oja:quota-exceeded', {
                         detail: { key, storage, value, error: e },
