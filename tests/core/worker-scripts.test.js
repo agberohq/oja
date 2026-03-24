@@ -1,28 +1,35 @@
 /**
  * Tests for OjaWorker options.scripts
  *
- * The Worker shim in setup.js uses new Function() to evaluate worker source.
- * new Function() executes in the global scope, so global.importScripts is
- * accessible inside the worker body — verified by direct Node test.
+ * Root cause of previous failures:
+ *   WORKER_BOOTSTRAP used `self.onmessage = async (e) => {...}`
+ *   The WorkerShim captures a bare local `let onmessage` variable.
+ *   `self.onmessage` sets on globalThis — shadowed by the local `let onmessage`.
+ *   Result: __capture__(onmessage) captured undefined, no messages were handled.
  *
- * We set global.importScripts in beforeEach and delete in afterEach.
- * The spy records which URLs were passed so we can assert injection order.
+ * Fix applied to worker.js:
+ *   Changed to `onmessage = self.onmessage = async (e) => {...}`
+ *   Now both the local variable (for the shim) and self.onmessage (for real Workers)
+ *   are assigned, making OjaWorker work correctly in both environments.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OjaWorker } from '../../src/js/ext/worker.js';
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
+// ─── importScripts shim ───────────────────────────────────────────────────────
+// In real Workers, importScripts() is a global function.
+// In the WorkerShim, the worker source runs via new Function() in the global scope,
+// so globalThis.importScripts is accessible as a bare call.
 
 let importScriptsCalls = [];
 
 beforeEach(() => {
     importScriptsCalls = [];
-    // Inject importScripts into global scope — accessible inside new Function()
     globalThis.importScripts = (...urls) => { importScriptsCalls.push(...urls); };
 });
 
 afterEach(() => {
     delete globalThis.importScripts;
+    vi.restoreAllMocks();
 });
 
 // ─── scripts injection ────────────────────────────────────────────────────────
@@ -33,18 +40,16 @@ describe('OjaWorker — options.scripts', () => {
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/lib.js'] }
         );
-
         await w.call('ping');
         expect(importScriptsCalls).toContain('https://example.com/lib.js');
         w.close();
     });
 
-    it('calls importScripts with multiple URLs preserving order', async () => {
+    it('calls importScripts with multiple URLs in the correct order', async () => {
         const w = new OjaWorker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/a.js', 'https://example.com/b.js'] }
         );
-
         await w.call('ping');
         expect(importScriptsCalls[0]).toBe('https://example.com/a.js');
         expect(importScriptsCalls[1]).toBe('https://example.com/b.js');
@@ -68,17 +73,16 @@ describe('OjaWorker — options.scripts', () => {
         w.close();
     });
 
-    it('scripts run before the handler body so globals are available', async () => {
+    it('scripts run before the handler body — globals are available to handlers', async () => {
         // Simulate a library loaded by importScripts setting a global
         globalThis.importScripts = (...urls) => {
             importScriptsCalls.push(...urls);
-            // Simulate lib setting global after load
-            globalThis.__testLib = { version: '2.0' };
+            globalThis.__testLib = { version: '3.0' };
         };
 
         const w = new OjaWorker(
             (self) => {
-                // __testLib should be available because importScripts ran first
+                // __testLib was set by importScripts before this function ran
                 self.handle('version', () => {
                     return typeof __testLib !== 'undefined' ? __testLib.version : 'missing';
                 });
@@ -87,67 +91,67 @@ describe('OjaWorker — options.scripts', () => {
         );
 
         const version = await w.call('version');
-        expect(version).toBe('2.0');
+        expect(version).toBe('3.0');
 
         delete globalThis.__testLib;
         w.close();
     });
 
-    it('name option works alongside scripts', async () => {
+    it('name option still works alongside scripts', async () => {
         const w = new OjaWorker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/x.js'], name: 'named-worker' }
         );
-        const result = await w.call('ping');
-        expect(result).toBe('pong');
+        expect(await w.call('ping')).toBe('pong');
         w.close();
     });
 
-    it('worker source contains importScripts call when scripts provided', () => {
-        // Inspect the blob source to verify injection without actually running
-        const blobs = [];
-        const origCreateObjectURL = URL.createObjectURL;
+    it('generated source contains importScripts call when scripts provided', () => {
+        // Verify the blob source via the shim's __shimText property
+        const captured = [];
+        const origCreate = URL.createObjectURL;
         URL.createObjectURL = (blob) => {
-            blobs.push(blob.__shimText ?? '');
-            return origCreateObjectURL(blob);
+            captured.push(blob.__shimText ?? '');
+            return origCreate(blob);
         };
 
-        const w = new OjaWorker(
-            (self) => { self.handle('ping', () => 'pong'); },
-            { scripts: ['https://cdn.example.com/marked.min.js'] }
-        );
+        try {
+            const w = new OjaWorker(
+                (self) => { self.handle('ping', () => 'pong'); },
+                { scripts: ['https://cdn.example.com/marked.min.js'] }
+            );
+            w.close();
+        } finally {
+            URL.createObjectURL = origCreate;
+        }
 
-        URL.createObjectURL = origCreateObjectURL;
-
-        const src = blobs[0] ?? '';
-        expect(src).toContain('importScripts(');
-        expect(src).toContain('https://cdn.example.com/marked.min.js');
-        w.close();
+        expect(captured[0]).toContain('importScripts(');
+        expect(captured[0]).toContain('https://cdn.example.com/marked.min.js');
     });
 
-    it('worker source has NO importScripts when scripts option absent', () => {
-        const blobs = [];
-        const origCreateObjectURL = URL.createObjectURL;
+    it('generated source has no importScripts when scripts option absent', () => {
+        const captured = [];
+        const origCreate = URL.createObjectURL;
         URL.createObjectURL = (blob) => {
-            blobs.push(blob.__shimText ?? '');
-            return origCreateObjectURL(blob);
+            captured.push(blob.__shimText ?? '');
+            return origCreate(blob);
         };
 
-        const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
+        try {
+            const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
+            w.close();
+        } finally {
+            URL.createObjectURL = origCreate;
+        }
 
-        URL.createObjectURL = origCreateObjectURL;
-
-        const src = blobs[0] ?? '';
-        // Should not start with importScripts
-        expect(src.trimStart().startsWith('importScripts')).toBe(false);
-        w.close();
+        expect(captured[0].trimStart().startsWith('importScripts')).toBe(false);
     });
 });
 
 // ─── Core OjaWorker behaviour unchanged ───────────────────────────────────────
 
 describe('OjaWorker — core behaviour unchanged', () => {
-    it('call() resolves with handler return value', async () => {
+    it('call() resolves with the handler return value', async () => {
         const w = new OjaWorker((self) => {
             self.handle('double', (n) => n * 2);
         });
@@ -155,7 +159,7 @@ describe('OjaWorker — core behaviour unchanged', () => {
         w.close();
     });
 
-    it('call() rejects when handler throws', async () => {
+    it('call() rejects when the handler throws', async () => {
         const w = new OjaWorker((self) => {
             self.handle('fail', () => { throw new Error('worker error'); });
         });
@@ -167,5 +171,18 @@ describe('OjaWorker — core behaviour unchanged', () => {
         const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
         w.close();
         await expect(w.call('ping')).rejects.toThrow('closed');
+    });
+
+    it('handles multiple concurrent calls correctly', async () => {
+        const w = new OjaWorker((self) => {
+            self.handle('echo', (x) => x);
+        });
+        const results = await Promise.all([
+            w.call('echo', 1),
+            w.call('echo', 2),
+            w.call('echo', 3),
+        ]);
+        expect(results).toEqual([1, 2, 3]);
+        w.close();
     });
 });

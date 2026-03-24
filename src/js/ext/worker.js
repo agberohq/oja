@@ -53,7 +53,7 @@
  *   // State lives on the main thread. Worker is a pure processing unit.
  *   // Pattern: extract data → send to worker → receive result → update state
  *
- *   const [result, setResult] = state(null);
+ *   const[result, setResult] = state(null);
  *   const [status, setStatus] = state('idle');
  *
  *   on('#upload', 'change', async (e, el) => {
@@ -80,10 +80,16 @@
  *           self.handle('parse', (content) => marked.parse(content));
  *       },
  *       {
- *           scripts: ['https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js'],
+ *           scripts:['https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js'],
  *           name: 'markdown-parser',
  *       }
  *   );
+ *
+ *   // vs the old, error-prone pattern:
+ *   const badWorker = new OjaWorker((self) => {
+ *       self.importScripts('https://…/marked.min.js'); // ← easy to get wrong
+ *       self.handle('parse', (c) => marked.parse(c));
+ *   });
  */
 
 import { debug } from '../utils/debug.js';
@@ -98,22 +104,22 @@ const _api = {
     handle(type, fn) {
         _handlers.set(type, fn);
     },
-    send(type, data, transfer = []) {
-        self.postMessage({ type: '__event__', eventType: type, data }, transfer);
+    send(type, data, transfer =[]) {
+        postMessage({ type: '__event__', eventType: type, data }, transfer);
     }
 };
 
-self.onmessage = async (e) => {
+onmessage = self.onmessage = async (e) => {
     const { id, type, data } = e.data;
 
     if (type === '__ping__') {
-        self.postMessage({ id, type: '__pong__' });
+        postMessage({ id, type: '__pong__' });
         return;
     }
 
     const handler = _handlers.get(type);
     if (!handler) {
-        self.postMessage({
+        postMessage({
             id,
             type  : '__error__',
             error : 'No handler for: ' + type
@@ -125,10 +131,10 @@ self.onmessage = async (e) => {
         const result   = await handler(data);
         const transfer = result instanceof ArrayBuffer ? [result]
             : result instanceof Uint8Array            ? [result.buffer]
-            : [];
-        self.postMessage({ id, type: '__result__', result }, transfer);
+            :[];
+        postMessage({ id, type: '__result__', result }, transfer);
     } catch (err) {
-        self.postMessage({ id, type: '__error__', error: err.message });
+        postMessage({ id, type: '__error__', error: err.message });
     }
 };
 `;
@@ -150,7 +156,7 @@ export class OjaWorker {
      *   name     : string    — debug name shown in console and debug timeline
      *   scripts  : string[]  — URLs to load via importScripts() before handlers run
      *                          Use for CDN libraries (marked, pako, etc.)
-     *                          Example: { scripts: ['https://cdn.../marked.min.js'] }
+     *                          Example: { scripts:['https://cdn.../marked.min.js'] }
      *   onEvent  : fn        — called when worker pushes an event via self.send()
      *   onError  : fn        — called on unhandled worker errors
      */
@@ -165,7 +171,7 @@ export class OjaWorker {
         // Prepend importScripts() calls for any scripts listed in options.scripts.
         // These execute before the user's worker function, so libraries are
         // available when self.handle() handlers are registered.
-        const scripts = Array.isArray(options.scripts) ? options.scripts : [];
+        const scripts = Array.isArray(options.scripts) ? options.scripts :[];
         const importBlock = scripts.length
             ? `importScripts(${scripts.map(s => JSON.stringify(s)).join(', ')});\n`
             : '';
@@ -205,7 +211,7 @@ export class OjaWorker {
      * @param {any}      data      — data to send
      * @param {Array}    transfer  — Transferable objects (ArrayBuffers) for zero-copy
      */
-    call(type, data, transfer = []) {
+    call(type, data, transfer =[]) {
         if (this._closed) return Promise.reject(new Error(`[oja/worker] "${this._name}" is closed`));
 
         return new Promise((resolve, reject) => {
@@ -225,7 +231,7 @@ export class OjaWorker {
      * @param {any}     data      — data to send
      * @param {Array}   transfer  — Transferable objects for zero-copy
      */
-    send(type, data, transfer = []) {
+    send(type, data, transfer =[]) {
         if (this._closed) {
             console.warn(`[oja/worker] "${this._name}" is closed — send ignored`);
             return this;
