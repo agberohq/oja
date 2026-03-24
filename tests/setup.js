@@ -181,11 +181,15 @@ const mockStorage = () => {
     };
 };
 
-// Node 22 introduces a native localStorage that breaks if --localstorage-file is not provided.
-// This overrides it so Vitest environments don't throw `TypeError: setItem is not a function`.
-if (typeof globalThis.localStorage === 'undefined' || !globalThis.localStorage.setItem) {
-    Object.defineProperty(globalThis, 'localStorage', { value: mockStorage(), writable: true });
-}
-if (typeof globalThis.sessionStorage === 'undefined' || !globalThis.sessionStorage.setItem) {
-    Object.defineProperty(globalThis, 'sessionStorage', { value: mockStorage(), writable: true });
-}
+// Always install our mock storage implementation.
+// writable: true lets subsequent Object.defineProperty calls override if needed.
+Object.defineProperty(globalThis, 'localStorage', {
+    value: mockStorage(),
+    writable: true,
+    configurable: true,
+});
+Object.defineProperty(globalThis, 'sessionStorage', {
+    value: mockStorage(),
+    writable: true,
+    configurable: true,
+});
