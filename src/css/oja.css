@@ -231,14 +231,33 @@
 .oja-skel-avatar { height: 48px; width: 48px; border-radius: 50%; flex-shrink: 0; }
 .oja-skel-row { display: flex; gap: 16px; margin-bottom: 12px; align-items: center; }
 
+/* ─── Popover & Tooltip ──────────────────────────────────────────────────────── */
+
+.oja-popover {
+    background: var(--bg, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: var(--oja-radius, 8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 8px;
+}
+
+.oja-tooltip {
+    background: var(--fg, #1a1a1a);
+    color: var(--bg, #ffffff);
+    padding: 4px 8px;
+    border-radius: var(--oja-radius, 4px);
+    font-size: 11px;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
 /* ─── Respect reduced motion ─────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
     .oja-entering,
     .oja-leaving,
     .oja-updated,
-    [data-each-item].oja-entering,
-    [data-each-item].oja-leaving,
+    [data-each-item].oja-entering,[data-each-item].oja-leaving,
     .oja-toast,
     .oja-toast.oja-toast-leaving {
         animation: none;
@@ -338,6 +357,10 @@ TABLE
 
 .oja-table .oja-row-clickable {
     cursor: pointer;
+}
+
+.oja-row-selected td {
+    background-color: var(--oja-table-row-selected, var(--hover-bg, #f3f4f6));
 }
 
 /* ─── Cell content ────────────────────────────────────────────────────────── */
@@ -442,6 +465,16 @@ TABLE
     width: 40px;
 }
 
+/* Select column */
+.oja-th-select, .oja-td-select {
+    width: 40px;
+    text-align: center;
+}
+
+.oja-table-select-all, .oja-table-select-row {
+    cursor: pointer;
+}
+
 /* ─── Group rows ──────────────────────────────────────────────────────────── */
 
 .oja-group-header {
@@ -517,6 +550,12 @@ TABLE
     flex-wrap: wrap;
 }
 
+.oja-table-footer-left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
 .oja-page-info {
     font-size: 12px;
     color: var(--text-mute, #6b7280);
@@ -554,6 +593,11 @@ TABLE
 .oja-page-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.oja-export-btn {
+    padding: 0 12px;
+    font-weight: 500;
 }
 
 .oja-load-more-btn {
