@@ -26,7 +26,7 @@
  *       onDrop: (files) => {
  *           Array.from(files).forEach(file => uploadFile(file));
  *       },
- *       accept: ['.jpg', '.png', '.pdf'],
+ *       accept:['.jpg', '.png', '.pdf'],
  *       maxSize: 10 * 1024 * 1024,  // 10MB
  *       multiple: true,
  *       onDragOver: () => highlightZone(),
@@ -132,7 +132,7 @@ export function reorder(target, options = {}) {
 
     const opts = { ...defaults, ...options };
 
-    _reorderLists.set(list, { opts, items: [] });
+    _reorderLists.set(list, { opts, items:[] });
 
     _initListItems(list, opts);
 
@@ -353,7 +353,7 @@ export function dropZone(target, options = {}) {
     }
 
     const defaults = {
-        accept: [],
+        accept:[],
         maxSize: Infinity,
         multiple: true,
         onDrop: null,
@@ -933,6 +933,145 @@ export function resizable(target, options = {}) {
     };
 }
 
+// ─── Canvas helpers ────────────────────────────────────────────────────────
+
+export function canvas(target, options = {}) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) {
+        console.warn('[oja/dragdrop] canvas target not found');
+        return { destroy: () => {} };
+    }
+
+    const { onPanStart, onPanEnd, onPan, onZoom, zoomSpeed = 0.001 } = options;
+
+    let active = false;
+    let lastX = 0, lastY = 0;
+
+    const onPointerDown = (e) => {
+        if (e.button !== 0) return;
+        active = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+        if (onPanStart) onPanStart(e);
+    };
+
+    const onPointerMove = (e) => {
+        if (!active) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (onPan) onPan(dx, dy, e);
+    };
+
+    const onPointerUp = (e) => {
+        if (!active) return;
+        active = false;
+        if (el.releasePointerCapture) el.releasePointerCapture(e.pointerId);
+        if (onPanEnd) onPanEnd(e);
+    };
+
+    const onWheel = (e) => {
+        if (onZoom) {
+            e.preventDefault();
+            const scale = e.deltaY < 0 ? 1 + Math.abs(e.deltaY) * zoomSpeed : 1 / (1 + Math.abs(e.deltaY) * zoomSpeed);
+            onZoom(scale, e.clientX, e.clientY, e);
+        }
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+    if (onZoom) el.addEventListener('wheel', onWheel, { passive: false });
+
+    return {
+        destroy: () => {
+            el.removeEventListener('pointerdown', onPointerDown);
+            el.removeEventListener('pointermove', onPointerMove);
+            el.removeEventListener('pointerup', onPointerUp);
+            el.removeEventListener('pointercancel', onPointerUp);
+            if (onZoom) el.removeEventListener('wheel', onWheel);
+        }
+    };
+}
+
+export function transformable(target, options = {}) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) {
+        console.warn('[oja/dragdrop] transformable target not found');
+        return { destroy: () => {}, setVisible: () => {} };
+    }
+
+    const style = getComputedStyle(el);
+    if (style.position === 'static' || !style.position) {
+        el.style.position = 'relative';
+    }
+
+    const handles = options.handles ||['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw', 'rotate'];
+    const elements =[];
+
+    handles.forEach(h => {
+        const handle = document.createElement('div');
+        handle.className = `oja-transform-handle oja-handle-${h}`;
+        if (h === 'rotate') handle.style.borderRadius = '50%';
+        el.appendChild(handle);
+        elements.push(handle);
+    });
+
+    return {
+        setVisible: (visible) => {
+            elements.forEach(h => h.style.display = visible ? '' : 'none');
+        },
+        destroy: () => {
+            elements.forEach(h => h.remove());
+        }
+    };
+}
+
+export function selectionBox(target, options = {}) {
+    const container = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!container) {
+        console.warn('[oja/dragdrop] selectionBox target not found');
+        return { destroy: () => {} };
+    }
+
+    const { className = 'oja-selection-rect', onStart } = options;
+    let rect = null;
+
+    const onPointerDown = (e) => {
+        if (e.button === 2) return; // ignore right click
+        rect = document.createElement('div');
+        rect.className = className;
+        container.appendChild(rect);
+        if (onStart) onStart(e);
+    };
+
+    const onPointerUp = () => {
+        if (rect) {
+            rect.remove();
+            rect = null;
+        }
+    };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointercancel', onPointerUp);
+
+    return {
+        destroy: () => {
+            container.removeEventListener('pointerdown', onPointerDown);
+            container.removeEventListener('pointerup', onPointerUp);
+            container.removeEventListener('pointercancel', onPointerUp);
+            if (rect) {
+                rect.remove();
+                rect = null;
+            }
+        }
+    };
+}
+
 // Export
 
 export const dragdrop = {
@@ -943,6 +1082,9 @@ export const dragdrop = {
     sortable,
     resizable,
     enableTouchSupport,
+    canvas,
+    transformable,
+    selectionBox,
 };
 
 // Auto-enable touch support on touch-capable devices
