@@ -1,18 +1,18 @@
-/**
- * oja/oja.css
- * The only CSS Oja owns.
- * App styles live in the app — Oja never touches them.
- *
- * Four things only:
- *   1. Page transitions (entering / leaving)
- *   2. Component lifecycle (add / remove / update)
- *   3. Form error states
- *   4. Toast notifications and banners
- *
- * Animation durations here must match CSS_TRANSITION_MS in component.js (250ms).
- */
+ /**
+     * oja/oja.css
+     * The only CSS Oja owns.
+     * App styles live in the app — Oja never touches them.
+     *
+     * Four things only:
+     *   1. Page transitions (entering / leaving)
+     *   2. Component lifecycle (add / remove / update)
+     *   3. Form error states
+     *   4. Toast notifications and banners
+     *
+     * Animation durations here must match CSS_TRANSITION_MS in component.js (250ms).
+     */
 
-/* ─── Page transitions ──────────────────────────────────────────────────────── */
+    /* ─── Page transitions ──────────────────────────────────────────────────────── */
 
 .oja-entering {
     animation: oja-fade-in 0.2s ease forwards;
@@ -30,12 +30,11 @@
     animation: oja-slide-in 0.2s ease forwards;
 }
 
-/* An item being removed from a list */
-[data-each-item].oja-leaving {
-    animation: oja-slide-out 0.2s ease forwards;
-    pointer-events: none;
-    overflow: hidden;
-}
+/* An item being removed from a list */[data-each-item].oja-leaving {
+                                           animation: oja-slide-out 0.2s ease forwards;
+                                           pointer-events: none;
+                                           overflow: hidden;
+                                       }
 
 /* An item that just changed — brief highlight flash */
 .oja-updated {
@@ -207,6 +206,31 @@
     100% { background-color: transparent; }
 }
 
+@keyframes oja-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+
+/* ─── Skeleton Loaders ───────────────────────────────────────────────────────── */
+
+.oja-skeleton-wrapper {
+    width: 100%;
+}
+
+.oja-skel-avatar, .oja-skel-title, .oja-skel-line {
+    background: linear-gradient(90deg, var(--panel-bg, #f3f4f6) 25%, var(--border, #e5e7eb) 50%, var(--panel-bg, #f3f4f6) 75%);
+    background-size: 400% 100%;
+    animation: oja-shimmer 1.5s infinite linear;
+    border-radius: var(--oja-radius, 4px);
+    margin-bottom: 8px;
+}
+
+.oja-skel-line { height: 16px; width: 100%; }
+.oja-skel-line:last-child { width: 80%; margin-bottom: 0; }
+.oja-skel-title { height: 24px; width: 60%; margin-bottom: 16px; }
+.oja-skel-avatar { height: 48px; width: 48px; border-radius: 50%; flex-shrink: 0; }
+.oja-skel-row { display: flex; gap: 16px; margin-bottom: 12px; align-items: center; }
+
 /* ─── Respect reduced motion ─────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -222,6 +246,11 @@
     }
     .oja-toast          { opacity: 1; transform: none; }
     .oja-toast-leaving  { opacity: 0; }
+
+    .oja-skel-avatar, .oja-skel-title, .oja-skel-line {
+        animation: none;
+        background: var(--border, #e5e7eb);
+    }
 }
 
 
@@ -754,5 +783,3 @@ TABLE
     .oja-page-btn,
     .oja-copy-btn               { transition: none; }
 }
-
-
