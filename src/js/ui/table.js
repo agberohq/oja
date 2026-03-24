@@ -37,9 +37,12 @@
  *   loadMoreText  : string   — label on load-more button
  *   emptyText     : string   — message when rows is empty
  *   loadingText   : string   — message in loading state
+ *   selectable    : boolean  — add selection checkboxes (default: false)
+ *   exportable    : boolean  — add CSV export button to footer (default: false)
+ *   onSelectionChange: fn(selectedIds) — fires when selection changes
  *   onRowClick    : fn(row)  — row click handler
  *   columnCallbacks: { key: fn(cellValue, row) → htmlString }
- *   actions       : [{ label, icon, onClick, style? }]
+ *   actions       :[{ label, icon, onClick, style? }]
  *   groupBy       : string   — key to group rows under collapsible headers
  *   numbering     : boolean  — prepend row number column
  *   compact       : boolean  — tighter padding
@@ -171,9 +174,12 @@ export const table = {
             loadMoreText   = 'Load more',
             emptyText      = 'No records found',
             loadingText    = 'Loading…',
+            selectable     = false,
+            exportable     = false,
+            onSelectionChange = null,
             onRowClick     = null,
             columnCallbacks = {},
-            actions        = [],
+            actions        =[],
             groupBy        = '',
             numbering      = false,
             compact        = false,
@@ -183,8 +189,8 @@ export const table = {
         } = opts;
 
         // State
-        let localRows      = rows || [];
-        let remoteRows     = [];
+        let localRows      = rows ||[];
+        let remoteRows     =[];
         let totalRemote    = 0;
         let sortKey        = null;
         let sortDir        = 'asc';
@@ -192,7 +198,8 @@ export const table = {
         let loading        = false;
         let allLoaded      = false;
         let expandedGroups = new Set();
-        const _listeners   = [];
+        let selectedIds    = new Set();
+        const _listeners   =[];
 
         const isRemote = typeof fetchData === 'function';
 
@@ -219,7 +226,8 @@ export const table = {
         // ── All columns including optional extras ─────────────────────────
 
         function _allCols() {
-            const cols = [];
+            const cols =[];
+            if (selectable) cols.push({ key: '__select', label: '<input type="checkbox" class="oja-table-select-all">', sortable: false, _select: true, width: '40px' });
             if (numbering) cols.push({ key: '__num', label: '#', sortable: false, _num: true });
             cols.push(...headers);
             if (actions.length > 0) cols.push({ key: '__actions', label: '', sortable: false, _actions: true });
@@ -235,7 +243,26 @@ export const table = {
                 const th = document.createElement('th');
                 th.innerHTML = col.label;
                 if (col.width) th.style.width = col.width;
-                if (col.sortable) {
+
+                if (col._select) {
+                    th.className = 'oja-th-select';
+                    const cb = th.querySelector('.oja-table-select-all');
+                    if (cb) {
+                        const h = (e) => {
+                            const isChecked = e.target.checked;
+                            const currentVisible = _getPage(_getSorted());
+                            currentVisible.forEach((r, i) => {
+                                const id = r.id ?? ((paginationMode === 'pages' ? (currentPage - 1) * pageSize : 0) + i);
+                                if (isChecked) selectedIds.add(String(id));
+                                else selectedIds.delete(String(id));
+                            });
+                            _renderBody();
+                            if (onSelectionChange) onSelectionChange(Array.from(selectedIds));
+                        };
+                        cb.addEventListener('change', h);
+                        _listeners.push({ el: cb, type: 'change', handler: h });
+                    }
+                } else if (col.sortable) {
                     th.classList.add('oja-th-sortable');
                     th.setAttribute('data-key', col.key);
                     th.setAttribute('aria-sort', 'none');
@@ -276,6 +303,32 @@ export const table = {
             return sorted.slice(s, s + pageSize);
         }
 
+        function _updateSelectAll() {
+            const cb = thead.querySelector('.oja-table-select-all');
+            if (!cb) return;
+            const currentVisible = _getPage(_getSorted());
+            if (currentVisible.length === 0) {
+                cb.checked = false;
+                cb.indeterminate = false;
+                return;
+            }
+            let selectedCount = 0;
+            currentVisible.forEach((r, i) => {
+                const id = r.id ?? ((paginationMode === 'pages' ? (currentPage - 1) * pageSize : 0) + i);
+                if (selectedIds.has(String(id))) selectedCount++;
+            });
+            cb.checked = selectedCount === currentVisible.length;
+            cb.indeterminate = selectedCount > 0 && selectedCount < currentVisible.length;
+
+            // highlight rows
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const rowCb = tr.querySelector('.oja-table-select-row');
+                if (rowCb) {
+                    tr.classList.toggle('oja-row-selected', rowCb.checked);
+                }
+            });
+        }
+
         function _buildRow(row, index, globalIndex) {
             const tr = document.createElement('tr');
             if (onRowClick) {
@@ -286,6 +339,28 @@ export const table = {
             }
 
             for (const col of _allCols()) {
+                if (col._select) {
+                    const td = document.createElement('td');
+                    td.className = 'oja-td-select';
+                    const id = String(row.id ?? globalIndex);
+                    const checked = selectedIds.has(id) ? 'checked' : '';
+                    td.innerHTML = `<input type="checkbox" class="oja-table-select-row" data-id="${_esc(id)}" ${checked}>`;
+
+                    const cb = td.querySelector('input');
+                    const h = (e) => {
+                        e.stopPropagation();
+                        if (e.target.checked) selectedIds.add(id);
+                        else selectedIds.delete(id);
+                        _updateSelectAll();
+                        if (onSelectionChange) onSelectionChange(Array.from(selectedIds));
+                    };
+                    cb.addEventListener('change', h);
+                    _listeners.push({ el: cb, type: 'change', handler: h });
+                    tr.appendChild(td);
+
+                    if (checked) tr.classList.add('oja-row-selected');
+                    continue;
+                }
                 if (col._num) {
                     const td = document.createElement('td');
                     td.className = 'oja-td-num';
@@ -324,6 +399,26 @@ export const table = {
             if (visibleHeaders[0]) {
                 const primary = document.createElement('div');
                 primary.className = 'oja-card-primary';
+
+                if (selectable) {
+                    const id = String(row.id ?? globalIndex);
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.className = 'oja-table-select-row';
+                    cb.style.marginRight = '8px';
+                    cb.checked = selectedIds.has(id);
+                    const h = (e) => {
+                        e.stopPropagation();
+                        if (e.target.checked) selectedIds.add(id);
+                        else selectedIds.delete(id);
+                        if (onSelectionChange) onSelectionChange(Array.from(selectedIds));
+                        _renderBody(); // Re-sync table
+                    };
+                    cb.addEventListener('change', h);
+                    _listeners.push({ el: cb, type: 'change', handler: h });
+                    primary.appendChild(cb);
+                }
+
                 if (numbering) {
                     const num = document.createElement('span');
                     num.className = 'oja-card-num';
@@ -453,6 +548,7 @@ export const table = {
                 tr.appendChild(td);
                 tbody.appendChild(tr);
                 _renderMobileCards([]);
+                _updateSelectAll();
                 return;
             }
 
@@ -465,6 +561,7 @@ export const table = {
                 });
             }
 
+            _updateSelectAll();
             _renderMobileCards(visible);
         }
 
@@ -472,7 +569,7 @@ export const table = {
             const groups = new Map();
             for (const row of sorted) {
                 const k = String(_cell(row, groupBy).value ?? row[groupBy] ?? '—');
-                if (!groups.has(k)) groups.set(k, []);
+                if (!groups.has(k)) groups.set(k,[]);
                 groups.get(k).push(row);
             }
             let globalIdx = 0;
@@ -532,10 +629,28 @@ export const table = {
             });
         }
 
-        // ── Footer (pagination / load-more) ──────────────────────────────
+        // ── Footer (pagination / load-more / export) ──────────────────────────────
 
         function _renderFooter() {
             footerDiv.innerHTML = '';
+
+            const leftWrap = document.createElement('div');
+            leftWrap.className = 'oja-table-footer-left';
+            leftWrap.style.display = 'flex';
+            leftWrap.style.gap = '12px';
+            leftWrap.style.alignItems = 'center';
+            footerDiv.appendChild(leftWrap);
+
+            if (exportable) {
+                const btn = document.createElement('button');
+                btn.className = 'oja-page-btn oja-export-btn';
+                btn.innerHTML = 'Export';
+                btn.addEventListener('click', async () => {
+                    const { exporter } = await import('../ext/export.js');
+                    exporter.csv(isRemote ? remoteRows : localRows, 'export.csv');
+                });
+                leftWrap.appendChild(btn);
+            }
 
             const sorted     = _getSorted();
             const totalRows  = isRemote ? totalRemote : sorted.length;
@@ -562,7 +677,7 @@ export const table = {
             const info = document.createElement('span');
             info.className = 'oja-page-info';
             info.textContent = `${start}–${end} of ${totalRows}`;
-            footerDiv.appendChild(info);
+            leftWrap.appendChild(info);
 
             const nav = document.createElement('nav');
             nav.className = 'oja-page-nav';
@@ -610,11 +725,11 @@ export const table = {
                 _renderBody();
                 try {
                     const result = await fetchData(currentPage, pageSize, sortKey, sortDir);
-                    remoteRows   = result.data || [];
+                    remoteRows   = result.data ||[];
                     totalRemote  = result.total ?? remoteRows.length;
                 } catch (e) {
                     console.error('[oja/table] fetchData error:', e);
-                    remoteRows  = [];
+                    remoteRows  =[];
                     totalRemote = 0;
                 } finally {
                     loading = false;
@@ -630,7 +745,7 @@ export const table = {
             _renderBody();
             try {
                 const result = await fetchData(currentPage + 1, pageSize, sortKey, sortDir);
-                const newRows = result.data || [];
+                const newRows = result.data ||[];
                 remoteRows    = [...remoteRows, ...newRows];
                 totalRemote   = result.total ?? remoteRows.length;
                 currentPage++;
@@ -662,7 +777,7 @@ export const table = {
         return {
             // Replace local data and re-render, preserving sort state.
             update(newRows) {
-                localRows   = newRows || [];
+                localRows   = newRows ||[];
                 currentPage = 1;
                 _renderBody();
                 _renderFooter();
