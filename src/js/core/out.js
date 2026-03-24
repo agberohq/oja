@@ -59,6 +59,7 @@
  *     .animate(name, options?)         — apply named animation on enter/exit
  *     .onError(handler)                — fn(err) => Out shown on render failure
  *     .retry(count)                    — retry failed component loads N times
+ *     .skeleton(type, options?)        — show a shimmer placeholder while loading
  *
  *   Event methods — attach listeners to the target element, return this:
  *     .on(event, selector?, handler)   — delegated or direct event listener
@@ -139,6 +140,17 @@
  *         empty: Out.c('states/no-users.html'),
  *     })
  *
+ * ─── Beautiful skeleton loaders ───────────────────────────────────────────────
+ *
+ *     Out.skeleton('#main', 'table', { lines: 5 })
+ *        .component('pages/data-grid.html');
+ *
+ * ─── Composition — static forms ───────────────────────────────────────────────
+ *
+ *   Out.if(conditionFn, thenOut, elseOut?)
+ *   Out.promise(promise, { loading?, success, error? })
+ *   Out.list(items, itemFn, options?)
+ *
  * ─── Shorthand aliases ────────────────────────────────────────────────────────
  *
  *   Out.c()  — Out.component()
@@ -167,7 +179,6 @@ import { render as templateRender, fill, each } from './template.js';
 import { execScripts }                           from './_exec.js';
 import { emit }                                  from './events.js';
 import { effect }                                from './reactive.js';
-import { find }                                  from './ui.js';
 import { animate }                               from './animate.js';
 import { _segmentRender }                        from './segment.js';
 
@@ -316,16 +327,6 @@ class _Out {
     /**
      * output() — render this Out to an HTML string without mounting into the DOM.
      * Useful for imperative usage: third-party editors, SSR, testing, PDF export.
-     *
-     *   const card = Out.component('components/card.html', data);
-     *   const html = await card.output();
-     *   thirdPartyEditor.setContent(html);
-     *
-     *   // Or for simple Out types:
-     *   const html = await Out.html('<b>Hello</b>').output(); // → '<b>Hello</b>'
-     *
-     * Note: scripts inside components are NOT executed — output() is for HTML
-     * extraction only. For full mounting with reactivity, use render() instead.
      */
     async output() {
         const div = document.createElement('div');
@@ -485,9 +486,6 @@ class _LinkOut extends _Out {
 class _ComponentOut extends _Out {
     constructor(url, data = {}, lists = {}, options = {}) {
         super('component', url, options);
-        // Guard: url must be a string path. A common mistake is passing an _Out
-        // object here — e.g. Out.to('#el').component(Out.text('hello')) — which
-        // should be Out.to('#el').render(Out.text('hello')) instead.
         if (typeof url !== 'string') {
             console.warn(
                 '[oja/out] _ComponentOut received a non-string url:', url,
@@ -497,8 +495,6 @@ class _ComponentOut extends _Out {
         this._data       = data;
         this._lists      = lists;
         this._prefetched = false;
-        // options.vfs pins a specific VFS to this instance — no global side effect.
-        // When absent, _fetchHTML falls back to the globally registered _vfs.
         this._vfs = options.vfs !== undefined ? options.vfs : undefined;
     }
 
@@ -611,10 +607,6 @@ class _FnOut extends _Out {
             if (_Out.is(result)) {
                 await result.render(container, context);
             } else if (typeof result === 'function') {
-                // Returned function is a cleanup — register it as an onUnmount hook on the
-                // active component scope so it runs automatically when the component unmounts.
-                // component.onUnmount() reads _activeElement internally, which is set to the
-                // container during _ComponentOut.render() and Out.to().component() calls.
                 try {
                     const { component } = await import('./component.js');
                     if (component._activeElement) {
@@ -666,7 +658,6 @@ class _IfOut extends _Out {
         this._else = elseOut || new _EmptyOut();
     }
 
-    // Evaluate condition at render time — not reactive, stateless.
     async render(container, context = {}) {
         const branch = this._payload(context) ? this._then : this._else;
         await branch.render(container, context);
@@ -695,7 +686,6 @@ class _PromiseOut extends _Out {
         try {
             const value = await this._payload;
 
-            // success can be an Out directly, or a function that receives the resolved value
             const successOut = typeof this._success === 'function'
                 ? this._success(value)
                 : this._success;
@@ -719,7 +709,6 @@ class _ListOut extends _Out {
     constructor(items, itemFn, options = {}) {
         super('list', items, options);
         this._itemFn = itemFn;
-        // options.empty — Out to show when items is empty (defaults to Out.empty())
         this._emptyOut = options.empty || new _EmptyOut();
     }
 
@@ -733,7 +722,6 @@ class _ListOut extends _Out {
             return;
         }
 
-        // Keyed path — delegate to engine.listAsync for minimal DOM updates
         if (this._options.key) {
             const { listAsync } = await import('./engine.js');
             const itemFn = this._itemFn;
@@ -760,7 +748,6 @@ class _ListOut extends _Out {
             return;
         }
 
-        // Unkeyed fallback — existing full-rebuild path
         container.innerHTML = '';
 
         await Promise.all(items.map(async (item, index) => {
@@ -777,11 +764,38 @@ class _ListOut extends _Out {
     }
 }
 
+// ─── Skeleton generation helper ───────────────────────────────────────────────
+
+function _buildSkeletonHtml(type, opts) {
+    const lines = opts.lines || 3;
+    let html = '';
+
+    if (type === 'card') {
+        html = `<div class="oja-skel-row">
+                    <div class="oja-skel-avatar"></div>
+                    <div style="flex:1">
+                        <div class="oja-skel-title" style="margin-bottom:8px"></div>
+                        <div class="oja-skel-line"></div>
+                    </div>
+                </div>`;
+        for (let i = 0; i < lines; i++) html += `<div class="oja-skel-line"></div>`;
+    } else if (type === 'table') {
+        for (let i = 0; i < lines; i++) {
+            html += `<div class="oja-skel-row">
+                        <div class="oja-skel-line" style="margin-bottom:0"></div>
+                        <div class="oja-skel-line" style="margin-bottom:0"></div>
+                        <div class="oja-skel-line" style="margin-bottom:0"></div>
+                     </div>`;
+        }
+    } else {
+        for (let i = 0; i < lines; i++) html += `<div class="oja-skel-line"></div>`;
+    }
+
+    return `<div class="oja-skeleton-wrapper" aria-busy="true">${html}</div>`;
+}
 
 // ─── Fluent API: Out.to() ─────────────────────────────────────────────────────
 
-// OutTarget provides a fluent, chainable API for rendering content to DOM elements.
-// Each method returns `this` for chaining, except .to() which returns a new OutTarget.
 class OutTarget {
     constructor(target, options = {}) {
         this._target       = target;
@@ -791,7 +805,8 @@ class OutTarget {
         this._errorHandler = null;
         this._retryCount   = 0;
         this._condition    = null;
-        this._listeners    = [];
+        this._skeleton     = null;
+        this._listeners    =[];
     }
 
     _resolve() {
@@ -879,6 +894,11 @@ class OutTarget {
         return this;
     }
 
+    skeleton(type = 'text', options = {}) {
+        this._skeleton = { type, options };
+        return this;
+    }
+
     with(data) {
         this._context = _deepMerge(this._context, data);
         return this;
@@ -899,8 +919,6 @@ class OutTarget {
         return this;
     }
 
-    // Diff the container against newHtml and patch only what changed.
-    // Delegates to engine.morph() — preserves focus, scroll, and event listeners.
     morph(html) {
         const el = this._resolve();
         if (!el) return this;
@@ -908,9 +926,6 @@ class OutTarget {
         return this;
     }
 
-    // Bind this element to a store key for reactive text/html/class/attr updates.
-    // Named bindKey to avoid collision with the existing signal-based bind() method.
-    // type: 'text' | 'html' | 'class' | 'attr'  (default: 'text')
     bindKey(storeKey, type = 'text', transform) {
         const el = this._resolve();
         if (!el) return this;
@@ -921,8 +936,6 @@ class OutTarget {
         return this;
     }
 
-    // Set up a reactive binding — re-renders whenever the signal changes.
-    // signal must be an Oja reactive signal or any callable returning a value.
     bind(signal, renderFn) {
         const el = this._resolve();
         if (!el) return this;
@@ -993,10 +1006,6 @@ class OutTarget {
     }
 
     async render(out) {
-        // When called with an Out argument — Out.to('#el').render(Out.text('hello')) —
-        // treat it as a render-into-target call, matching the el.render(out) pattern
-        // on _renderable elements. This makes Out.to() and find() symmetric.
-        // When called with no argument, behaves as the original terminal await helper.
         if (_Out.is(out)) {
             this._render(out);
             if (this._pendingRender) await this._pendingRender;
@@ -1015,8 +1024,18 @@ class OutTarget {
 
         const doRender = async () => {
             try {
-                if (this._animation && el.firstChild) await this._applyAnimation(el, 'out');
+                // 1. Animate old content out (only if we aren't replacing it with a skeleton right now)
+                if (this._animation && el.firstChild && !this._skeleton) await this._applyAnimation(el, 'out');
+
+                // 2. Inject skeleton synchronously BEFORE awaiting the Out render
+                if (this._skeleton) {
+                    el.innerHTML = _buildSkeletonHtml(this._skeleton.type, this._skeleton.options);
+                }
+
+                // 3. Render new content (e.g. fetches happen inside here)
                 await out.render(el, this._context);
+
+                // 4. Animate new content in
                 if (this._animation) await this._applyAnimation(el, 'in');
             } catch (err) {
                 if (this._errorHandler) {
@@ -1163,6 +1182,10 @@ export const Out = {
                 return createTagHandler(target).apply(outTarget, args);
             }
         });
+    },
+
+    skeleton(target, type = 'text', options = {}) {
+        return this.to(target).skeleton(type, options);
     },
 
     component(url, data = {}, lists = {}, options = {}) {
