@@ -148,3 +148,26 @@ globalThis.indexedDB = {
         return req;
     },
 };
+
+// ─── LocalStorage / SessionStorage Shim (Node 22 support) ──────────────────────
+
+const mockStorage = () => {
+    let store = new Map();
+    return {
+        getItem: (k) => store.has(k) ? store.get(k) : null,
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+        clear: () => store.clear(),
+        get length() { return store.size; },
+        key: (i) => Array.from(store.keys())[i] || null
+    };
+};
+
+// Node 22 introduces a native localStorage that breaks if --localstorage-file is not provided.
+// This overrides it so Vitest environments don't throw `TypeError: setItem is not a function`.
+if (typeof globalThis.localStorage === 'undefined' || !globalThis.localStorage.setItem) {
+    Object.defineProperty(globalThis, 'localStorage', { value: mockStorage(), writable: true });
+}
+if (typeof globalThis.sessionStorage === 'undefined' || !globalThis.sessionStorage.setItem) {
+    Object.defineProperty(globalThis, 'sessionStorage', { value: mockStorage(), writable: true });
+}
