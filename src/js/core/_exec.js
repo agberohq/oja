@@ -102,7 +102,8 @@ export function execScripts(container, sourceUrl, propsData = {}) {
             if (!declares('container')) picks.push('container');
             if (!declares('find'))      picks.push('find');
             if (!declares('findAll'))   picks.push('findAll');
-            picks.push('props'); // props is Oja-specific — always injected
+            picks.push('props');          // props is Oja-specific — always injected
+            picks.push('__oja_ready__'); // slot completion signal
 
             // The key is read once and immediately deleted. Module scripts execute
             // synchronously until their first await, so the delete on line 2 always
@@ -118,13 +119,35 @@ export function execScripts(container, sourceUrl, propsData = {}) {
             next.src  = blobUrl;
             next.type = 'module';
 
+            // Use a ready-signal channel instead of the load event.
+            // The load event fires when the <script> element loads — not when
+            // the module's async body (imports, top-level awaits) completes.
+            // We inject __oja_ready__ into the module scope; the module calls
+            // it as the last statement of its setup, guaranteeing all listeners
+            // and effects are registered before the caller proceeds.
             const p = new Promise((resolve) => {
                 const revoke = () => URL.revokeObjectURL(blobUrl);
-                next.addEventListener('load',  () => { revoke(); resolve(); }, { once: true });
+                window[scopeKey].__oja_ready__ = () => { revoke(); resolve(); };
+
+                // Fallback: if the module never calls __oja_ready__ (e.g. it has
+                // no top-level async, or an older slot without the call), the load
+                // event still resolves us — it just means we may resolve slightly early.
+                next.addEventListener('load', () => {
+                    // Give the module one microtask tick to call __oja_ready__
+                    // synchronously before we fall back to load-event resolution.
+                    Promise.resolve().then(() => {
+                        if (window[scopeKey]?.__oja_ready__) {
+                            // Module didn't call it yet — fall back to load timing
+                            revoke();
+                            resolve();
+                        }
+                    });
+                }, { once: true });
+
                 next.addEventListener('error', (e) => {
                     console.error('[oja/_exec] module script failed in:', sourceUrl, e);
                     revoke();
-                    resolve(); // resolve, not reject — broken component should not block caller
+                    resolve();
                 }, { once: true });
             });
 
