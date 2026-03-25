@@ -123,6 +123,19 @@ export const auth = {
      *
      *   app.Use(auth.middleware('protected', '/login'));
      */
+    /**
+     * Returns a router middleware function for a named protection level.
+     *
+     * The second argument can now be a callback (for modal-based login flows)
+     * in addition to a redirect path string.
+     *
+     *   // Classic redirect (unchanged)
+     *   app.Use(auth.middleware('protected', '/login'));
+     *
+     *   // Modal-based login — pass a callback instead of a path
+     *   app.Use(auth.middleware('protected', () => modal.open('loginModal')));
+     *   app.Use(auth.middleware('protected', { onFail: () => modal.open('loginModal') }));
+     */
     middleware(levelName, redirectTo = '/login') {
         return async (ctx, next) => {
             const check = _levels.get(levelName);
@@ -135,7 +148,15 @@ export const auth = {
             if (!check()) {
                 _metaStore.set('intendedPath',   ctx.path);
                 _metaStore.set('intendedParams', ctx.params);
-                ctx.redirect(redirectTo);
+
+                // support callback or { onFail } object as redirect target
+                if (typeof redirectTo === 'function') {
+                    redirectTo();
+                } else if (redirectTo && typeof redirectTo === 'object' && typeof redirectTo.onFail === 'function') {
+                    redirectTo.onFail(ctx);
+                } else {
+                    ctx.redirect(redirectTo);
+                }
                 return;
             }
 
@@ -191,20 +212,55 @@ export const auth = {
          *
          *   await auth.session.start(jwt);
          */
-        async start(token, refreshToken = null) {
+        /**
+         * Start a session with a JWT, opaque token, or Basic auth credential.
+         *
+         * The third argument `sessionOptions` allows non-JWT tokens to
+         * specify an expiry or opt out of expiry entirely (e.g. Basic auth):
+         *
+         *   // JWT — expiry auto-detected from payload.exp (unchanged)
+         *   await auth.session.start(jwt);
+         *
+         *   // Opaque token with explicit expiry
+         *   await auth.session.start(opaqueToken, null, { expires: Date.now() + 8 * 3600_000 });
+         *
+         *   // Basic auth / no expiry — isActive() returns true while token present
+         *   await auth.session.start(basicToken, null, { expires: null });
+         */
+        async start(token, refreshToken = null, sessionOptions = {}) {
             await _tokenStore.set('token', token);
             if (refreshToken) {
                 await _tokenStore.set('refresh_token', refreshToken);
             }
             _metaStore.set('startedAt', Date.now());
 
+            // Determine expiry — JWT payload takes priority, then explicit
+            // sessionOptions.expires, then undefined (no expiry = never expires).
             const payload = _decodeJWT(token);
+
             if (payload?.exp) {
+                // Standard JWT with exp claim
                 const expMs = payload.exp * 1000;
                 _metaStore.set('exp', expMs);
+                _metaStore.set('payload', payload);
                 _startExpiryWatch(expMs);
                 _startRefreshWatch(expMs);
+            } else if (sessionOptions.expires !== undefined) {
+                if (sessionOptions.expires === null) {
+                    // Explicit no-expiry (Basic auth, long-lived tokens)
+                    // Store a sentinel so isActive() knows a session is live
+                    _metaStore.set('exp', 'no-expiry');
+                } else {
+                    // Explicit timestamp
+                    const expMs = sessionOptions.expires;
+                    _metaStore.set('exp', expMs);
+                    _startExpiryWatch(expMs);
+                    _startRefreshWatch(expMs);
+                }
             }
+            // If no exp and no sessionOptions.expires: session is present but
+            // isActive() will return false (original behaviour preserved for
+            // callers who relied on that — they can pass { expires: null } to opt in).
 
             emit('auth:start', { token });
             _runHooks('start', token, refreshToken);
@@ -217,7 +273,7 @@ export const auth = {
             _stopAllTimers();
             await _tokenStore.clear('token');
             await _tokenStore.clear('refresh_token');
-            _metaStore.clear('exp');
+            _metaStore.clear('exp');        // clears both numeric and 'no-expiry'
             _metaStore.clear('startedAt');
             _metaStore.clear('payload');
             emit('auth:end');
@@ -253,9 +309,14 @@ export const auth = {
          * Is a session currently active?
          * Checks that a session was started (exp exists in meta) and has not expired.
          */
+        // isActive() now handles three cases:
+        //   1. JWT with exp claim    → check timestamp
+        //   2. 'no-expiry' sentinel  → true while token is stored
+        //   3. No exp at all         → false (original behaviour)
         isActive() {
             const exp = _metaStore.get('exp');
             if (!exp) return false;
+            if (exp === 'no-expiry') return true; // A-05: explicit no-expiry
             if (Date.now() >= exp) return false;
             return true;
         },
