@@ -154,6 +154,7 @@ function _getAllFocusable(container) {
 
 const _stack = [];
 const _hooks = new Map();
+const _closeGuards = new Map();
 let   _backdrop = null;
 
 // ─── Accessibility helpers ────────────────────────────────────────────────────
@@ -203,6 +204,16 @@ function _announce(message) {
 // A second call before the first resolves dismisses the previous one gracefully.
 const _pendingConfirms = new Map();
 
+
+// ─── Internal render helper ───────────────────────────────────────────────────
+// Used by modal.open() to render a body Out and return its completion promise.
+class _ModalOutTarget {
+    constructor(el) { this._el = el; }
+    _renderAsync(out, context) {
+        return out.render ? out.render(this._el, context) : Promise.resolve();
+    }
+}
+
 export const modal = {
 
     /**
@@ -214,12 +225,17 @@ export const modal = {
         const el = document.getElementById(id);
         if (!el) {
             console.warn(`[oja/modal] element not found: #${id}`);
-            return;
+            return Promise.resolve(null);
         }
 
         _setAriaHidden(el, false);
         _stack.push({ id, data, element: el });
         el.classList.add('active');
+
+        if (data.size) {
+            const inner = el.querySelector('.modal') || el;
+            inner.classList.add(`oja-modal-${data.size}`);
+        }
 
         const focusable = _getAllFocusable(el);
 
@@ -247,11 +263,16 @@ export const modal = {
             _hideSiblingsFromAT(el);
         }
 
+        // Render body content and collect any async render promise
+        let _renderPromise = null;
+
         if (data.body && Out.is(data.body)) {
             const bodyEl = el.querySelector('[data-modal-body]');
-            if (bodyEl) data.body.render(bodyEl, data);
+            if (bodyEl) {
+                const out = new _ModalOutTarget(bodyEl);
+                _renderPromise = out._renderAsync(data.body, data);
+            }
         } else if (typeof data.body === 'string') {
-            // Convenience: plain HTML strings are auto-wrapped as Out.html()
             const bodyEl = el.querySelector('[data-modal-body]');
             if (bodyEl) Out.html(data.body).render(bodyEl, data);
         }
@@ -270,7 +291,11 @@ export const modal = {
         emit('modal:open', { id, data });
         _announce(`Opened ${el.getAttribute('aria-label') || id}`);
 
-        return this;
+        // Return Promise<Element> resolving once body
+        // has rendered. Eliminates setTimeout(50)+getElementById workaround.
+        // Usage: const el = await modal.open('id', { body: Out.html('...') });
+        if (_renderPromise) return _renderPromise.then(() => el);
+        return Promise.resolve(el);
     },
 
     /** Alias for open() — semantic for drawer stacks. */
@@ -279,8 +304,22 @@ export const modal = {
     /**
      * Close the top-most modal/drawer on the stack.
      */
-    close() {
+    async close() {
         if (_stack.length === 0) return;
+
+        // Run close guards — if any return false, cancel the close
+        const top = _stack[_stack.length - 1];
+        const guards = _closeGuards.get(top.id);
+        if (guards?.size) {
+            for (const guard of guards) {
+                try {
+                    const result = await guard();
+                    if (result === false) return this;
+                } catch (e) {
+                    console.warn(`[oja/modal] beforeClose guard error:`, e);
+                }
+            }
+        }
 
         const { id, element } = _stack.pop();
         element.classList.remove('active');
@@ -436,6 +475,119 @@ export const modal = {
         });
     },
 
+    // ─── Prompt helper ───────────────────────────────────────────────────────
+
+    /**
+     * Programmatic input prompt dialog.
+     * Returns a Promise resolving to the entered string, or null if cancelled.
+     *
+     *   const name = await modal.prompt('Rename note', {
+     *       default: meta.title,
+     *       placeholder: 'Note name',
+     *       confirm: 'Rename',
+     *   });
+     *   if (name) renameNote(id, name);
+     *
+     * Requires a #promptModal in the HTML with:
+     *   <p data-modal-field="message"></p>
+     *   <input data-prompt-input>
+     *   <button data-prompt-ok>OK</button>
+     *   <button data-prompt-cancel>Cancel</button>
+     *
+     * Alternatively, if no #promptModal exists, modal.prompt() injects a
+     * temporary one automatically — zero HTML required.
+     */
+    prompt(message, options = {}) {
+        const {
+            modalId     = 'promptModal',
+            default: defaultValue = '',
+            placeholder = '',
+            confirm     = 'OK',
+            cancel      = 'Cancel',
+        } = options;
+
+        return new Promise(resolve => {
+            let el = document.getElementById(modalId);
+            let _injected = false;
+
+            // Auto-inject a minimal prompt modal if none exists in the HTML
+            if (!el) {
+                _injected = true;
+                el = document.createElement('div');
+                el.id = modalId;
+                el.className = 'modal-overlay';
+                el.setAttribute('role', 'dialog');
+                el.setAttribute('aria-modal', 'true');
+                el.innerHTML = `
+                    <div class="modal" style="min-width:300px;max-width:480px">
+                        <p data-modal-field="message" style="margin-bottom:12px;font-weight:500"></p>
+                        <input data-prompt-input class="modal-input" style="width:100%;margin-bottom:12px;padding:8px 10px;border:1px solid var(--border,#444);border-radius:4px;background:var(--bg-input,#1a1a1a);color:var(--text-primary,#eee);font-size:13px">
+                        <div style="display:flex;gap:8px;justify-content:flex-end">
+                            <button data-prompt-cancel class="btn-ghost">${_esc(cancel)}</button>
+                            <button data-prompt-ok class="btn-primary">${_esc(confirm)}</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(el);
+            }
+
+            const done = (value) => {
+                resolve(value);
+                if (_injected) {
+                    modal.closeById(modalId);
+                    setTimeout(() => el.remove(), 300);
+                } else {
+                    modal.closeById(modalId);
+                }
+            };
+
+            modal.open(modalId, { message }).then(() => {
+                const input  = el.querySelector('[data-prompt-input]');
+                const ok     = el.querySelector('[data-prompt-ok]');
+                const cancelBtn = el.querySelector('[data-prompt-cancel]');
+
+                if (input) {
+                    input.value = defaultValue;
+                    if (placeholder) input.placeholder = placeholder;
+                    input.focus();
+                    input.select();
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter')  { e.preventDefault(); done(input.value.trim() || null); }
+                        if (e.key === 'Escape') { e.preventDefault(); done(null); }
+                    }, { once: false });
+                }
+
+                ok?.addEventListener('click',     () => done(input ? input.value.trim() || null : null), { once: true });
+                cancelBtn?.addEventListener('click', () => done(null), { once: true });
+
+                const unsub = listen('modal:close', ({ id: closedId }) => {
+                    if (closedId === modalId) { unsub(); resolve(null); }
+                });
+            });
+        });
+    },
+
+    // ─── Before-close guard ───────────────────────────────────────────────────
+
+    /**
+     * Register a guard function called before a modal closes.
+     * If the guard returns false (or a Promise resolving to false), the close
+     * is cancelled. Use for unsaved-form warnings.
+     *
+     *   modal.beforeClose('editModal', async () => {
+     *       if (form.isDirty('#editForm')) {
+     *           return await modal.confirm('Discard unsaved changes?');
+     *       }
+     *       return true;
+     *   });
+     *
+     * Returns an unsubscribe function.
+     */
+    beforeClose(id, guardFn) {
+        if (!_closeGuards.has(id)) _closeGuards.set(id, new Set());
+        _closeGuards.get(id).add(guardFn);
+        return () => _closeGuards.get(id)?.delete(guardFn);
+    },
+
     // ─── Accessibility utilities ──────────────────────────────────────────────
 
     getFocusable(id) {
@@ -450,6 +602,16 @@ export const modal = {
         target?.focus();
     },
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function _esc(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 
 // ─── Keyboard and event wiring ────────────────────────────────────────────────
 
