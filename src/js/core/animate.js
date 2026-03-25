@@ -863,6 +863,204 @@ export const animate = {
      */
     easing: EASINGS,
 
+
+    // ─── collapse / expand ──────────────────────────────────────────────
+
+    /**
+     * F-38: Animate an element's height to 0 (collapse).
+     * CSS cannot transition height:auto — this measures first then animates.
+     * Sets display:none after completing so the element is fully hidden.
+     *
+     *   await animate.collapse('#panel');
+     *   await animate.collapse('#panel', { duration: 200, easing: 'ease' });
+     */
+    async collapse(element, options = {}) {
+        const el = typeof element === 'string' ? document.querySelector(element) : element;
+        if (!el || el.style.display === 'none') return;
+
+        const { duration = 250, easing = 'ease' } = options;
+        const currentHeight = el.scrollHeight;
+
+        el.style.overflow = 'hidden';
+        el.style.height   = currentHeight + 'px';
+
+        await new Promise(resolve => {
+            requestAnimationFrame(() => {
+                el.style.transition = `height ${duration}ms ${easing}`;
+                el.style.height     = '0px';
+
+                const done = () => {
+                    el.style.display    = 'none';
+                    el.style.height     = '';
+                    el.style.overflow   = '';
+                    el.style.transition = '';
+                    resolve();
+                };
+
+                el.addEventListener('transitionend', done, { once: true });
+                setTimeout(done, duration + 50); // fallback
+            });
+        });
+    },
+
+    /**
+     * Animate an element's height from 0 to its natural height (expand).
+     * Counterpart to animate.collapse().
+     *
+     *   await animate.expand('#panel');
+     */
+    async expand(element, options = {}) {
+        const el = typeof element === 'string' ? document.querySelector(element) : element;
+        if (!el) return;
+
+        const { duration = 250, easing = 'ease' } = options;
+
+        el.style.display  = '';
+        el.style.overflow = 'hidden';
+        el.style.height   = '0px';
+
+        const targetHeight = el.scrollHeight;
+
+        await new Promise(resolve => {
+            requestAnimationFrame(() => {
+                el.style.transition = `height ${duration}ms ${easing}`;
+                el.style.height     = targetHeight + 'px';
+
+                const done = () => {
+                    el.style.height     = '';
+                    el.style.overflow   = '';
+                    el.style.transition = '';
+                    resolve();
+                };
+
+                el.addEventListener('transitionend', done, { once: true });
+                setTimeout(done, duration + 50); // fallback
+            });
+        });
+    },
+
+    // ─── F-39: countUp ────────────────────────────────────────────────────────
+
+    /**
+     * Animate a number from `from` to `to` inside an element.
+     *
+     *   animate.countUp('#stat', 0, 1247, { duration: 1200, decimals: 0 });
+     *   animate.countUp('#stat', 0, 9.99, { decimals: 2, prefix: '$' });
+     */
+    countUp(element, from, to, options = {}) {
+        const el = typeof element === 'string' ? document.querySelector(element) : element;
+        if (!el) return null;
+
+        const {
+            duration = 1000,
+            decimals = 0,
+            prefix   = '',
+            suffix   = '',
+            easing   = 'ease-out',
+        } = options;
+
+        const easeFn = typeof easing === 'function'
+            ? easing
+            : (EASINGS[easing] || EASINGS['ease-out']);
+
+        const startTime = performance.now();
+        let rafId;
+
+        // Set initial value synchronously so callers see it immediately
+        el.textContent = prefix + from.toFixed(decimals) + suffix;
+
+        const tick = (now) => {
+            const elapsed  = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const value    = from + (to - from) * easeFn(progress);
+
+            el.textContent = prefix + value.toFixed(decimals) + suffix;
+
+            if (progress < 1) { rafId = requestAnimationFrame(tick); }
+        };
+
+        rafId = requestAnimationFrame(tick);
+
+        return { stop: () => cancelAnimationFrame(rafId) };
+    },
+
+    // ─── typewriter ─────────────────────────────────────────────────────
+
+    /**
+     * Type text into an element character by character.
+     *
+     *   animate.typewriter('#headline', 'Welcome to Oja.', { speed: 40 });
+     *   Returns { stop, promise } — stop() halts mid-type, promise resolves on finish.
+     */
+    typewriter(element, text, options = {}) {
+        const el = typeof element === 'string' ? document.querySelector(element) : element;
+        if (!el) return { stop: () => {}, promise: Promise.resolve() };
+
+        const { speed = 50, cursor = true, cursorChar = '|' } = options;
+
+        let i = 0;
+        let stopped = false;
+        let timerId;
+
+        const promise = new Promise(resolve => {
+            if (cursor) el.textContent = cursorChar;
+
+            const tick = () => {
+                if (stopped) { resolve(); return; }
+                el.textContent = text.slice(0, i) + (cursor && i < text.length ? cursorChar : '');
+                i++;
+                if (i > text.length) {
+                    if (cursor) setTimeout(() => { el.textContent = text; }, speed * 3);
+                    resolve();
+                } else {
+                    timerId = setTimeout(tick, speed);
+                }
+            };
+
+            timerId = setTimeout(tick, speed);
+        });
+
+        return {
+            stop: () => { stopped = true; clearTimeout(timerId); el.textContent = text; },
+            promise,
+        };
+    },
+
+    // ─── F-41: shake ──────────────────────────────────────────────────────────
+
+    /**
+     * Quick horizontal shake for error feedback.
+     *
+     *   animate.shake('#save-btn');
+     *   animate.shake('#field', { intensity: 8, duration: 400 });
+     */
+    shake(element, options = {}) {
+        const el = typeof element === 'string' ? document.querySelector(element) : element;
+        if (!el) return Promise.resolve();
+
+        const { intensity = 6, duration = 300, count = 3 } = options;
+
+        return new Promise(resolve => {
+            const keyframes = [
+                { transform: 'translateX(0)' },
+                ...Array.from({ length: count * 2 }, (_, i) => ({
+                    transform: `translateX(${i % 2 === 0 ? intensity : -intensity}px)`
+                })),
+                { transform: 'translateX(0)' },
+            ];
+
+            if (el.animate) {
+                const anim = el.animate(keyframes, { duration, easing: 'ease-in-out' });
+                anim.onfinish = resolve;
+                anim.oncancel = resolve;
+            } else {
+                // Fallback: CSS class-based shake
+                el.style.animation = `oja-shake ${duration}ms ease-in-out`;
+                setTimeout(() => { el.style.animation = ''; resolve(); }, duration);
+            }
+        });
+    },
+
     /**
      * Stop all active animations on an element.
      *
