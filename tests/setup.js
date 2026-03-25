@@ -193,3 +193,63 @@ Object.defineProperty(globalThis, 'sessionStorage', {
     writable: true,
     configurable: true,
 });
+// ─── Module script execution shim for _exec.js tests ─────────────────────────
+// jsdom cannot execute blob: URL module scripts — setting script.src to a
+// blob: URL does nothing and the load event never fires. This causes all
+// _exec.js tests to timeout waiting for Promise resolution.
+//
+// This shim intercepts document.createElement('script'), and when .src is
+// set to a blob:shim-* URL (created by our URL.createObjectURL shim above),
+// it:
+//   1. Retrieves the source text from _blobSources
+//   2. Evaluates it via new Function so __oja_ready__ and window vars work
+//   3. Dispatches the load event on the next microtask
+//
+// This faithfully reproduces the _exec.js execution model:
+//   - preamble runs synchronously (destructures + deletes window[scopeKey])
+//   - script body runs synchronously until first await
+//   - load event fires after execution, just like a real browser
+
+const _nativeCreateElement = document.createElement.bind(document);
+
+document.createElement = function(tag, options) {
+    const el = _nativeCreateElement(tag, options);
+    if (tag.toLowerCase() !== 'script') return el;
+
+    // Intercept .src assignment on script elements
+    let _src = '';
+    Object.defineProperty(el, 'src', {
+        get() { return _src; },
+        set(url) {
+            _src = url;
+            if (!url.startsWith('blob:shim-')) return;
+
+            const source = _blobSources.get(url);
+            if (source === undefined) return;
+
+            // Execute synchronously on next microtask — matches browser behaviour
+            // where module scripts execute after the current task completes.
+            queueMicrotask(() => {
+                try {
+                    // Use Function constructor to evaluate in a scope where
+                    // window globals (including window[scopeKey]) are accessible.
+                    // We wrap in an async IIFE to support top-level await syntax.
+                    const fn = new Function(source);
+                    const result = fn();
+                    // If the script is async, wait for it before firing load
+                    if (result && typeof result.then === 'function') {
+                        result.then(() => el.dispatchEvent(new Event('load')))
+                            .catch(() => el.dispatchEvent(new Event('error')));
+                    } else {
+                        el.dispatchEvent(new Event('load'));
+                    }
+                } catch (err) {
+                    el.dispatchEvent(Object.assign(new Event('error'), { error: err }));
+                }
+            });
+        },
+        configurable: true,
+    });
+
+    return el;
+};
