@@ -870,6 +870,18 @@ class OutTarget {
         return this;
     }
 
+    /**
+     * Set render mode — 'replace' (default), 'append', or 'prepend'.
+     * When 'append' or 'prepend', new content is added without clearing existing.
+     *
+     *   Out.to('#feed').mode('append').component('post.html', newPost)
+     *   Out.to('#log').mode('prepend').html('<li>New entry</li>')
+     */
+    mode(renderMode) {
+        this._renderMode = renderMode; // 'replace' | 'append' | 'prepend'
+        return this;
+    }
+
     segment(name, data = {}) {
         if (!this._condition || this._condition()) {
             const mergedData = { ...this._context, ...data };
@@ -911,6 +923,41 @@ class OutTarget {
     when(conditionFn) {
         this._condition = conditionFn;
         return this;
+    }
+
+    /**
+     * Re-invoke an Out factory on a timer, replacing content each tick.
+     * Returns a handle with .stop(). Automatically clears on component unmount
+     * via the component scope hook.
+     *
+     *   Out.to('#stats').poll(() => Out.fn(fetchStats), 5000);
+     *
+     * @param {Function} outFn   — () => Out  — called each tick
+     * @param {number}   intervalMs — milliseconds between updates
+     */
+    poll(outFn, intervalMs = 5000) {
+        if (typeof outFn !== 'function') {
+            console.warn('[oja/out] poll() requires a factory function () => Out');
+            return this;
+        }
+
+        // Render immediately
+        const out = outFn();
+        if (_Out.is(out)) this._render(out);
+
+        const id = setInterval(() => {
+            const next = outFn();
+            if (_Out.is(next)) this._render(next);
+        }, intervalMs);
+
+        const stop = () => clearInterval(id);
+
+        // Register with component scope for auto-cleanup on unmount
+        // (_registerWithActiveComponent is imported at module level in events.js)
+        try { _registerWithActiveComponent?.(stop); } catch {}
+
+        this._pollStop = stop;
+        return { stop, target: this };
     }
 
     onError(handler) {
@@ -1001,6 +1048,70 @@ class OutTarget {
         return this;
     }
 
+    // DOM helpers ───────────────────────────────────────────────────────
+    // Pure element manipulation — no rendering involved. All return this.
+
+    /** Show the element (restore display). */
+    show() {
+        const el = this._resolve();
+        if (el) el.style.display = '';
+        return this;
+    }
+
+    /** Hide the element (display:none). */
+    hide() {
+        const el = this._resolve();
+        if (el) el.style.display = 'none';
+        return this;
+    }
+
+    /** Toggle visibility. Pass force=true/false to set explicitly. */
+    toggle(force) {
+        const el = this._resolve();
+        if (!el) return this;
+        const isHidden = getComputedStyle(el).display === 'none';
+        const shouldShow = force !== undefined ? force : isHidden;
+        el.style.display = shouldShow ? '' : 'none';
+        return this;
+    }
+
+    /** Add one or more CSS classes. */
+    addClass(...classes) {
+        const el = this._resolve();
+        if (el) el.classList.add(...classes.flat());
+        return this;
+    }
+
+    /** Remove one or more CSS classes. */
+    removeClass(...classes) {
+        const el = this._resolve();
+        if (el) el.classList.remove(...classes.flat());
+        return this;
+    }
+
+    /** Toggle a CSS class. Pass force=true/false to set explicitly. */
+    toggleClass(cls, force) {
+        const el = this._resolve();
+        if (el) el.classList.toggle(cls, force);
+        return this;
+    }
+
+    /** Set or remove an attribute. Pass null/undefined value to remove. */
+    attr(name, value) {
+        const el = this._resolve();
+        if (!el) return this;
+        if (value === null || value === undefined) el.removeAttribute(name);
+        else el.setAttribute(name, String(value));
+        return this;
+    }
+
+    /** Apply inline styles from a plain object. */
+    css(styles) {
+        const el = this._resolve();
+        if (el) Object.assign(el.style, styles);
+        return this;
+    }
+
     to(target) {
         this._flush();
         return new OutTarget(target, { context: this._context });
@@ -1038,7 +1149,18 @@ class OutTarget {
                 }
 
                 // 3. Render new content (e.g. fetches happen inside here)
-                await out.render(el, this._context);
+                // honour render mode
+                if (this._renderMode === 'append' || this._renderMode === 'prepend') {
+                    const tmp = document.createElement('div');
+                    await out.render(tmp, this._context);
+                    if (this._renderMode === 'append') {
+                        while (tmp.firstChild) el.appendChild(tmp.firstChild);
+                    } else {
+                        while (tmp.lastChild) el.insertBefore(tmp.lastChild, el.firstChild);
+                    }
+                } else {
+                    await out.render(el, this._context);
+                }
 
                 // 4. Animate new content in
                 if (this._animation) await this._applyAnimation(el, 'in');
@@ -1177,16 +1299,28 @@ export const Out = {
         // Dummy function — gives the Proxy a callable target so the `apply`
         // trap fires when the result is used as a tagged template tag.
         const fn = function() {};
-        return new Proxy(fn, {
+        const proxy = new Proxy(fn, {
             get(_fn, prop) {
                 if (prop === Symbol.for('nodejs.util.promisify.custom')) return undefined;
                 const val = outTarget[prop];
-                return typeof val === 'function' ? val.bind(outTarget) : val;
+                if (typeof val === 'function') {
+                    return function(...args) {
+                        const result = val.apply(outTarget, args);
+                        // If the method returned the OutTarget (chaining), return
+                        // the Proxy instead so callers get a consistent reference.
+                        return result === outTarget ? proxy : result;
+                    };
+                }
+                return val;
+            },
+            has(_fn, prop) {
+                return prop in outTarget;
             },
             apply(_fn, _thisArg, args) {
                 return createTagHandler(target).apply(outTarget, args);
             }
         });
+        return proxy;
     },
 
     skeleton(target, type = 'text', options = {}) {
@@ -1266,6 +1400,141 @@ export const Out = {
 
     is(value) {
         return value instanceof _Out;
+    },
+
+    /**
+     * Zero-dependency inline SVG sparkline.
+     * No CDN required — pure SVG path computed from values array.
+     *
+     *   Out.sparkline([12, 45, 23, 67, 34, 89], { color: '#00c770', height: 40 })
+     *
+     * @param {number[]} values
+     * @param {Object}   options
+     *   color   : string  — stroke colour (default: 'var(--accent, #4f8ef7)')
+     *   height  : number  — SVG height in px (default: 40)
+     *   width   : number  — SVG width in px (default: 120)
+     *   fill    : boolean — filled area under the line (default: false)
+     *   strokeWidth : number — line thickness (default: 1.5)
+     */
+    sparkline(values, options = {}) {
+        return new _FnOut(async (container) => {
+            const {
+                color       = 'var(--accent, #4f8ef7)',
+                height      = 40,
+                width       = 120,
+                fill        = false,
+                strokeWidth = 1.5,
+            } = options;
+
+            if (!values || values.length < 2) { container.innerHTML = ''; return; }
+
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || 1;
+            const pad = strokeWidth;
+            const W = width - pad * 2;
+            const H = height - pad * 2;
+
+            const pts = values.map((v, i) => {
+                const x = pad + (i / (values.length - 1)) * W;
+                const y = pad + H - ((v - min) / range) * H;
+                return `${x},${y}`;
+            });
+
+            const polyline = pts.join(' ');
+            const fillPath = fill
+                ? `<polygon points="${polyline} ${pad + W},${pad + H} ${pad},${pad + H}"
+                    fill="${color}" fill-opacity="0.15"/>`
+                : '';
+
+            container.innerHTML = `<svg viewBox="0 0 ${width} ${height}"
+                xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"
+                style="display:block;overflow:visible">
+                ${fillPath}
+                <polyline points="${polyline}"
+                    fill="none" stroke="${color}" stroke-width="${strokeWidth}"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+        });
+    },
+
+    /**
+     * Zero-dependency inline SVG time-series line chart.
+     * Supports multiple series, axis labels, and tooltips on hover.
+     *
+     *   Out.timeSeries([
+     *       { label: 'HTTP', values: [12, 45, 23], color: '#4f8ef7' },
+     *       { label: 'TCP',  values: [5,  12, 8],  color: '#00c770' },
+     *   ], { height: 120, timestamps: ['00:00','00:01','00:02'] })
+     */
+    timeSeries(series, options = {}) {
+        return new _FnOut(async (container) => {
+            const {
+                height      = 120,
+                width       = 300,
+                strokeWidth = 1.5,
+                timestamps  = [],
+                showGrid    = true,
+                gridLines   = 4,
+            } = options;
+
+            if (!series?.length) { container.innerHTML = ''; return; }
+
+            const allValues = series.flatMap(s => s.values || []);
+            if (!allValues.length) { container.innerHTML = ''; return; }
+
+            const min = Math.min(...allValues);
+            const max = Math.max(...allValues);
+            const range = max - min || 1;
+            const padL = 32, padR = 8, padT = 8, padB = timestamps.length ? 20 : 8;
+            const W = width - padL - padR;
+            const H = height - padT - padB;
+
+            const maxLen = Math.max(...series.map(s => s.values?.length || 0));
+
+            let svgContent = '';
+
+            // Grid lines
+            if (showGrid) {
+                for (let i = 0; i <= gridLines; i++) {
+                    const y = padT + (i / gridLines) * H;
+                    const val = max - (i / gridLines) * range;
+                    svgContent += `<line x1="${padL}" y1="${y}" x2="${padL + W}" y2="${y}"
+                        stroke="var(--border,#333)" stroke-width="0.5" stroke-dasharray="2,3"/>
+                        <text x="${padL - 4}" y="${y + 4}" text-anchor="end"
+                        font-size="8" fill="var(--text-muted,#666)">${Math.round(val)}</text>`;
+                }
+            }
+
+            // X-axis labels
+            if (timestamps.length) {
+                const step = Math.max(1, Math.floor(timestamps.length / 5));
+                timestamps.forEach((t, i) => {
+                    if (i % step !== 0 && i !== timestamps.length - 1) return;
+                    const x = padL + (i / (maxLen - 1 || 1)) * W;
+                    svgContent += `<text x="${x}" y="${padT + H + 14}" text-anchor="middle"
+                        font-size="8" fill="var(--text-muted,#666)">${t}</text>`;
+                });
+            }
+
+            // Series lines
+            for (const s of series) {
+                const vals = s.values || [];
+                if (vals.length < 2) continue;
+                const color = s.color || 'var(--accent,#4f8ef7)';
+                const pts = vals.map((v, i) => {
+                    const x = padL + (i / (vals.length - 1)) * W;
+                    const y = padT + H - ((v - min) / range) * H;
+                    return `${x.toFixed(1)},${y.toFixed(1)}`;
+                }).join(' ');
+                svgContent += `<polyline points="${pts}" fill="none" stroke="${color}"
+                    stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+            }
+
+            container.innerHTML = `<svg viewBox="0 0 ${width} ${height}"
+                xmlns="http://www.w3.org/2000/svg" width="100%" height="${height}"
+                style="display:block;overflow:visible">${svgContent}</svg>`;
+        });
     },
 
     async prefetchAll(outs, options = {}) {
