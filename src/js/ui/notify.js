@@ -78,6 +78,9 @@ const TYPES = {
     info    : { cls: 'oja-toast-info',    icon: 'ℹ', role: 'status',  live: 'polite'   },
 };
 
+// Runtime config (max stack, default duration override, etc.)
+let _config = { max: 0 }; // max: 0 = unlimited
+
 const DEFAULTS = {
     duration    : 4000,
     dismissible : true,
@@ -100,7 +103,21 @@ export const notify = {
      *
      *   notify.show(Out.h('<strong>Deploy</strong> complete — 3 hosts'));
      */
-    show(responder, options = {}) {
+    /**
+     * Show an Out as a toast — for rich content.
+     * Also accepts notify.show(message, type) legacy two-arg form (A-06 compat).
+     *
+     *   notify.show(Out.h('<strong>Deploy</strong> complete'));
+     *   notify.show('Copied', 'success');   // legacy — still works
+     */
+    show(responder, optionsOrType = {}) {
+        // A-06 backwards compat: notify.show('msg', 'success') old two-arg API
+        if (typeof responder === 'string' && typeof optionsOrType === 'string') {
+            const type = ['success','error','warn','info'].includes(optionsOrType)
+                ? optionsOrType : 'info';
+            return _show(type, responder, {});
+        }
+        const options = typeof optionsOrType === 'object' ? optionsOrType : {};
         if (!Out.is(responder)) return _show('info', String(responder), options);
         return _showResponder(responder, options);
     },
@@ -224,11 +241,60 @@ export const notify = {
         return this;
     },
 
+    /**
+     * Configure global notify behaviour.
+     *
+     *   notify.config({ max: 4 });          // show at most 4 toasts at once
+     *   notify.config({ max: 0 });          // unlimited (default)
+     */
+    config(options = {}) {
+        _config = { ..._config, ...options };
+        return this;
+    },
+
     // ─── Dismiss ──────────────────────────────────────────────────────────────
 
     /** Dismiss all visible toasts immediately. */
     dismissAll() {
         _container?.querySelectorAll('.oja-toast').forEach(_dismiss);
+        return this;
+    },
+
+    /**
+     * Update the content of an existing toast by its id.
+     * Eliminates the dismiss+re-show flicker pattern.
+     *
+     *   const id = notify.info('Uploading…', { duration: 0 });
+     *   // later:
+     *   notify.update(id, 'Upload complete ✓', { type: 'success' });
+     */
+    update(id, message, options = {}) {
+        if (!id || !_container) return this;
+        const toast = _container.querySelector(`#${id}`);
+        if (!toast) return this;
+
+        const type = options.type || toast.dataset.toastType || 'info';
+        const meta = TYPES[type] || TYPES.info;
+
+        // Update text content
+        const msgEl = toast.querySelector('.oja-toast-msg');
+        if (msgEl) msgEl.textContent = message;
+
+        // Update type class if changed
+        const prevType = toast.dataset.toastType;
+        if (prevType !== type) {
+            if (prevType) toast.classList.remove(TYPES[prevType]?.cls || '');
+            toast.classList.add(meta.cls);
+            toast.dataset.toastType = type;
+            toast.setAttribute('role', meta.role);
+        }
+
+        // Reset or extend duration if provided
+        if (options.duration !== undefined && options.duration > 0) {
+            if (toast._toastTimer) clearTimeout(toast._toastTimer);
+            toast._toastTimer = setTimeout(() => _dismiss(toast), options.duration);
+        }
+
         return this;
     },
 
@@ -239,6 +305,77 @@ export const notify = {
         const toast = _container.querySelector(`#${id}`);
         if (toast) _dismiss(toast);
         return this;
+    },
+
+    /**
+     * Auto-manage a toast through pending → success → error states.
+     * Returns the original promise so callers can still await/chain it.
+     *
+     *   await notify.promise(api.post('/deploy'), {
+     *       pending: 'Deploying…',
+     *       success: 'Deployed ✓',
+     *       error:   'Deploy failed',
+     *   });
+     *
+     *   // Dynamic messages:
+     *   notify.promise(fetchUser(id), {
+     *       pending: 'Loading…',
+     *       success: (user) => `Welcome, ${user.name}`,
+     *       error:   (err)  => `Failed: ${err.message}`,
+     *   });
+     */
+    promise(promise, messages = {}) {
+        const pendingMsg = messages.pending || 'Loading…';
+        const id = _show('info', pendingMsg, { duration: 0 });
+
+        promise.then(
+            (result) => {
+                const msg = typeof messages.success === 'function'
+                    ? messages.success(result) : (messages.success || '✓');
+                this.update(id, msg, { type: 'success', duration: 4000 });
+            },
+            (err) => {
+                const msg = typeof messages.error === 'function'
+                    ? messages.error(err) : (messages.error || '✗ Failed');
+                this.update(id, msg, { type: 'error', duration: 6000 });
+            }
+        );
+
+        return promise;
+    },
+
+    /**
+     * Show a progress toast with an updatable percentage.
+     * Returns a handle with .update(pct) and .done(message).
+     *
+     *   const p = notify.progress('Uploading…');
+     *   p.update(60);     // "Uploading… 60%"
+     *   p.done('Done ✓'); // replaces toast content, auto-dismisses
+     */
+    progress(message, options = {}) {
+        const id = _show('info', message, { duration: 0 });
+        let _pct = 0;
+
+        return {
+            id,
+            update(pct) {
+                _pct = Math.max(0, Math.min(100, Math.round(pct)));
+                notify.update(id, `${message} ${_pct}%`);
+                return this;
+            },
+            done(doneMessage = '✓') {
+                notify.update(id, doneMessage, { type: 'success', duration: 4000 });
+                return this;
+            },
+            fail(failMessage = '✗ Failed') {
+                notify.update(id, failMessage, { type: 'error', duration: 6000 });
+                return this;
+            },
+            dismiss() {
+                notify.dismiss(id);
+                return this;
+            },
+        };
     },
 
     /** Get the current toast count. */
@@ -283,6 +420,7 @@ function _show(type, message, options = {}) {
     toast.setAttribute('aria-live', meta.live);
     toast.setAttribute('aria-atomic', 'true');
     toast.setAttribute('aria-describedby', `${id}-msg`);
+    toast.dataset.toastType = type;
 
     if (opts.pauseOnHover) {
         toast.addEventListener('mouseenter', () => _pauseToast(toast));
@@ -311,6 +449,11 @@ function _show(type, message, options = {}) {
         toast.querySelector('.oja-toast-close')?.addEventListener('click', () => _dismiss(toast));
     }
 
+    // Enforce max stack limit — dismiss oldest if over cap
+    if (_config.max > 0) {
+        const current = _container.querySelectorAll('.oja-toast:not(.oja-toast-leaving)');
+        if (current.length >= _config.max) _dismiss(current[0]);
+    }
     _container.appendChild(toast);
 
     requestAnimationFrame(() => toast.classList.add('oja-toast-visible'));
