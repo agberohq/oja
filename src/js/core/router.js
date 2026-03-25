@@ -160,6 +160,8 @@ export class Router {
         this._beforeEach       = [];
         this._afterEach        = [];
         this._prefetchEnabled  = prefetch;
+        this._namedRoutes      = new Map(); // name → pattern
+        this._urlHandler       = null;      // stored for destroy()
 
         // Register VFS with Out so all component fetches check local store first.
         // Can also be set independently via Out.vfsUse(vfs) before router.start().
@@ -375,7 +377,9 @@ export class Router {
         this._started = true;
 
         const eventName = this._mode === 'hash' ? 'hashchange' : 'popstate';
-        window.addEventListener(eventName, () => this._handleURL(defaultPath));
+        // Store handler ref so destroy() can remove it
+        this._urlHandler = () => this._handleURL(defaultPath);
+        window.addEventListener(eventName, this._urlHandler);
 
         await this._handleURL(defaultPath);
 
@@ -411,6 +415,10 @@ export class Router {
      * Race-safe: only the most recent navigate() call is allowed to complete.
      */
     async navigate(path, options = {}) {
+        // F-31: if path is a known route name, resolve it
+        if (this._namedRoutes.has(path)) {
+            path = this.path(path, options.params || {});
+        }
         const currentNavId = ++this._navId;
         const [pathname, qs] = path.split('?');
         const query          = { ...options.query, ..._parseQuery(qs || '') };
@@ -580,6 +588,79 @@ export class Router {
     }
 
     current() { return this._current; }
+
+    /**
+     * Register a named route pattern.
+     * Allows URL generation from name + params instead of string construction.
+     *
+     *   router.name('host.routes', '/hosts/{id}/routes');
+     *   router.navigate('host.routes', { id: 42 });
+     *   router.path('host.routes', { id: 42 }); // → '/hosts/42/routes'
+     */
+    name(routeName, pattern) {
+        this._namedRoutes.set(routeName, pattern);
+        return this;
+    }
+
+    /**
+     * Build a URL path from a named route and params.
+     */
+    path(routeName, params = {}) {
+        const pattern = this._namedRoutes.get(routeName);
+        if (!pattern) {
+            console.warn(`[oja/router] unknown route name: "${routeName}"`);
+            return '/';
+        }
+        return pattern.replace(/\{(\w+)\}/g, (_, key) =>
+            params[key] !== undefined ? encodeURIComponent(params[key]) : `{${key}}`
+        );
+    }
+
+    /**
+     * Navigate to a named route.
+     */
+    navigateTo(routeName, params = {}, options = {}) {
+        return this.navigate(this.path(routeName, params), options);
+    }
+
+    /**
+     * Remove the URL event listener.    /**
+     * Remove the URL event listener. Call when replacing a router instance.
+     */
+    destroy() {
+        if (!this._urlHandler) return;
+        const eventName = this._mode === 'hash' ? 'hashchange' : 'popstate';
+        window.removeEventListener(eventName, this._urlHandler);
+        this._urlHandler = null;
+        this._started = false;
+    }
+
+    /**
+     * Check if the current path matches a pattern.
+     * Supports * wildcards: router.is('/hosts/*')
+     * Returns true if current route matches.
+     *
+     *   navLink.classList.toggle('active', router.is('/hosts/*'));
+     */
+    is(pattern) {
+        if (!this._current) return false;
+        const current = this._current.split('?')[0];
+        if (pattern === current) return true;
+        // Convert pattern to regex: /hosts/* → /hosts/.*
+        const regexStr = '^' + pattern
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*/g, '.*') + '$';
+        return new RegExp(regexStr).test(current);
+    }
+
+    /**
+     * Get a single param by name from the current route + query params.
+     *
+     *   const id = router.param('id');  // vs router.params().id
+     */
+    param(name) {
+        return this._params?.[name] ?? null;
+    }
     params()  { return { ...this._params }; }
 
     // ─── URL helpers ──────────────────────────────────────────────────────────
