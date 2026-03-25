@@ -95,6 +95,9 @@ import { Out }           from './out.js';
 // Tracks the active layout per container element.
 const _active = new Map(); // containerEl → { url, unmountHooks, readyHooks, intervals, timeouts }
 
+// Tracks per-slot ready callbacks registered via allSlotsReady()
+const _slotReadyMap = new Map(); // slotName → resolve[]
+
 // Set during apply() so onUnmount/onReady/interval/timeout called inside layout
 // scripts know which container's entry to register against.
 let _currentContainer = null;
@@ -168,6 +171,65 @@ export const layout = {
         fill(container, data);
         emit('layout:updated', { container });
         return this;
+    },
+
+    /**
+     * Signal that a slot's async setup is complete.
+     * Called by slot scripts as their last statement after all listeners,
+     * effects, and imports are registered. Resolves the corresponding
+     * allSlotsReady() promise entry.
+     *
+     * The __oja_ready__ function injected by _exec.js calls this automatically
+     * when a slot script calls layout.slotReady(name) as its final line.
+     *
+     *   // At the end of a slot script:
+     *   layout.slotReady('editor');
+     *
+     * @param {string} name — must match the slot name used in layout.slot()
+     */
+    slotReady(name) {
+        const cbs = _slotReadyMap.get(name);
+        if (cbs) {
+            cbs.forEach(resolve => resolve());
+            _slotReadyMap.delete(name);
+        }
+        import('./events.js').then(({ emit }) => emit('layout:slot-ready', { name })).catch(() => {});
+    },
+
+    /**
+     * Wait for multiple slots to signal readiness via slotReady().
+     * Resolves only when all named slots have called layout.slotReady().
+     * Use this in app.js after layout.slot() calls to ensure all slot
+     * scripts have finished their async setup before loading content.
+     *
+     *   await layout.allSlotsReady(['nav', 'sidebar', 'editor', 'render']);
+     *   // Now safe — all listen() handlers are registered
+     *   await loadNoteContent(activeNote());
+     *
+     * @param {string[]} names     — slot names to wait for
+     * @param {number}   [timeout] — ms before rejecting (default 10000)
+     * @returns {Promise<void>}
+     */
+    allSlotsReady(names, timeout = 10000) {
+        if (!names?.length) return Promise.resolve();
+        const pending = new Set(names);
+
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(`[oja/layout] allSlotsReady timeout — still waiting: ${[...pending].join(', ')}`));
+            }, timeout);
+
+            const check = (name) => {
+                pending.delete(name);
+                if (pending.size === 0) { clearTimeout(timer); resolve(); }
+            };
+
+            // Register per-slot resolve callbacks
+            for (const name of names) {
+                if (!_slotReadyMap.has(name)) _slotReadyMap.set(name, []);
+                _slotReadyMap.get(name).push(() => check(name));
+            }
+        });
     },
 
     /**
