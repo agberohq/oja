@@ -51,6 +51,16 @@ class TrieNode {
 
 // ─── Trie ─────────────────────────────────────────────────────────────────────
 
+// ─── Runtime-configurable fuzzy visit cap ───────────────────────────────
+// Default: 10_000 visited nodes per fuzzy search. Increase for large indexes:
+//   import { runtime } from './runtime.js';
+//   runtime.define('search.fuzzyVisitCap', 50_000);
+function _getFuzzyCap() {
+    try {
+        return globalThis.__oja_runtime_get?.('search.fuzzyVisitCap') ?? 10_000;
+    } catch { return 10_000; }
+}
+
 export class Trie {
     constructor() {
         this.root = new TrieNode();
@@ -99,6 +109,22 @@ export class Trie {
             node = node.children.get(char);
         }
         return node.isEnd ? node.data : null;
+    }
+
+    /**
+     * Return true if any key starts with the given prefix.
+     * Cheaper than autocomplete(prefix, { limit: 1 }).length > 0.
+     *
+     *   trie.startsWith('ap'); // → true
+     */
+    startsWith(prefix) {
+        if (!prefix || typeof prefix !== 'string') return this.root.children.size > 0;
+        let node = this.root;
+        for (const char of prefix.toLowerCase()) {
+            if (!node.children.has(char)) return false;
+            node = node.children.get(char);
+        }
+        return true;
     }
 
     /**
@@ -279,6 +305,10 @@ export class Trie {
 
     _fuzzyCollect(node, current, query, results, maxDistance, visited) {
         if (!node) return;
+        // Safety cap prevents unbounded visited map growth.
+        // Cap is runtime-configurable via runtime.define('search.fuzzyVisitCap', N).
+        const cap = _getFuzzyCap();
+        if (visited.size > cap) return;
 
         const distance = _levenshtein(current, query);
         if (distance <= maxDistance) {
@@ -320,9 +350,10 @@ export class Search {
             ...options,
         };
 
-        this._trie  = new Trie();
-        this._docs  = new Map(); // id → document
-        this._index = new Map(); // term → Set<id>
+        this._trie       = new Trie();
+        this._docs       = new Map(); // id → document
+        this._index      = new Map(); // term → Set<id>
+        this._fieldCache = new Map(); // D-04: id:term → field (built at add() time)
 
         for (const item of items) {
             if (item.id != null) this.add(String(item.id), item);
@@ -348,6 +379,9 @@ export class Search {
                     this._trie.insert(term, term);
                 }
                 this._index.get(term).add(id);
+                // D-04: cache field for this id:term pair at index time
+                const cacheKey = `${id} ${term}`;
+                if (!this._fieldCache.has(cacheKey)) this._fieldCache.set(cacheKey, field);
             }
         }
 
@@ -411,7 +445,7 @@ export class Search {
                     if (!doc) continue;
 
                     // Determine which field this term came from for weight lookup
-                    const field      = this._fieldForTerm(doc, matched);
+                    const field      = this._fieldForTerm(doc, matched, id);
                     const weight     = opts.weights[field] ?? 1;
 
                     if (!scores.has(id)) scores.set(id, { id, doc, score: 0, matches: [] });
@@ -548,6 +582,38 @@ export class Search {
     /**
      * Return index statistics: document count, unique term count, trie size.
      */
+    /**
+     *  "Did you mean?" — returns the closest matching term when no exact
+     * results are found. Returns null if the index is empty or query is blank.
+     *
+     *   search.suggest('hsts'); // → 'hosts'
+     */
+    suggest(query, options = {}) {
+        if (!query || typeof query !== 'string') return null;
+        const { maxDistance = 2 } = options;
+        const terms = _tokenize(query.toLowerCase());
+        if (!terms.length) return null;
+
+        let best = null;
+        let bestDist = Infinity;
+
+        for (const term of terms) {
+            const candidates = this._trie.fuzzySearch(term, {
+                maxDistance,
+                limit: 5,
+                includeData: true,
+            });
+            for (const { key, distance } of candidates) {
+                if (distance < bestDist) {
+                    bestDist = distance;
+                    best = key;
+                }
+            }
+        }
+
+        return best;
+    }
+
     stats() {
         return {
             documents:   this._docs.size,
@@ -582,27 +648,55 @@ export class Search {
      * Restore from a previously exported snapshot.
      */
     import(data) {
-        this._opts      = data.options;
-        this._trie      = new Trie();
-        this._trie.import(data.trie);
-        this._docs      = new Map(data.documents);
-        this._index.clear();
+        // Snapshot current state so we can restore on failure.
+        const prevOpts  = this._opts;
+        const prevTrie  = this._trie;
+        const prevDocs  = this._docs;
+        const prevIndex = this._index;
+        try {
+            if (!data || !data.options || !data.trie || !data.documents) {
+                throw new Error('Invalid import data structure');
+            }
+            this._opts  = data.options;
+            this._trie  = new Trie();
+            this._trie.import(data.trie);
+            this._docs  = new Map(data.documents);
+            this._index = new Map();
+            this._fieldCache = new Map(); // D-04: clear field cache on import
+            this._rebuildIndex();
+            return this;
+        } catch (err) {
+            console.warn('[Search] import failed, restoring previous state:', err);
+            this._opts  = prevOpts;
+            this._trie  = prevTrie;
+            this._docs  = prevDocs;
+            this._index = prevIndex;
+            return this;
+        }
+    }
 
+    // ─── Internal helpers ─────────────────────────────────────────────────────
+
+    _rebuildIndex() {
+        this._index.clear();
+        this._fieldCache.clear();
+        this._trie.clear();
         for (const [id, doc] of this._docs) {
             for (const field of this._opts.fields) {
                 const value = doc[field];
                 if (!value || typeof value !== 'string') continue;
                 for (const term of _tokenize(value)) {
-                    if (!this._index.has(term)) this._index.set(term, new Set());
+                    if (!this._index.has(term)) {
+                        this._index.set(term, new Set());
+                        this._trie.insert(term, term);
+                    }
                     this._index.get(term).add(id);
+                    const cacheKey = `${id} ${term}`;
+                    if (!this._fieldCache.has(cacheKey)) this._fieldCache.set(cacheKey, field);
                 }
             }
         }
-
-        return this;
     }
-
-    // ─── Internal helpers ─────────────────────────────────────────────────────
 
     _removeById(id) {
         if (!this._docs.has(id)) return this;
@@ -613,11 +707,22 @@ export class Search {
                 this._trie.delete(term);
             }
         }
+        // clear all cached field lookups for this document
+        for (const key of this._fieldCache.keys()) {
+            if (key.startsWith(id + ' ')) this._fieldCache.delete(key);
+        }
         this._docs.delete(id);
         return this;
     }
 
-    _fieldForTerm(doc, term) {
+    // _fieldForTerm now reads from _fieldCache built at add() time.
+    // Previously re-tokenized every field on every query match — O(docs*fields*terms).
+    _fieldForTerm(doc, term, id) {
+        if (id !== undefined) {
+            const cached = this._fieldCache.get(`${id} ${term}`);
+            if (cached !== undefined) return cached;
+        }
+        // Fallback for callers without id (shouldn't happen in normal search flow)
         for (const field of this._opts.fields) {
             const value = doc[field];
             if (!value || typeof value !== 'string') continue;
