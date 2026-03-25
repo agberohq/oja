@@ -512,3 +512,9 @@ function _resolve(target) {
 function _isSelector(value) {
     return typeof value === 'string';
 }
+// ─── Standalone export ──────────────────────────────────────────────────
+// allSlotsReady is available as layout.allSlotsReady() and also as a named export
+// so apps can import it directly: import { allSlotsReady } from './layout.js'
+export function allSlotsReady(names, timeout = 10000) {
+    return layout.allSlotsReady(names, timeout);
+}
