@@ -323,16 +323,18 @@ class ReactiveSystem {
             onQuotaExceeded,
         });
 
+        // Guard per storage key so only one listener is registered
+        // per key regardless of how many times persistentState() is called with it.
         if (store === 'local' && typeof window !== 'undefined') {
-            window.addEventListener('storage', (e) => {
-                if (e.key === key && e.newValue !== null) {
-                    try {
-                        write(JSON.parse(e.newValue));
-                    } catch {
-                        // Ignore
+            const flagKey = `__oja_storage_wired_${key}`;
+            if (!window[flagKey]) {
+                window[flagKey] = true;
+                window.addEventListener('storage', (e) => {
+                    if (e.key === key && e.newValue !== null) {
+                        try { write(JSON.parse(e.newValue)); } catch { /* ignore */ }
                     }
-                }
-            });
+                });
+            }
         }
 
         return [read, write];
@@ -519,6 +521,14 @@ class ReactiveSystem {
         this._flushDepth--;
     }
 
+    // Run fn without tracking signal dependencies
+    _withoutTracking(fn) {
+        const saved = this._currentEffect;
+        this._currentEffect = null;
+        try { return fn(); }
+        finally { this._currentEffect = saved; }
+    }
+
     inspect() {
         return {
             states: Array.from(this._states.entries()).map(([id, data]) => ({
@@ -545,11 +555,11 @@ class ReactiveSystem {
 
 const _sys = new ReactiveSystem();
 
-if (typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.endsWith('.local'))) {
-
+// D-03: DevTools connection is now opt-in via window.__OJA_DEVTOOLS__ = true.
+// Previously auto-connected on localhost which caused issues in staging/intranet
+// environments served locally. Set the flag before importing reactive.js:
+//   window.__OJA_DEVTOOLS__ = true;
+if (typeof window !== 'undefined' && window.__OJA_DEVTOOLS__) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => _sys._connectDevTools());
     } else {
@@ -644,6 +654,92 @@ context.inspect = () => {
         snapshot[name] = read();
     }
     return snapshot;
+};
+
+
+// ─── watch(signal, fn, options) ────────────────────────────────────────
+// Like effect() but explicit about what to watch, passes (newVal, oldVal),
+// and does not run immediately by default.
+//
+//   watch(count, (next, prev) => console.log(prev, '→', next));
+//   watch(count, handler, { immediate: true }); // run like effect()
+//
+// Returns a dispose function.
+export function watch(signal, fn, options = {}) {
+    const { immediate = false } = options;
+    let prev = signal();
+
+    if (immediate) {
+        fn(prev, undefined);
+    }
+
+    return effect(() => {
+        const next = signal();
+        if (next !== prev || (next !== null && typeof next === 'object')) {
+            const old = prev;
+            prev = next;
+            fn(next, old);
+        }
+    });
+}
+
+// ─── untrack(fn) ────────────────────────────────────────────────────────
+// Run fn() without tracking any signal reads as dependencies.
+// Use inside effect() to read signals you don't want to subscribe to.
+//
+//   effect(() => {
+//       const id = selectedId();          // tracked
+//       const cfg = untrack(getConfig);   // NOT tracked
+//   });
+export function untrack(fn) {
+    return _sys._withoutTracking(fn);
+}
+
+// ─── readonly(signal) ───────────────────────────────────────────────────
+// Wrap a writable signal to expose only the getter.
+// Useful for module encapsulation.
+//
+//   const [_count, setCount] = state(0);
+//   export const count = readonly(_count);
+export function readonly(signal) {
+    const read = () => signal();
+    read.__isOjaSignal = true;
+    read.__isReadonly  = true;
+    return read;
+}
+
+// ─── context.subscribe(name, fn) ───────────────────────────────────────
+// Watch a named context value. fn receives (newValue, oldValue).
+// Returns an unsubscribe function.
+context.subscribe = (name, fn) => {
+    const pair = _ctx.get(name);
+    if (!pair) {
+        console.warn(`[oja/context] subscribe: '${name}' is not registered`);
+        return () => {};
+    }
+    const [read] = pair;
+    return watch(read, fn);
+};
+
+// ─── context.reset(name) ───────────────────────────────────────────────
+// Restore a context value to its initial value and re-persist if applicable.
+context.reset = (name) => {
+    if (!_ctx.has(name)) return;
+
+    // Find the initial value from the reactive system's state tracking
+    for (const [id, stateEntry] of _sys._states) {
+        if (stateEntry.name === name) {
+            const [, write] = _ctx.get(name);
+            write(stateEntry.initialValue);
+
+            // Re-persist default if this was a persistent state
+            const persistent = _sys._persistentStates.get(id);
+            if (persistent) {
+                _sys._savePersistent(persistent.key, persistent.storage, stateEntry.initialValue, null);
+            }
+            return;
+        }
+    }
 };
 
 if (typeof window !== 'undefined') {
