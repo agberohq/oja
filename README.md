@@ -2,18 +2,14 @@
 
 
 <p align="center">
-  <img src="assets/oja_icon.png" width="300" alt="Agbero Logo">
+  <img src="assets/oja_icon.png" width="300" alt="Oja Logo">
 </p>
 
-
-
 <p align="left">
-  <img src="assets/oja_name.png" width="70" alt="Agbero Logo">
+  <img src="assets/oja_name.png" width="70" alt="Oja">
 </p>
 
 > *Oja* (Yoruba: *marketplace*) — a minimal, zero-build JavaScript framework for building multi-page SPAs.
-
-
 
 No compiler. No virtual DOM. No node_modules. Drop files in, open a browser, it works.
 
@@ -47,6 +43,9 @@ A component is a plain `.html` file a UI developer can open in a browser, edit, 
 - No server-side rendering
 
 ---
+
+## Tutorials 
+[TUTORIAL.md](TUTORIAL.md) for detailed step-by-step tutorials.
 
 ## Installation
 
@@ -86,19 +85,11 @@ Pin to a specific version in production:
 </script>
 ```
 
-Or import directly from the URL without an import map:
-
-```html
-<script type="module">
-    import { state, effect } from 'https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.full.esm.js';
-</script>
-```
-
 ---
 
 ### Option 2 — Self-hosted (build from source)
 
-Clone the repo and build once. Use this when you need to bundle Oja into your own build pipeline or want to ship without a CDN dependency.
+Clone the repo and build once.
 
 **Requirements** (one-time setup):
 ```bash
@@ -130,7 +121,7 @@ make clean    # remove build/
 
 ### Option 3 — Direct source imports (zero build, development friendly)
 
-Copy the `src/` folder and import directly. No build step ever. This is how the example apps work — open `example/hello/index.html` or `example/twitter/index.html` in a browser and they run immediately.
+Copy the `src/` folder and import directly. No build step ever.
 
 ```
 my-project/
@@ -140,25 +131,22 @@ my-project/
         src/          ← copied from this repo
     pages/
     components/
-    layouts/
 ```
 
 ```js
-// app.js — import from the barrel
+// app.js
 import { Router, Out, auth, notify, component } from '../oja/src/oja.js';
 ```
 
 ---
 
-### Option 4 — npm (if you already use a package.json)
-
-If your project already uses npm for other dependencies, you can manage Oja the same way:
+### Option 4 — npm
 
 ```bash
 npm install @agberohq/oja
 ```
 
-Then point the import map at `node_modules` instead of a CDN:
+Point the import map at `node_modules`:
 
 ```html
 <link rel="stylesheet" href="./node_modules/@agberohq/oja/build/oja.min.css">
@@ -172,8 +160,6 @@ Then point the import map at `node_modules` instead of a CDN:
 </script>
 ```
 
-Everything else is identical — the import map goes in `index.html` once, all files use `@agberohq/oja`.
-
 ---
 
 ## Build variants
@@ -183,13 +169,13 @@ Everything else is identical — the import map goes in `index.html` once, all f
 | `oja.full.esm.js` | Everything | Default — the import map examples above all point here |
 | `oja.core.esm.js` | Core only (no WebSocket, Worker, WASM, canvas, drag-and-drop) | Size-sensitive production apps |
 | `oja.core.min.js` | Core IIFE — `window.Oja` | Legacy scripts, no ES module support |
-| `oja.min.css` | Oja UI components (toasts, modals, drawers, tables) | Always include alongside any build |
+| `oja.min.css` | Oja UI components (toasts, modals, tables, wizard, progress) | Always include alongside any build |
 
 ---
 
 ## Grouped imports
 
-When you want a clean namespace without listing every name, import a group object:
+When you want a clean namespace without listing every name:
 
 ```js
 import { Reactive, Event, DOM } from '@agberohq/oja';
@@ -203,7 +189,7 @@ Event.on('.btn', 'click', handler);
 Event.emit('app:ready');
 Event.debounce(search, 200);
 
-// DOM helpers
+// DOM helpers — all scoped, all chainable
 const el = DOM.find('#app');
 DOM.createEl('div', { class: 'card' });
 ```
@@ -214,19 +200,19 @@ DOM.createEl('div', { class: 'card' });
 
 ### 1. `Out` — the universal display primitive
 
-`Out` is how Oja produces every piece of visible output. There are no raw HTML strings, no ad-hoc `innerHTML`, no inconsistent rendering paths. One primitive, composable everywhere.
+`Out` is how Oja produces every piece of visible output. No raw HTML strings. No ad-hoc `innerHTML`. One primitive, composable everywhere.
 
 ```js
 import { Out } from '@agberohq/oja';
 
-// Render a component file with data
+// Render a component file
 Out.component('pages/dashboard.html', { user, metrics })
 
 // Raw HTML — no script execution (safe for user-generated content)
 Out.raw('<p>User content</p>')
 
 // HTML with script execution
-Out.html('<div class="card"><script type="module">...</script></div>')
+Out.html('<div class="card">...</div>')
 
 // Text — safely escaped
 Out.text('Hello, world')
@@ -240,18 +226,16 @@ Out.t('plain text')                  // Out.text()
 #### Composition — conditional, list, async
 
 ```js
-// Conditional rendering — condition evaluated at render time
+// Conditional — condition evaluated at render time
 Out.if(() => user.isAdmin, Out.c('admin.html'), Out.c('denied.html'))
 
-// List rendering — one Out per item
+// List — one Out per item
 Out.list(users, (user) => Out.c('components/user.html', user))
-
-// With custom empty state
 Out.list(users, (user) => Out.c('components/user.html', user), {
     empty: Out.c('states/no-users.html'),
 })
 
-// Async — loading → success → error states
+// Async — loading → success → error
 Out.promise(fetchUser(id), {
     loading: Out.c('states/loading.html'),
     success: (user) => Out.c('pages/user.html', user),
@@ -265,20 +249,47 @@ Out.fn(async (container, ctx) => {
 })
 ```
 
-`Out` is accepted wherever Oja produces visible output: router, modal, notify, component, template `each()`.
-
-#### Rendering into a DOM element
-
-Oja extends every DOM element it touches with a `.render()` method that accepts
-any `Out` responder. This lets you update part of a mounted component without
-re-mounting the whole thing:
+#### Fluent API — Out.to()
 
 ```js
-// Inside a component script
-const panelEl = find('#details-panel');
-panelEl.render(Out.component('components/detail.html', { item }));
-panelEl.render(Out.html('<p>Updated</p>'));
+// Out.to() returns a chainable OutTarget — use it for direct DOM rendering
+Out.to('#app').html('<h1>Hello</h1>');
+Out.to('#app').component('pages/hosts.html', data);
+Out.to('#panel').animate('fadeIn').component('modal.html');
+Out.to('#app').with({ user }).component('page.html');
+Out.to('#panel').when(() => user.isAdmin).component('admin.html');
+
+// Tagged template literal — use Out.tag() for interpolated HTML
+Out.tag('#greeting')`<h1>Hello ${name}!</h1>`;
+
+// DOM helpers — all chainable, all return the OutTarget
+Out.to('#el').show().addClass('active');
+Out.to('#el').hide();
+Out.to('#el').toggle();
+Out.to('#el').addClass('loading');
+Out.to('#el').removeClass('loading');
+Out.to('#el').attr('data-state', 'ready');
+Out.to('#el').css({ color: 'red' });
 ```
+
+#### Inline charts — no dependencies
+
+```js
+// Sparkline — zero-dependency SVG line chart
+Out.sparkline([12, 45, 23, 67, 34, 89], {
+    color:  '#00c770',
+    height: 40,
+    fill:   true,
+})
+
+// Time series — multiple series, axis labels
+Out.timeSeries([
+    { label: 'HTTP', values: [12, 45, 23], color: '#4f8ef7' },
+    { label: 'TCP',  values: [5,  12, 8],  color: '#00c770' },
+], { height: 120, timestamps: ['00:00', '00:01', '00:02'] })
+```
+
+---
 
 ### 2. Components are plain HTML files
 
@@ -296,11 +307,11 @@ panelEl.render(Out.html('<p>Updated</p>'));
 </div>
 ```
 
-A UI developer can open this file in a browser. No JSX. No template compilation. Valid HTML.
+A UI developer can open this file in a browser. No JSX. No template compilation.
 
-### 3. Every component script gets `container`
+### 3. Every component script gets scoped helpers
 
-When Oja mounts a component, the inline script automatically receives `container` — the exact DOM element it was mounted into. This enables true isolation: multiple instances of the same component never conflict.
+When Oja mounts a component, the inline script automatically receives `container`, `find`, `findAll`, and `props`. Use them instead of global DOM queries — they are scoped to this component instance.
 
 ```html
 <!-- components/image.html -->
@@ -308,16 +319,25 @@ When Oja mounts a component, the inline script automatically receives `container
 <div class="spinner"></div>
 
 <script type="module">
-    // container is THIS instance — not the whole document
-    const img     = container.querySelector('img');
-    const spinner = container.querySelector('.spinner');
+    // find() and findAll() are scoped to this component instance.
+    // Global document queries are an anti-pattern — if two instances
+    // of this component are mounted, they would both target the same node.
+    const img     = find('img');
+    const spinner = find('.spinner');
 
     const image = new Image();
     image.onload  = () => { img.src = image.src; spinner.remove(); };
     image.onerror = () => { spinner.textContent = '✗'; };
-    image.src = img.dataset.src;
+    image.src     = img.dataset.src;
 </script>
 ```
+
+| Variable    | What it is                                        |
+|-------------|---------------------------------------------------|
+| `container` | The DOM element this component was mounted into   |
+| `find`      | `querySelector` scoped to `container`             |
+| `findAll`   | `querySelectorAll` scoped to `container`          |
+| `props`     | Read-only proxy of the props passed at mount time |
 
 ### 4. Reactive state — fine-grained, no virtual DOM
 
@@ -333,16 +353,42 @@ const errorRate = derived(() => {
     return ((m.errors / m.total) * 100).toFixed(2) + '%';
 });
 
-// Effect runs whenever metrics() changes — updates real DOM directly
+// effect() runs whenever metrics() changes — updates real DOM directly
 effect(() => {
     const m = metrics();
     if (!m) return;
-    document.getElementById('stat-rps').textContent = m.rps + ' req/s';
-    document.getElementById('stat-errors').textContent = errorRate();
+    Out.to('#stat-rps').text(m.rps + ' req/s');
+    Out.to('#stat-errors').text(errorRate());
 });
 
-// Cross-component state — same value anywhere in the app
+// Cross-module shared state — same value anywhere in the app
 export const [isOnline, setOnline] = context('isOnline', true);
+```
+
+#### Reactive channels — component communication
+
+`channel()` is the right primitive when two components need to share state
+without a common parent. Late subscribers always receive the current value
+immediately on subscribe — unlike `emit/listen` which is fire-and-forget.
+
+```js
+import { channel } from '@agberohq/oja';
+
+// In hosts.html — write
+const selected = channel('host:selected');
+selected.set({ id: 42, name: 'api.example.com' });
+
+// In sidebar.html — read (gets current value immediately even if set before mount)
+const selected = channel('host:selected');
+const off = selected.subscribe(host => {
+    if (host) renderDetail(host);
+});
+
+// One-time read without subscribing
+const host = selected.get();
+
+// Clean up when the owning component unmounts
+component.onUnmount(() => selected.destroy());
 ```
 
 ### 5. Router — Go-style middleware and groups
@@ -366,28 +412,31 @@ router.Use(async (ctx, next) => {
 // Public route
 router.Get('/login', Out.component('pages/login.html'));
 
-// Protected group — auth checked automatically
-const app = router.Group('/');
+// Protected group — middleware only applies inside
+const app = router.Group('/app');
 app.Use(auth.middleware('protected', '/login'));
-app.Get('dashboard', Out.component('pages/dashboard.html'));
-app.Get('hosts',     Out.component('pages/hosts.html'));
+app.Get('/dashboard', Out.component('pages/dashboard.html'));
+app.Get('/hosts',     Out.component('pages/hosts.html'));
 
-// URL params
-app.Route('hosts/{id}', host => {
-    host.Use(async (ctx, next) => {
-        ctx.host = await api.get(`/api/hosts/${ctx.params.id}`);
-        if (!ctx.host) return ctx.redirect('/hosts');
-        await next();
-    });
-    host.Get('/', Out.fn(async (container, ctx) =>
-        Out.component('pages/host-detail.html', ctx.host)
-    ));
+// Nested group — middleware stacks correctly
+const hosts = app.Group('/hosts');
+hosts.Use(async (ctx, next) => {
+    ctx.host = await api.get(`/hosts/${ctx.params.id}`);
+    if (!ctx.host) return ctx.redirect('/app/hosts');
+    await next();
 });
+hosts.Get('/{id}',        Out.component('pages/host-detail.html'));
+hosts.Get('/{id}/routes', Out.component('pages/host-routes.html'));
+
+// Named routes — generate URLs without string construction
+router.name('host.detail', '/app/hosts/{id}');
+router.navigateTo('host.detail', { id: 42 });
+router.path('host.detail', { id: 42 }); // → '/app/hosts/42'
 
 router.NotFound(Out.html(`
     <div class="error-page">
         <div class="error-code">404</div>
-        <a href="#/dashboard">Dashboard</a>
+        <a href="#/app/dashboard">Dashboard</a>
     </div>
 `));
 
@@ -423,16 +472,23 @@ await auth.session.start(responseToken);
 ```js
 import { layout } from '@agberohq/oja';
 
-// Define a persistent shell — survives navigation, renders once
-const shell = layout('components/nav.html', {
-    outlet : '#page-content',
-    data   : () => ({ user: auth.session.user() }),
-});
+// Mount once — survives navigation
+await layout.apply('#app', 'layouts/main.html', { user: currentUser });
 
-// Use as router middleware — shell wraps all routes in the group
-const app = router.Group('/');
-app.Use(shell.middleware());
-app.Get('dashboard', Out.component('pages/dashboard.html'));
+// Update data in the shell without remounting
+layout.update({ user: updatedUser });
+
+// Named slots — fill async content into specific areas
+await layout.slot('sidebar', Out.component('components/sidebar.html', { items }));
+
+// Wait for all slots to finish their async setup before loading content
+await layout.allSlotsReady(['nav', 'sidebar']);
+await loadInitialContent();
+
+// Router middleware — switch layouts per route group
+const publicGroup = router.Group('/');
+publicGroup.Use(layout.middleware('layouts/auth.html', '#app'));
+publicGroup.Get('/login', Out.component('pages/login.html'));
 ```
 
 ### 8. Component lifecycle — automatic cleanup
@@ -443,13 +499,112 @@ component.interval(refresh, 3000);   // cleared on navigate away
 component.timeout(showTip, 5000);    // cleared if user navigates first
 
 component.onMount(() => {
-    document.getElementById('search')?.focus();
+    find('#search')?.focus();
 });
 
 component.onUnmount(() => {
     sse.close();
     notify.dismissBanner();
 });
+```
+
+### 9. Runtime — unified event bus
+
+`runtime` is the single coordination point for all Oja internal events.
+Every module — router, component, layout, out, api — emits on the same bus.
+
+```js
+import { runtime } from '@agberohq/oja';
+
+// Subscribe to any internal event
+const off = runtime.on('component:mounted', ({ url, ms }) => {
+    console.log(`${url} loaded in ${ms}ms`);
+});
+
+runtime.on('oja:navigate:start', ({ path }) => progress('page').start());
+runtime.on('oja:navigate:end',   ({ path }) => progress('page').done());
+
+// Emit custom app events through the same bus
+runtime.emit('app:ready', { user });
+runtime.emit('hosts:refresh');
+
+// Remove a specific handler
+runtime.off('component:mounted', handler);
+off(); // or call the returned unsubscribe function
+
+// Full event catalogue:
+// Router:    oja:navigate:start  oja:navigate:end  oja:navigate
+// Component: component:mounted  component:added  component:removed
+//            component:updated  component:cache-hit  component:slow-render
+// Layout:    layout:mounted  layout:updated  layout:slot-ready  layout:unmounted
+// Out:       out:fetch-start  out:fetch-end  out:fetch-error  out:component-rendered
+// Api:       api:error  api:queued  api:unauthorized  api:online  api:offline
+// Notify:    notify:toast  notify:banner
+// Modal:     modal:open  modal:close
+```
+
+### 10. Progress — direction-aware, milestone-driven
+
+```js
+import { progress } from '@agberohq/oja';
+
+const p = progress('upload');  // named channels — isolate concerns
+
+// Core
+p.start();         // indeterminate pulsing bar
+p.set(60);         // jump to 60%
+p.inc(10);         // increment by 10 (capped at 99 — use done() for 100)
+p.done();          // fill to 100 then fade
+p.fail('reason');  // go red then fade
+p.reset();         // immediate reset, no animation
+
+// Reverse — animate backward to a checkpoint (e.g. corrupt file, re-upload)
+p.reverse(30, { reason: 'corrupt' });
+
+// Color slices — interpolated or snapped
+p.color([
+    { at: 0,   color: '#3b82f6' },
+    { at: 50,  color: '#f59e0b' },
+    { at: 100, color: '#10b981' },
+], { interpolate: true }); // default
+
+// Hooks — fire at milestones, with direction and condition support
+p.on(50, () => notify.info('Halfway'));
+p.on(50, handler, { direction: 'up' });    // only going up
+p.on(50, handler, { direction: 'down' });  // only going down
+p.on(50, handler, { once: true });         // auto-remove after first fire
+p.on(50, handler, { if: () => user.isPro }); // conditional
+
+// Lifecycle events
+p.on('start',   ()          => showSpinner());
+p.on('done',    ()          => hideSpinner());
+p.on('fail',    ({ reason })=> showRetry(reason));
+p.on('change',  (val, dir)  => updateLabel(val));
+p.on('reverse', ({ from, reason }) => notify.warn('Re-uploading…'));
+
+// Batch — register all hooks at once, always merges
+p.action({
+    30:     () => notify.info('Nearly a third done'),
+    50:     { up: () => showMid(), down: () => notify.warn('Regressing') },
+    done:   () => cleanup(),
+    fail:   () => showRetry(),
+    change: (val) => updateLabel(val),
+});
+
+// Auto-wire to runtime lifecycle events
+p.track(runtime, {
+    start: 'oja:navigate:start',
+    tick:  'component:mounted',
+    total: 10,
+    done:  'oja:navigate:end',
+});
+
+// Attach inline to an element (default: top-of-page slim bar)
+p.attach('#upload-zone');
+
+// Bind to api or uploader — automatic start/done/fail
+p.bind(api);
+p.bind(uploader);
 ```
 
 ---
@@ -472,7 +627,7 @@ Oja supports two styles — mix freely:
 <div data-empty="hosts">No hosts found</div>
 ```
 
-### Go-style inline syntax (expressive, works in attributes)
+### Go-style inline syntax
 
 ```html
 {{.user.name | upper}}
@@ -516,26 +671,22 @@ Oja supports two styles — mix freely:
 ```js
 import { Store } from '@agberohq/oja';
 
-const store  = new Store('myapp');                        // session storage
-const secure = new Store('myapp', { encrypt: true });     // AES-GCM encrypted
-const local  = new Store('myapp', { prefer: 'local' });  // local storage
+const store  = new Store('myapp');
+const secure = new Store('myapp', { encrypt: true });
+const local  = new Store('myapp', { prefer: 'local' });
 
-// Sync API (plain store)
 store.set('page', 'hosts');
-store.get('page', 'dashboard');   // with fallback
+store.get('page', 'dashboard');    // with fallback
 store.has('page');
 store.clear('page');
 store.all();
-store.merge('settings', { theme: 'dark' }); // shallow merge into object value
-store.push('log', entry);                   // append to array value
-store.increment('count', 1);               // numeric increment
+store.merge('settings', { theme: 'dark' });
+store.push('log', entry);
+store.increment('count', 1);
+store.ttl('session', 30 * 60000); // auto-expire after 30 min
 
-// Async API — used automatically when encrypt:true
-await secure.set('token', jwt);
-await secure.get('token');
-
-// Watch for changes
 store.onChange('theme', (newVal, oldVal) => applyTheme(newVal));
+store.onChange('*', (key, newVal) => sync(key, newVal)); // wildcard
 ```
 
 Storage cascade: `sessionStorage → localStorage → memory`. Same code works on web, mobile webview, and private browsing.
@@ -547,28 +698,20 @@ Storage cascade: `sessionStorage → localStorage → memory`. Same code works o
 ```js
 import { encrypt } from '@agberohq/oja';
 
-// Encrypt / decrypt
 const ct = await encrypt.seal('my secret', 'passphrase', 'salt');
 const pt = await encrypt.open(ct, 'passphrase', 'salt');
 
-// Sign / verify (HMAC-SHA256)
 const sig = await encrypt.sign('message', 'secret');
 const ok  = await encrypt.verify('message', sig, 'secret');
 
-// Rotate key without exposing plaintext
 const newCt = await encrypt.rotate(oldCt, 'old-pass', 'new-pass', 'salt');
 
-// Check availability
 if (encrypt.available()) { ... }
 ```
-
-`encrypt` is separate from `Store` — import it anywhere: VFS, auth, your own modules.
 
 ---
 
 ### VFS — offline-first virtual filesystem
-
-VFS stores your app's files in IndexedDB, backed by a background Worker. Components load from VFS first, network second. Works offline after the first visit.
 
 ```js
 import { VFS, Out, Router } from '@agberohq/oja';
@@ -576,10 +719,8 @@ import { VFS, Out, Router } from '@agberohq/oja';
 const vfs = new VFS('my-app');
 await vfs.ready();
 
-// Mount remote files into local IndexedDB
 await vfs.mount('https://cdn.example.com/my-app/');
 
-// Wire to router — all Out.component() calls check VFS first
 const router = new Router({ outlet: '#app', vfs });
 router.Get('/', Out.c('pages/home.html'));
 router.start('/');
@@ -587,20 +728,31 @@ router.start('/');
 
 **Read / write:**
 ```js
-vfs.write('pages/home.html', html);   // fire and forget
-await vfs.flush();                     // guarantee durability
+vfs.write('pages/home.html', html);  // fire and forget
+await vfs.flush();                    // guarantee durability
 const html = await vfs.readText('pages/home.html');
-const bin  = await vfs.read('logo.png');  // ArrayBuffer for binary
+const bin  = await vfs.read('logo.png');
 await vfs.rm('old.html');
-const files = await vfs.ls('/');      // flat list
-const tree  = await vfs.tree('/');    // nested tree
+const files = await vfs.ls('/');
+const tree  = await vfs.tree('/');
 ```
 
-**Per-route VFS (multiple VFS instances):**
+**Encrypt at rest:**
 ```js
-// vfs.component() pins this VFS instance to the Out — no global side effect
-router.Get('/', vfs.component('pages/home.html', { user }));
-router.Get('/admin', adminVfs.component('pages/admin.html'));
+const vfs = new VFS('secure-app', {
+    encrypt: {
+        seal:     async (text) => myEncrypt(text),    // called on write
+        open:     async (text) => myDecrypt(text),    // called on read
+        isSealed: (text) => text.startsWith('ENC:'),  // detect encrypted content
+    },
+});
+```
+
+**Storage quota:**
+```js
+await vfs.persist();  // request durable storage from browser
+const q = await vfs.quota();
+console.log(`${q.usedMB} MB used of ${q.quotaMB} MB (${q.percent}%)`);
 ```
 
 **Change watchers:**
@@ -608,80 +760,7 @@ router.Get('/admin', adminVfs.component('pages/admin.html'));
 const off = vfs.onChange('pages/', (path, content) => reloadPreview(path));
 vfs.on('conflict', ({ path }) => showConflictBadge(path));
 vfs.on('mounted',  ({ base, fetched }) => console.log('ready:', fetched.length, 'files'));
-off(); // unsubscribe
-```
-
-**Conflict policy:**
-```js
-const vfs = new VFS('my-app', {
-    onConflict: 'keep-local',                    // default — never lose local changes
-    // onConflict: 'take-remote',                // always accept remote version
-    // onConflict: (path, local, remote) => {    // decide per file
-    //     return path.startsWith('data/') ? 'remote' : 'local';
-    // },
-});
-```
-
-**VFS manifest (`vfs.json`)** — place at your remote root:
-```json
-{
-  "files": [
-    "index.html",
-    "app.js",
-    "pages/home.html",
-    "components/card.html"
-  ]
-}
-```
-
----
-
-### config — optional project configuration
-
-`oja.config.json` is the optional single source of truth for an Oja project — like `package.json` is to Node. Everything works without it.
-
-```json
-{
-  "version": "1.0.0",
-  "name": "my-app",
-
-  "vfs": {
-    "manifest": "vfs.json",
-    "conflict": "keep-local",
-    "sync": { "auto": true, "interval": 60000 }
-  },
-
-  "routes": {
-    "protected": ["/admin", "/settings"],
-    "fallback":  "/index.html"
-  },
-
-  "auth": {
-    "loginPath":   "/login",
-    "defaultPath": "/dashboard"
-  }
-}
-```
-
-```js
-import { config, VFS, Router } from '@agberohq/oja';
-
-// Load once in app.js
-await config.load();                  // looks for ./oja.config.json
-await config.load('https://cdn.example.com/my-app/');  // or remote base
-
-// Read any section
-const vfsCfg = config.get('vfs');    // → object or null
-
-// Apply to VFS — mounts, wires sync interval, sets conflict policy
-const vfs = new VFS('my-app');
-await vfs.ready();
-await config.applyVFS(vfs, 'https://cdn.example.com/my-app/');
-
-// Apply to Router — registers protected route middleware
-const router = new Router({ outlet: '#app', vfs });
-config.applyRouter(router, { auth });
-router.start('/');
+off();
 ```
 
 ---
@@ -691,106 +770,24 @@ router.start('/');
 ```js
 import { on, once, off, emit, listen, debounce, throttle, keys } from '@agberohq/oja';
 
-// Or via the Event group:
-import { Event } from '@agberohq/oja';
-
 on('.btn-delete', 'click', (e, el) => deleteItem(el.dataset.id));
 once('#confirm-ok', 'click', handleConfirm);
-off('.btn-delete', 'click', handler);
 
 emit('host:updated', { id: 'api-example-com' });
 const unsub = listen('host:updated', ({ id }) => refresh(id));
-unsub(); // stop listening
+unsub();
 
-// Timing utilities
 on('#search', 'input', debounce(search, 200));
 on('#scroll', 'scroll', throttle(updateNav, 100));
 
-// Keyboard shortcuts
 keys({
     'ctrl+s': () => save(),
     'escape': () => modal.closeAll(),
-    '/':      () => document.getElementById('search')?.focus(),
+    '/':      () => find('#search')?.focus(),
 });
 
-// Visibility and resize
 onVisible('#lazy-section', () => loadContent());
 onResize('#chart', ({ width, height }) => redraw(width, height));
-```
-
----
-
-### Drag and drop
-
-```js
-import { dragdrop } from '@agberohq/oja';
-
-// Reorderable list
-dragdrop.reorder('#host-list', {
-    onReorder: (items) => api.post('/hosts/reorder', { order: items.map(el => el.dataset.id) }),
-    handle:    '.drag-handle',
-    animation: 150,
-});
-
-// File drop zone
-dragdrop.dropZone('#upload-area', {
-    onDrop:    (files) => files.forEach(uploadFile),
-    accept:    ['.jpg', '.png', '.pdf'],
-    maxSize:   10 * 1024 * 1024,
-    onError:   (msg) => notify.error(msg),
-});
-
-// Custom drag source + drop target
-dragdrop.draggable('.host-card', {
-    data: (el) => ({ id: el.dataset.id }),
-});
-
-dragdrop.dropTarget('.folder', {
-    accept: (el, data) => data.type === 'host',
-    onDrop: (el, data) => moveHostToFolder(data.id, el.dataset.folderId),
-});
-```
-
----
-
-### Forms
-
-```js
-import { form } from '@agberohq/oja';
-
-form.on('#loginForm', {
-    submit:  async (data) => api.post('/login', data),
-    success: (res) => auth.session.start(res.token),
-    error:   (err) => form.showError('#loginForm', 'password', err.message),
-});
-
-// Rich error — accepts Out
-form.showError('#myForm', 'email', Out.html('Invalid — <a href="/help">see examples</a>'));
-
-// Async validation
-const ok = await form.validate('#firewallForm', {
-    ip:     (v) => /^[\d.:/a-fA-F]+$/.test(v) || 'Enter a valid IP or CIDR',
-    reason: (v) => v.trim().length >= 3 || 'Too short',
-    ip:     async (v) => await api.get(`/check?ip=${v}`) || 'Already blocked',
-});
-if (!ok) return;
-
-// Image upload + preview
-form.image('#avatarInput', '#avatarPreview', {
-    maxSizeMb : 2,
-    accept    : ['image/jpeg', 'image/png'],
-    onError   : (msg) => notify.error(msg),
-});
-
-// Collect field values without a submit event
-const data = form.collect('#myForm');
-
-// Dirty tracking — detect unsaved changes
-const stop = form.dirty('#editForm', (field, isDirty) => {
-    document.querySelector('#save-btn').disabled = !isDirty;
-});
-// Reset the baseline after a successful save
-form.resetDirty('#editForm');
 ```
 
 ---
@@ -806,9 +803,26 @@ notify.warn('Session expires in 5 minutes', {
     action: { label: 'Renew', fn: () => auth.session.renew() }
 });
 
-// banner() — persistent full-width message, stays until dismissed
-notify.banner('⚠️ Connection lost');
-notify.banner(Out.html('⚠️ Outage: <a href="#/status">details</a>'), { type: 'warn' });
+// Progress toast — stays until done/fail/dismiss
+const p = notify.progress('Uploading…');
+p.update(60);          // shows "Uploading… 60%"
+p.done('Upload done'); // switches to success
+p.fail('Upload failed');
+
+// Update an existing toast's message and/or type
+const id = notify.info('Processing…', { duration: 0 });
+notify.update(id, 'Done!', { type: 'success' });
+
+// Promise binding — automatic pending → success/error
+notify.promise(uploadFile(), {
+    pending: 'Uploading…',
+    success: (res) => `Uploaded ${res.name}`,
+    error:   'Upload failed',
+});
+
+// Banners — persistent, full-width
+notify.banner('⚠️ Connection lost. Reconnecting…', { type: 'warn' });
+notify.banner(Out.html('Maintenance in 5 min. <a href="#/status">Details</a>'));
 notify.dismissBanner();
 
 notify.setPosition('top-right'); // top-right | top-left | top-center | bottom-*
@@ -819,73 +833,137 @@ notify.setPosition('top-right'); // top-right | top-left | top-center | bottom-*
 ### Modals
 
 ```js
-import { modal } from '@agberohq/oja';
+import { modal, Out } from '@agberohq/oja';
 
-modal.open('confirmModal');
-modal.close();
-modal.closeAll();
+// Open returns Promise<Element> — await it when you need the modal element
+const el = await modal.open('confirmModal');
 
-// body and footer accept string or Out
+// Pass body and footer as Out or plain HTML string
 modal.open('infoModal', {
     body:   Out.component('components/user-detail.html', user),
-    footer: Out.html('<button data-action="modal-close">Done</button>'),
+    footer: '<button data-action="modal-close">Done</button>',
+    size:   'lg',  // sm | md | lg | xl | full
 });
 
-// Cascading drawers
+// Programmatic prompt — auto-injects if #promptModal doesn't exist
+const name = await modal.prompt('Enter a name', { default: 'Alice' });
+
+// Close guard — prevent close when there are unsaved changes
+const off = modal.beforeClose('editModal', async () => {
+    if (form.isDirty('#editForm')) {
+        return await modal.confirm('Discard changes?');
+    }
+    return true;
+});
+off(); // remove the guard
+
+// Stack API
 modal.push('routeDrawer', { host: 'api.example.com' });
 modal.pop();
+modal.closeAll();
+modal.isOpen('editModal'); // → boolean
+modal.current();           // → id of top modal or null
 
 // Promise-based confirm
 const confirmed = await modal.confirm('Delete this rule?');
-if (confirmed) await api.delete(`/api/firewall?ip=${ip}`);
+if (confirmed) await api.delete(`/firewall?ip=${ip}`);
 ```
 
 ---
 
-### Engine — smart DOM updates
+### Animate
 
 ```js
-import { engine, Store } from '@agberohq/oja';
+import { animate } from '@agberohq/oja';
 
-// Wire to your app store once in app.js — data-oja-bind attributes then update automatically
-const store = new Store('myapp');
-engine.useStore(store);
+// Standard
+await animate.fadeIn(find('#panel'), { duration: 300 });
+await animate.fadeOut(find('#panel'));
+await animate.slideIn(find('#drawer'));
+await animate.slideOut(find('#drawer'));
 
-// Keyed list reconciliation — only changed nodes are patched
-engine.list(listEl, items, {
-    key:    item => item.id,
-    render: (item, existing) => {
-        const el = existing || document.createElement('div');
-        el.className  = 'item';
-        el.dataset.id = item.id;
-        el.querySelector('span').textContent = item.text;
-        return el;
+// Collapse / expand — height animation
+await animate.collapse('#panel', { duration: 200 });
+await animate.expand('#panel');
+
+// Count-up — animate a number from → to
+animate.countUp('#revenue', 0, 48750, { duration: 1200, prefix: '$' });
+animate.countUp('#requests', 0, 9.99, { decimals: 2 });
+
+// Typewriter — character-by-character reveal
+await animate.typewriter('#headline', 'Welcome to Oja.', { speed: 40 });
+
+// Shake — error feedback
+animate.shake('#save-btn');
+```
+
+---
+
+### Collapse & Accordion
+
+```js
+import { collapse, accordion } from '@agberohq/oja';
+
+// Attach a trigger to a panel
+const panel = collapse.attach('#toggle-btn', '#content-panel', {
+    openFirst: true,
+    onChange:  (isOpen) => updateIcon(isOpen),
+});
+panel.open();
+panel.close();
+panel.toggle();
+panel.destroy();
+
+// Imperative — no trigger button
+collapse.show('#panel');
+collapse.hide('#panel');
+collapse.toggle('#panel');
+
+// Accordion — renders from data
+accordion.render('#faq', [
+    { label: 'What is Oja?',     body: Out.html('<p>A framework…</p>') },
+    { label: 'Does it need npm?', body: Out.html('<p>No.</p>') },
+], { openFirst: true });
+
+// Accordion — wire existing HTML
+accordion.wire('#faq', { openFirst: true });
+```
+
+---
+
+### Wizard
+
+```js
+import { wizard } from '@agberohq/oja';
+
+const w = wizard.render('#onboarding', [
+    {
+        key:      'type',
+        title:    'What kind of host?',
+        body:     Out.component('steps/host-type.html'),
+        validate: (data) => data.type ? true : 'Please choose a type',
     },
-    empty: () => {
-        const el = document.createElement('p');
-        el.textContent = 'No items yet';
-        return el;
+    {
+        key:   'config',
+        title: 'Configure',
+        body:  Out.component('steps/host-config.html'),
     },
+    {
+        key:   'review',
+        title: 'Review & Add',
+        body:  Out.component('steps/host-review.html'),
+    },
+], {
+    onComplete: (data) => api.post('/hosts', data),
+    onCancel:   () => modal.close(),
 });
 
-// Morph — tree-diff existing DOM against new HTML, preserving focus and scroll position
-await engine.morph(find('#stats-panel'), buildHtml(stats));
-
-// Skip an expensive build when content hasn't changed
-if (engine.shouldMorph(find('#panel'), html)) {
-    await engine.morph(find('#panel'), html);
-}
-
-// Declarative bindings — element updates when store key is written
-// HTML:  <span data-oja-bind="task.count"></span>
-// JS:
-effect(() => { engine.set('task.count', tasks().length); });
-
-// Scan a component subtree for data-oja-bind attributes
-component.onMount(el => engine.scan(el));
-
-// Auto-scan shell-level bindings across all routes (uses MutationObserver — use sparingly)
-engine.enableAutoBind();
+// Works inside a modal body
+modal.open('addHostModal', {
+    body: Out.fn(async (container) => {
+        wizard.render(container, steps, { onComplete });
+    }),
+});
 ```
 
 ---
@@ -901,7 +979,6 @@ const headers = [
     { key: 'status',   label: 'Status', sortable: false },
 ];
 
-// Render
 const t = table.render(find('#host-table'), rows, headers, {
     pageSize:   20,
     onRowClick: (row) => openHostDetail(row),
@@ -930,10 +1007,10 @@ const t = table.render(find('#host-table'), [], headers, {
     },
 });
 
-// Loading state
-t.setLoading(true);
-t.update(await api.get('/hosts'));
-t.setLoading(false);
+// Column visibility
+t.hideColumn('rps');
+t.showColumn('rps');
+t.toggleColumn('rps');
 ```
 
 ---
@@ -943,59 +1020,78 @@ t.setLoading(false);
 ```js
 import { Search, Trie, autocomplete } from '@agberohq/oja';
 
-// Full-text search index
 const index = new Search([], {
     fields:      ['text', 'tag', 'description'],
     weights:     { text: 2, tag: 1 },
-    fuzzy:       true,   // optional — tolerates typos
+    fuzzy:       true,
     maxDistance: 1,
 });
 
 index.add('id-1', { text: 'Fix login bug', tag: 'auth' });
 index.addAll(tasks().map(t => ({ id: t.id, ...t })));
 
-const results = index.search('logn'); // fuzzy match finds 'login'
+const results = index.search('logn');
 results.forEach(r => console.log(r.doc, r.score));
 
-// Override fuzzy per call
-const exact = index.search('login', { fuzzy: false });
-
-index.remove('id-1');
-index.clear();
-
-// Trie — fast prefix autocomplete (backed by a prefix tree)
+// Trie — fast prefix autocomplete
 const trie = new Trie();
-trie.insert('api.prod');
-trie.insertAll(['api.staging', 'web.prod', 'web.staging']);
+trie.insertAll(['api.prod', 'api.staging', 'web.prod']);
+trie.autocomplete('api.');           // → ['api.prod', 'api.staging']
+trie.startsWith('api.');            // → ['api.prod', 'api.staging']
 
-trie.autocomplete('api.');                         // → ['api.prod', 'api.staging']
-trie.fuzzySearch('prod', { maxDistance: 1 });      // → ['api.prod', 'web.prod']
-
-// Attach autocomplete to any input
-const handle = autocomplete.attach(find('#search-input'), {
-    source:   trie,            // Trie, Search, array, or async function
+autocomplete.attach(find('#search-input'), {
+    source:   trie,
     limit:    8,
     onSelect: (value) => { find('#search-input').value = value; },
 });
-
-component.onUnmount(() => handle.destroy());
 ```
 
 ---
 
-### Clipboard
+### Drag and drop
 
 ```js
-import { clipboard } from '@agberohq/oja';
+import { dragdrop } from '@agberohq/oja';
 
-await clipboard.write('some text');
-await clipboard.write(html, { format: 'text/html' });
+dragdrop.reorder('#host-list', {
+    onReorder: (items) => api.post('/hosts/reorder', { order: items.map(el => el.dataset.id) }),
+    handle:    '.drag-handle',
+    animation: 150,
+});
 
-const text = await clipboard.read();
+dragdrop.dropZone('#upload-area', {
+    onDrop:  (files) => files.forEach(uploadFile),
+    accept:  ['.jpg', '.png', '.pdf'],
+    maxSize: 10 * 1024 * 1024,
+    onError: (msg) => notify.error(msg),
+});
+```
 
-// Copy from an element's value or text content
-clipboard.from('#url-field');
-clipboard.from('#code-block', { type: 'text' });
+---
+
+### Forms
+
+```js
+import { form, notify } from '@agberohq/oja';
+
+form.on('#loginForm', {
+    submit:  async (data) => api.post('/login', data),
+    success: (res) => auth.session.start(res.token),
+    error:   (err) => form.showError('#loginForm', 'password', err.message),
+});
+
+const ok = await form.validate('#firewallForm', {
+    ip:     (v) => /^[\d.:/a-fA-F]+$/.test(v) || 'Enter a valid IP or CIDR',
+    reason: async (v) => await api.get(`/check?ip=${v}`) || 'Already blocked',
+});
+if (!ok) return;
+
+const stop = form.dirty('#editForm', (field, isDirty) => {
+    find('#save-btn').disabled = !isDirty;
+});
+component.onUnmount(() => stop());
+
+const data = form.collect('#myForm');
 ```
 
 ---
@@ -1005,14 +1101,12 @@ clipboard.from('#code-block', { type: 'text' });
 ```js
 import { OjaSSE, OjaSocket } from '@agberohq/oja';
 
-// Server-Sent Events
 const sse = new OjaSSE('/api/events');
 sse.on('metrics', (data) => setMetrics(data));
 sse.onDisconnect(() => notify.banner('Connection lost', { type: 'warn' }));
 sse.onConnect(()    => notify.dismissBanner());
 component.onUnmount(() => sse.close());
 
-// WebSocket
 const ws = new OjaSocket('wss://api.example.com/live');
 ws.on('connect',    () => ws.send({ type: 'subscribe', channel: 'hosts' }));
 ws.on('message',    (data) => handleMessage(data));
@@ -1021,6 +1115,35 @@ component.onUnmount(() => ws.close());
 ```
 
 Both reconnect automatically with exponential backoff.
+
+---
+
+### Engine — smart DOM updates
+
+```js
+import { engine, Store } from '@agberohq/oja';
+
+const store = new Store('myapp');
+engine.useStore(store);
+
+// Keyed list reconciliation — only changed nodes are patched
+engine.list(listEl, items, {
+    key:    item => item.id,
+    render: (item, existing) => {
+        const el = existing || document.createElement('div');
+        el.dataset.id = item.id;
+        find('span', el).textContent = item.text;
+        return el;
+    },
+});
+
+// Morph — tree-diff against new HTML, preserves focus and scroll
+await engine.morph(find('#stats-panel'), buildHtml(stats));
+
+if (engine.shouldMorph(find('#panel'), html)) {
+    await engine.morph(find('#panel'), html);
+}
+```
 
 ---
 
@@ -1042,19 +1165,10 @@ go(async () => {
     }
 });
 
-// Pipeline — chain processing stages
-const output = pipeline([resize, compress, upload], inputChannel);
-
-// Fan-out / fan-in
-const [q1, q2, q3] = fanOut(inputChannel, 3);
-const merged = fanIn([q1, q2, q3]);
-
 component.onUnmount(() => ch.close());
 ```
 
 ### Runner — long-lived background worker
-
-`Runner` is for infrastructure that needs to stay alive across the app lifetime — game loops, simulations, persistent connections. VFS uses it internally.
 
 ```js
 import { Runner } from '@agberohq/oja';
@@ -1065,35 +1179,10 @@ const worker = new Runner((self) => {
     self.on('get',       ()     => { return { count }; });
 });
 
-worker.send('increment', { by: 5 });           // fire and forget
-await worker.post('increment', { by: 1 });     // await receipt
-const { count } = await worker.request('get'); // await response
-
-worker.on('event', (data) => console.log(data));
+worker.send('increment', { by: 5 });
+const { count } = await worker.request('get');
 worker.close();
 ```
-
----
-
-## Multi-app architecture
-
-Multiple apps share the same Oja framework:
-
-```
-oja/src/          ← framework (shared)
-dashboard/        ← admin panel
-  index.html
-  app.js
-  pages/
-  components/
-portal/           ← user portal
-  index.html
-  app.js
-  pages/
-  components/
-```
-
-The boundary rule: **Would another app ever need this?** Yes → it belongs in `oja/src/`. No → it stays in the app folder.
 
 ---
 
@@ -1103,19 +1192,19 @@ The boundary rule: **Would another app ever need this?** Yes → it belongs in `
 import { logger, debug } from '@agberohq/oja';
 
 logger.info('auth', 'User logged in', { userId: 42 });
-logger.warn('api', 'Slow response', { ms: 1240, path: '/config' });
+logger.warn('api', 'Slow response', { ms: 1240 });
 logger.error('component', 'Load failed', { url: 'hosts.html' });
-logger.setLevel('WARN'); // ERROR | WARN | INFO | DEBUG
+logger.setLevel('WARN');
 
-// Forward errors to server
 logger.onLog((entry) => {
     if (entry.level === 'ERROR') api.post('/logs', entry);
 });
 
-// Framework internals — development only
-debug.enable('router,auth,api'); // or '*' for everything
-debug.dump();   // prints full timeline to console
-window._debug = debug; // access from browser console
+// Listen to all framework events for debugging
+const off = runtime.on('*', (name, detail) => console.debug(`[oja] ${name}`, detail));
+
+debug.enable('router,auth,api');
+debug.dump();
 ```
 
 ---
@@ -1126,33 +1215,35 @@ window._debug = debug; // access from browser console
 |---------|--------|-------|
 | Reactive state (`state`, `effect`, `derived`, `batch`) | named | core + full |
 | Cross-module state (`context`) | named | core + full |
-| Router (hash + history, groups, middleware) | `Router`, `Out` | core + full |
-| Layout (persistent shell) | `layout` | core + full |
+| Reactive channels (`channel`) | named | core + full |
+| Router (hash + history, groups, middleware, named routes) | `Router`, `Out` | core + full |
+| Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
 | Component mount + lifecycle | `component` | core + full |
 | Template syntax (`{{}}`, `data-if`, `data-each`) | built-in | core + full |
 | Auth (levels, session, JWT) | `auth` | core + full |
-| Notifications (toast + banner) | `notify` | core + full |
-| Modals + drawers (stack, confirm, focus trap) | `modal` | core + full |
-| Forms (lifecycle, validation, dirty tracking, image) | `form` | core + full |
+| Notifications (toast, banner, progress, promise) | `notify` | core + full |
+| Modals (stack, confirm, prompt, beforeClose guard) | `modal` | core + full |
+| Forms (lifecycle, validation, dirty tracking) | `form` | core + full |
 | Events (delegated, emit/listen, keyboard shortcuts) | `on`, `emit`, `listen`, `keys` | core + full |
-| Store (session/local/memory, encrypt, watch) | `Store` | core + full |
+| Store (session/local/memory, encrypt, watch, TTL) | `Store` | core + full |
 | Encryption (Web Crypto, seal/open/rotate) | `encrypt` | core + full |
 | Engine (list reconcile, morph, `data-oja-bind`) | `engine` | core + full |
 | Search + autocomplete (full-text, fuzzy, trie) | `Search`, `Trie`, `autocomplete` | core + full |
-| Table (sort, pagination, row actions, remote data) | `table` | full |
+| Progress (milestone hooks, reverse, bind, track) | `progress` | core + full |
+| Runtime unified event bus (`runtime.on/off/emit`) | `runtime` | core + full |
+| Animate (fade, slide, collapse, countUp, typewriter, shake) | `animate` | core + full |
+| Collapse + accordion | `collapse`, `accordion` | core + full |
+| Wizard (multi-step form, modal-compatible) | `wizard` | full |
+| Table (sort, pagination, row actions, column visibility) | `table` | full |
+| Inline charts (sparkline, timeSeries) | `Out.sparkline`, `Out.timeSeries` | core + full |
 | Clipboard (read/write/cut, multi-format) | `clipboard` | core + full |
 | Drag and drop (reorder, drop zone, custom) | `dragdrop` | full |
 | SSE (auto-reconnect) | `OjaSSE` | full |
 | WebSocket (auto-reconnect) | `OjaSocket` | full |
-| Web Worker wrapper | `OjaWorker` | full |
-| WASM component model | `OjaWasm` | full |
+| VFS (offline-first IndexedDB, encrypt, persist, quota) | `VFS` | core + full |
+| Config (`oja.config.json`) | `config` | core + full |
 | Channel + go (Go-style concurrency) | `Channel`, `go` | full |
 | Runner (long-lived background worker) | `Runner` | full |
-| VFS (offline-first IndexedDB filesystem) | `VFS` | core + full |
-| Config (`oja.config.json`) | `config` | core + full |
-| CSS variables helpers | `cssVars` | core + full |
-| Canvas utilities | `canvas` | full |
-| WebRTC | `webrtc` | full |
 | Logging + debug | `logger`, `debug` | core + full |
 | Adapter bridge (D3, Chart.js, GSAP, etc.) | `adapter` | core + full |
 
@@ -1165,16 +1256,16 @@ window._debug = debug; // access from browser console
 | Build step | None | Drop-in simplicity, no node_modules |
 | Virtual DOM | No | Direct DOM + targeted `effect()` |
 | Display primitive | `Out` everywhere | One type for all visible output — composable, typed, no raw strings |
+| DOM queries | `find()` / `findAll()` | Scoped to component instance — multiple instances never conflict |
 | URL strategy | Hash default, path opt-in | Hash works everywhere without server config |
-| CSS ownership | App owns all styles | Oja only owns lifecycle animation classes |
+| CSS ownership | App owns all styles | Oja only owns lifecycle animation and UI component classes |
 | Auth | Declared at route | Never check `isActive()` manually |
 | Token security | Encrypted cascade | Web Crypto API, no plaintext tokens |
-| Encryption | `encrypt.js` standalone | `Store`, `auth`, `VFS`, and third parties all import the same module |
+| Event bus | Single unified bus | All modules — router, component, layout, out, api — emit on `events.js`. `runtime.on()` is the public subscription point. |
+| Component communication | `channel()` | Reactive, holds current value, late subscribers get it immediately — unlike fire-and-forget emit/listen |
+| Progress | Direction-aware + hooks | Milestone hooks, reverse animation, runtime binding — first-class coordination primitive |
 | Offline | VFS optional | Progressive enhancement — start without VFS, add it when needed |
-| Config | `oja.config.json` optional | Like `package.json` — everything works without it |
 | Worker pattern | `Runner` + `Channel` separate | `Runner` stays alive; `Channel` moves data — single responsibility |
-| WASM | Component Model aligned | Same API today and when native support lands |
-| Third-party | `adapter.js` bridge | D3, GSAP, Chart.js registered once, used anywhere |
 
 ---
 
@@ -1184,7 +1275,6 @@ window._debug = debug; // access from browser console
 - **`OjaWasm` worker mode**: JS import callbacks are stubbed in the worker thread. For WASM modules that need JS callbacks, use non-worker mode.
 - **`OjaWorker` scope isolation**: worker functions are serialised as strings and run in a separate thread — they cannot close over variables from the outer scope.
 - **`webrtc.js` `connect()`**: WebRTC signaling is application-specific. Wire your own signaling server using `createPeer()`, `createOffer()`, `setLocalDescription()`.
-- **No DevTools browser extension yet**.
 
 ---
 

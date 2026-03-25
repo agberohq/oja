@@ -7,7 +7,8 @@ exactly when it is needed, so you never learn something in the abstract.
 By the end you will know how to use every core primitive:
 `state`, `effect`, `context`, `derived`, `batch`, routing, components,
 layouts, forms, modals, keyboard shortcuts, auth guards, the engine,
-search, tables, VFS, and config.
+search, tables, VFS, config, progress tracking, and component communication
+with `signal()`.
 
 No build step. No compiler. Just files.
 
@@ -318,6 +319,56 @@ app.Use(async (ctx, next) => {
 
 app.Get('/',        Out.component('pages/home.html'));
 app.Get('/profile', Out.component('pages/profile.html'));
+```
+
+
+### Groups and nested routes
+
+`router.Group(prefix)` creates a sub-router scoped to a URL prefix. Routes
+registered on the group are resolved relative to that prefix, and middleware
+added with `group.Use()` only applies to routes inside the group — it never
+leaks to the parent.
+
+This is the Go/chi pattern, brought to the browser. Middleware stacks correctly:
+a nested group inherits everything the parent group applied, then can add its own
+on top.
+
+```js
+// Protected section — all routes under /app require a logged-in user
+const app = router.Group('/app');
+app.Use(async (ctx, next) => {
+    if (!currentUser()) {
+        ctx.redirect('/login');
+        return;
+    }
+    await next();
+});
+
+app.Get('/dashboard', Out.component('pages/dashboard.html'));
+app.Get('/hosts',     Out.component('pages/hosts.html'));
+
+// Nested group — adds a second middleware layer for host detail pages
+// Both the auth check AND the host loader run before any host route renders
+const hosts = app.Group('/hosts');
+hosts.Use(async (ctx, next) => {
+    ctx.host = await api.get(`/hosts/${ctx.params.id}`);
+    if (!ctx.host) { ctx.redirect('/app/hosts'); return; }
+    await next();
+});
+hosts.Get('/{id}',        Out.component('pages/host-detail.html'));
+hosts.Get('/{id}/routes', Out.component('pages/host-routes.html'));
+```
+
+Named routes let you generate URLs from a name and params instead of
+constructing strings manually. Register a name on the group — it lands on the
+parent router automatically, so navigation works from anywhere:
+
+```js
+app.name('host.detail', '/hosts/{id}');
+
+// Later — anywhere in the app
+router.navigateTo('host.detail', { id: 42 });
+router.path('host.detail', { id: 42 }); // → '/app/hosts/42'
 ```
 
 ---
@@ -650,6 +701,64 @@ Wire the close button globally in `app.js`:
 on('[data-action="modal-close"]', 'click', () => modal.close());
 ```
 
+### Programmatic prompt
+
+Sometimes you need a quick text input from the user but you don't want to build
+a whole modal for it. `modal.prompt()` handles this — it auto-injects a minimal
+modal if you don't have one in the HTML, shows it, waits for the user to type
+and click OK or Cancel, then resolves with the value or `null`.
+
+```js
+// No HTML needed — Oja injects the modal automatically
+const name = await modal.prompt('What should we call this host?', {
+    default: 'api.example.com',
+});
+
+if (name) {
+    await api.post('/hosts', { hostname: name });
+    notify.success(`${name} added`);
+}
+```
+
+### Close guards — preventing accidental data loss
+
+If a form inside a modal can have unsaved changes, you want to warn the user
+before the modal closes. `modal.beforeClose()` registers a guard function that
+runs every time a close is attempted. If the guard returns `false`, the close
+is cancelled.
+
+```js
+// Register the guard when the component mounts
+const off = modal.beforeClose('editModal', async () => {
+    // If the form is clean, allow close immediately
+    if (!form.isDirty('#editForm')) return true;
+
+    // Otherwise ask — modal.confirm() is itself a modal, so they stack
+    const discard = await modal.confirm('Discard unsaved changes?');
+    return discard; // true = close, false = stay
+});
+
+// Remove the guard when the component unmounts
+// (guards on closed modals do nothing, but it is good practice to clean up)
+component.onUnmount(() => off());
+```
+
+### modal.open() returns a Promise
+
+`modal.open()` returns `Promise<Element>` — the modal element once it is ready.
+For most cases you don't need this. But when the modal body is an async
+component and you need to interact with it immediately after opening, awaiting
+gives you a clean moment:
+
+```js
+const el = await modal.open('editModal', {
+    body: Out.component('components/edit-form.html', { item }),
+    size: 'lg',
+});
+// The component has finished rendering by here
+el.querySelector('#first-input')?.focus();
+```
+
 ---
 
 ## Part 12 — Channels (async pipelines)
@@ -682,6 +791,83 @@ go(async () => {
 `go()` is fire-and-forget — it does not return a promise.
 Use channels when you want to decouple the thing that produces work from the
 thing that processes it.
+
+---
+
+## Part 12b — signal() — reactive component communication
+
+`Channel` (Part 12) is for coordinating async work — a producer and a consumer
+running independently. `signal()` solves a different problem: how do two
+components that are already mounted share state and stay in sync?
+
+The classic example is a host list and a detail sidebar. When the user clicks a
+host in the list, the sidebar should update. The two components don't have a
+common parent — they're mounted into different parts of the layout. You could
+use `emit` and `listen`, but that's fire-and-forget: if the sidebar mounts
+*after* the user has already clicked something, it misses the event and shows
+nothing.
+
+`signal()` solves this because it **holds its current value**. A component that
+subscribes after the value is set still receives it immediately. Think of it as
+a reactive variable that any component can read or write, with the last value
+always available.
+
+```js
+import { signal } from '@agberohq/oja';
+
+// In hosts.html — the list page
+// signal() takes a name, optionally an initial value
+const selected = signal('host:selected');
+
+// When the user clicks a row, write to the signal
+on(find('#host-list'), 'click', '[data-host-id]', (e, el) => {
+    selected.set({
+        id:   el.dataset.hostId,
+        name: el.dataset.hostName,
+    });
+});
+```
+
+```js
+// In sidebar.html — the detail panel
+import { signal } from '@agberohq/oja';
+
+const selected = signal('host:selected');
+
+// subscribe() calls the handler immediately with the current value
+// if one already exists — so the sidebar is always in sync,
+// even if it mounted after the selection was made
+const off = selected.subscribe(host => {
+    if (host) {
+        Out.to(find('#detail-panel'))
+            .component('components/host-detail.html', host);
+    }
+});
+
+// Always unsubscribe when the component unmounts
+component.onUnmount(() => off());
+```
+
+The rules are simple:
+
+- `signal('name')` anywhere returns the same signal — same name, same value.
+- `signal.set(value)` notifies all current subscribers and stores the value.
+- `signal.get()` reads the current value without subscribing.
+- `signal.subscribe(fn)` calls `fn` immediately with the current value (if any),
+  then again on every future `set()`. Returns an unsubscribe function.
+- The component that **creates** the signal is responsible for destroying it
+  when it unmounts — not the subscribers.
+
+```js
+// In the page that owns this signal — clean up on unmount
+component.onUnmount(() => selected.destroy());
+```
+
+**When to use `signal()` vs `emit/listen`:**
+
+Use `signal()` when the state matters at mount time — a selected item, a filter
+value, a current user. Use `emit/listen` for events that only matter right now —
+"this upload just finished", "the user just deleted that record".
 
 ---
 
@@ -738,6 +924,7 @@ in the order Oja expects it.
 import {
     Router, Out, layout, modal,
     context, auth, notify, on, keys,
+    signal, progress, runtime,
 } from '@agberohq/oja';
 
 // ── 1. Global context ─────────────────────────────────────────────────────
@@ -760,10 +947,21 @@ auth.session.OnExpiry(() => {
     notify.warn('Session expired');
 });
 
-// ── 3. Layout ─────────────────────────────────────────────────────────────
+// ── 3. Page load progress ────────────────────────────────────────────────────
+// Wire the top-of-page progress bar to the router automatically.
+// It starts when navigation begins, ticks on each component mount, and
+// completes when the router finishes rendering the new page.
+progress('page').track(runtime, {
+    start: 'oja:navigate:start',
+    tick:  'component:mounted',
+    total: 3,
+    done:  'oja:navigate:end',
+});
+
+// ── 4. Layout ─────────────────────────────────────────────────────────────
 await layout.apply('#app', 'layouts/main.html', { currentUser });
 
-// ── 4. Router ─────────────────────────────────────────────────────────────
+// ── 5. Router ─────────────────────────────────────────────────────────────
 const router = new Router({ mode: 'hash', outlet: '#main-outlet' });
 
 router.Get('/login', Out.component('pages/login.html'));
@@ -784,7 +982,7 @@ app.Get('/profile', Out.component('pages/profile.html', { currentUser, tasks }))
 
 router.NotFound(Out.component('pages/404.html'));
 
-// ── 5. Global event handlers ──────────────────────────────────────────────
+// ── 6. Global event handlers ──────────────────────────────────────────────
 on('[data-action="new-task"]', 'click', () => {
     modal.open('task-modal', {
         body: Out.component('components/task-form.html', { currentUser }),
@@ -803,7 +1001,7 @@ keys({
     '?':   () => notify.info('n: New task · g h: Home · g t: Tasks · g p: Profile'),
 });
 
-// ── 6. Start ──────────────────────────────────────────────────────────────
+// ── 7. Start ──────────────────────────────────────────────────────────────
 router.start('/');
 ```
 
@@ -820,6 +1018,137 @@ router.start('/');
 | Declaring `router` after `auth.session.OnStart` | `ReferenceError: Cannot access 'router' before initialization` | Declare `router` before any auth session callbacks |
 | `go()` return value | `go()` returns `undefined` — it is fire-and-forget | Use a flag or a Channel to observe completion |
 | Missing `<script type="importmap">` in `index.html` | `Failed to resolve module specifier "@agberohq/oja"` in the browser console | Add the import map to `index.html` — it only needs to be there once and covers every script on the page |
+| `Out.to(el)\`template\`` | `TypeError: Out.to(...) is not a function` | Use `Out.tag(el)\`template\`` for tagged template literals — `Out.to()` is for method chaining only |
+| Calling `signal.destroy()` from a subscriber | Destroys the signal for every other subscriber too | Only the page that owns the signal calls `destroy()` — subscribers just call the `off()` function they received from `subscribe()` |
+
+---
+
+## Part 14b — Progress tracking
+
+The task board uploads files, fetches data, and loads pages — all operations
+the user is waiting on. The `progress()` utility gives every waiting moment
+a visual shape without tying it to a specific UI component.
+
+### The top-of-page bar
+
+By default, `progress()` renders a slim 3px bar at the top of the page — the
+same pattern used by GitHub and YouTube. You do not build any HTML for it. You
+just call it.
+
+```js
+import { progress } from '@agberohq/oja';
+
+const p = progress('upload');
+
+p.start();    // starts the indeterminate pulsing bar
+p.set(60);    // snaps to 60% — animates from wherever it was
+p.done();     // fills to 100% then fades out
+p.fail();     // turns red then fades out
+```
+
+### Wiring to an upload
+
+```js
+const p = progress('upload');
+
+// Bind to an uploader instance — start/done/fail are wired automatically
+p.bind(uploader);
+
+// Or drive it manually from upload events
+uploader.onProgress((pct) => p.set(pct));
+uploader.onComplete(() => p.done());
+uploader.onError(() => p.fail());
+```
+
+### Milestone hooks
+
+The real power is the hook system. You can fire any function when the bar
+crosses a specific value, in either direction:
+
+```js
+p.action({
+    25:     () => notify.info('Quarter done'),
+    50:     () => notify.info('Halfway there'),
+    done:   () => notify.success('Upload complete!'),
+    fail:   () => notify.error('Upload failed — retrying'),
+    change: (val) => find('#pct-label').textContent = val + '%',
+});
+```
+
+Direction-aware hooks let you respond differently when progress is going
+forward versus backward:
+
+```js
+// This only fires when the bar crosses 50 going upward
+p.on(50, () => showHalfwayMessage(), { direction: 'up' });
+
+// This only fires when crossing 50 going downward
+p.on(50, () => notify.warn('Progress reversed'), { direction: 'down' });
+```
+
+### Reverse — honesty about what is happening
+
+Most progress bars only go forward. When something goes wrong — a corrupt
+chunk, a network retry — they reset to zero, which is jarring and dishonest.
+`p.reverse()` animates the bar backward to a checkpoint instead.
+
+```js
+p.set(80);  // upload was at 80%
+
+// Corrupt data detected — animate back to the last good checkpoint
+p.reverse(30, { reason: 'corrupt' });
+
+// A direction-aware hook can explain what happened
+p.on(50, ({ direction, reason }) => {
+    if (direction === 'down') {
+        notify.warn('Re-uploading from checkpoint…');
+    }
+}, { direction: 'down' });
+```
+
+### Tracking page loads
+
+You can wire the progress bar to the router so it tracks how many components
+have loaded on each navigation. This is one of those things that takes dozens
+of lines in most frameworks — in Oja it is four:
+
+```js
+import { progress, runtime } from '@agberohq/oja';
+
+// In app.js, before router.start()
+progress('page').track(runtime, {
+    start: 'oja:navigate:start',   // reset and start when navigation begins
+    tick:  'component:mounted',    // increment each time a component finishes loading
+    total: 3,                      // how many components to expect per page
+    done:  'oja:navigate:end',     // complete when the router finishes
+});
+```
+
+`runtime` is Oja's unified event bus — all modules emit on it, so `progress`
+can observe the entire framework lifecycle from one place.
+
+### Progress toasts — when the bar is not enough
+
+Sometimes you want the progress alongside a message the user can read. Use
+`notify.progress()` for a toast that stays open until you explicitly close it:
+
+```js
+const p = notify.progress('Uploading config…');
+
+uploader.onProgress((pct) => p.update(pct));  // shows "Uploading config… 60%"
+uploader.onComplete(() => p.done('Config saved'));
+uploader.onError(() => p.fail('Upload failed'));
+```
+
+Or let Oja wire a promise automatically:
+
+```js
+notify.promise(api.post('/config', data), {
+    pending: 'Saving config…',
+    success: 'Config saved',
+    error:   'Save failed',
+});
+```
 
 ---
 
