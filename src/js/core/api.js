@@ -1,4 +1,3 @@
-// src/js/core/api.js
 /**
  * oja/api.js
  * Fetch wrapper with auth, online/offline detection, and codec support.
@@ -450,13 +449,26 @@ export class Api {
         _emit(online ? 'api:online' : 'api:offline');
     }
 
+    // Store listener references so destroy() can remove them.
+    // Previously anonymous listeners were added with no way to remove them,
+    // causing leaks when multiple Api instances are created.
     _setupOnlineDetection() {
         if (typeof window === 'undefined') return;
-        window.addEventListener('online', () => {
-            this._setOnline(true);
-            this.flushQueue();
-        });
-        window.addEventListener('offline', () => this._setOnline(false));
+        this._onOnline  = () => { this._setOnline(true); this.flushQueue(); };
+        this._onOffline = () => this._setOnline(false);
+        window.addEventListener('online',  this._onOnline);
+        window.addEventListener('offline', this._onOffline);
+    }
+
+    /**
+     * Remove window event listeners registered by this Api instance.
+     * Call when the instance is no longer needed to prevent memory leaks.
+     */
+    destroy() {
+        if (this._onOnline)  window.removeEventListener('online',  this._onOnline);
+        if (this._onOffline) window.removeEventListener('offline', this._onOffline);
+        this._onOnline  = null;
+        this._onOffline = null;
     }
 }
 
