@@ -1,4 +1,4 @@
- /**
+/**
      * oja/oja.css
      * The only CSS Oja owns.
      * App styles live in the app — Oja never touches them.
@@ -12,7 +12,7 @@
      * Animation durations here must match CSS_TRANSITION_MS in component.js (250ms).
      */
 
-    /* ─── Page transitions ──────────────────────────────────────────────────────── */
+/* ─── Page transitions ──────────────────────────────────────────────────────── */
 
 .oja-entering {
     animation: oja-fade-in 0.2s ease forwards;
@@ -826,4 +826,378 @@ TABLE
     .oja-action-btn,
     .oja-page-btn,
     .oja-copy-btn               { transition: none; }
+}
+
+/* ===============================================================================
+   TOAST TYPE VARIANTS
+   =============================================================================== */
+
+.oja-toast-success {
+    background: var(--success-bg, #f0fdf4);
+    color: var(--success-fg, #166534);
+    border-left: 3px solid var(--success, #16a34a);
+}
+
+.oja-toast-error {
+    background: var(--danger-bg, #fef2f2);
+    color: var(--danger-fg, #991b1b);
+    border-left: 3px solid var(--danger, #ef4444);
+}
+
+.oja-toast-warn {
+    background: var(--warning-bg, #fffbeb);
+    color: var(--warning-fg, #92400e);
+    border-left: 3px solid var(--warning, #f59e0b);
+}
+
+.oja-toast-info {
+    background: var(--info-bg, #eff6ff);
+    color: var(--info-fg, #1e40af);
+    border-left: 3px solid var(--info, #3b82f6);
+}
+
+.oja-toast-custom {
+    background: var(--bg, #ffffff);
+    border-left: 3px solid var(--border, #e5e7eb);
+}
+
+
+/* ===============================================================================
+   MODAL SIZES
+   =============================================================================== */
+
+.oja-modal-sm   { max-width: 360px !important; width: 100%; }
+.oja-modal-md   { max-width: 540px !important; width: 100%; }
+.oja-modal-lg   { max-width: 720px !important; width: 100%; }
+.oja-modal-xl   { max-width: 960px !important; width: 100%; }
+.oja-modal-full { max-width: 98vw  !important; width: 98vw; max-height: 96vh; }
+
+
+/* ===============================================================================
+   ANIMATE - shake
+   =============================================================================== */
+
+.oja-shake {
+    animation: oja-shake 0.4s ease;
+}
+
+@keyframes oja-shake {
+    0%, 100% { transform: translateX(0);    }
+    20%       { transform: translateX(-6px); }
+    40%       { transform: translateX(6px);  }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px);  }
+}
+
+
+/* ===============================================================================
+   COLLAPSE & ACCORDION
+   =============================================================================== */
+
+[data-collapse-panel] {
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+[data-collapse-panel][aria-hidden="true"] {
+    max-height: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+[data-collapse-panel][aria-hidden="false"] {
+    opacity: 1;
+}
+
+[data-collapse-trigger][aria-expanded="true"]  .oja-collapse-icon { transform: rotate(180deg); }
+[data-collapse-trigger][aria-expanded="false"] .oja-collapse-icon { transform: rotate(0deg); }
+.oja-collapse-icon { display: inline-block; transition: transform 0.2s ease; }
+
+.oja-accordion-item {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: var(--oja-radius, 8px);
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.oja-accordion-item:last-child { margin-bottom: 0; }
+
+.oja-accordion-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--panel-bg, #f9fafb);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg, #1a1a1a);
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.oja-accordion-trigger:hover {
+    background: var(--hover-bg, #f3f4f6);
+}
+
+.oja-accordion-trigger[aria-expanded="true"] {
+    background: var(--hover-bg, #f3f4f6);
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.oja-accordion-label { flex: 1; }
+
+.oja-accordion-icon {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-mute, #6b7280);
+    transition: transform 0.2s ease;
+}
+
+.oja-accordion-trigger[aria-expanded="true"] .oja-accordion-icon {
+    transform: rotate(180deg);
+}
+
+.oja-accordion-body {
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--fg, #1a1a1a);
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.2s ease;
+}
+
+.oja-accordion-body[aria-hidden="true"] {
+    max-height: 0 !important;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    pointer-events: none;
+}
+
+.oja-accordion-body[aria-hidden="false"] {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-collapse-panel],
+    .oja-accordion-body,
+    .oja-accordion-icon,
+    .oja-collapse-icon { transition: none; }
+}
+
+
+/* ===============================================================================
+   WIZARD
+   =============================================================================== */
+
+.oja-wizard {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.oja-wizard-header {
+    padding: 16px 20px 0;
+}
+
+.oja-wizard-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--fg, #1a1a1a);
+    margin-bottom: 12px;
+}
+
+.oja-wizard-progress {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.oja-wizard-step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border, #e5e7eb);
+    background: var(--bg, #fff);
+    color: var(--text-mute, #6b7280);
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.oja-wizard-step-dot.active {
+    border-color: var(--accent, #0066ff);
+    background: var(--accent, #0066ff);
+    color: #fff;
+}
+
+.oja-wizard-step-dot.done {
+    border-color: var(--success, #16a34a);
+    background: var(--success, #16a34a);
+    color: #fff;
+}
+
+.oja-wizard-step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border, #e5e7eb);
+    transition: background 0.3s ease;
+}
+
+.oja-wizard-step-line.done {
+    background: var(--success, #16a34a);
+}
+
+.oja-wizard-count {
+    font-size: 11px;
+    color: var(--text-mute, #6b7280);
+    margin-bottom: 4px;
+}
+
+.oja-wizard-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.oja-wizard-error {
+    margin: 0 20px 12px;
+    padding: 10px 14px;
+    border-radius: var(--oja-radius, 6px);
+    background: var(--danger-bg, #fef2f2);
+    color: var(--danger-fg, #991b1b);
+    border-left: 3px solid var(--danger, #ef4444);
+    font-size: 13px;
+}
+
+.oja-wizard-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border, #e5e7eb);
+    background: var(--panel-bg, #f9fafb);
+    gap: 8px;
+}
+
+.oja-wizard-btn {
+    padding: 8px 16px;
+    border-radius: var(--oja-radius, 6px);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+}
+
+.oja-wizard-back {
+    background: none;
+    border-color: var(--border, #e5e7eb);
+    color: var(--text-mute, #6b7280);
+}
+
+.oja-wizard-back:hover:not(:disabled) {
+    background: var(--hover-bg, #f3f4f6);
+    color: var(--fg, #1a1a1a);
+}
+
+.oja-wizard-next,
+.oja-wizard-submit {
+    background: var(--accent, #0066ff);
+    color: #fff;
+    margin-left: auto;
+}
+
+.oja-wizard-next:hover:not(:disabled),
+.oja-wizard-submit:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.oja-wizard-cancel {
+    background: none;
+    border-color: transparent;
+    color: var(--text-mute, #6b7280);
+    font-size: 12px;
+}
+
+.oja-wizard-cancel:hover:not(:disabled) {
+    color: var(--danger, #ef4444);
+}
+
+.oja-wizard-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oja-wizard-step-dot,
+    .oja-wizard-step-line,
+    .oja-wizard-btn { transition: none; }
+}
+
+
+/* ===============================================================================
+   PROGRESS BAR  (src/js/utils/progress.js)
+   =============================================================================== */
+
+.oja-progress-wrap {
+    height: 3px;
+    background: transparent;
+    overflow: hidden;
+    border-radius: 0;
+}
+
+.oja-progress-top {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    height: 3px;
+}
+
+.oja-progress-wrap:not(.oja-progress-top) {
+    width: 100%;
+    border-radius: var(--oja-radius, 4px);
+    background: var(--border, #e5e7eb);
+}
+
+.oja-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent, #0066ff);
+    border-radius: inherit;
+    transition: width 0.3s ease, background 0.4s ease;
+    transform-origin: left center;
+}
+
+.oja-progress-bar.oja-progress-reversing {
+    transition: width 0.15s ease-in, background 0.2s ease;
+}
+
+.oja-progress-bar.oja-progress-indeterminate {
+    width: 100% !important;
+    animation: oja-progress-pulse 1.4s ease-in-out infinite;
+    background: var(--accent, #0066ff);
+}
+
+@keyframes oja-progress-pulse {
+    0%   { opacity: 1;   transform: scaleX(0.1) translateX(-100%); }
+    50%  { opacity: 0.8; transform: scaleX(0.6) translateX(60%);   }
+    100% { opacity: 1;   transform: scaleX(0.1) translateX(600%);  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oja-progress-bar                             { transition: none; }
+    .oja-progress-bar.oja-progress-indeterminate  { animation: none; opacity: 0.6; }
+    [data-collapse-panel],
+    .oja-accordion-body { transition: none; }
 }

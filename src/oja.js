@@ -44,7 +44,7 @@ export { timeout, interval, sleep, defer, withDefer }     from './js/core/system
 // ─── State & reactivity ───────────────────────────────────────────────────────
 export { Store }                                          from './js/core/store.js';
 export { state, effect, derived, batch, context,
-    watch, untrack, readonly }                        from './js/core/reactive.js';
+    watch, untrack, readonly, channel }              from './js/core/reactive.js';
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 export { render, renderRaw, fill, each, template }        from './js/core/template.js';
@@ -107,7 +107,7 @@ export const VERSION = '0.0.1';
 // ─── Grouped exports — one import, dot-access ─────────────────────────────────
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
-    watch, untrack, readonly }                            from './js/core/reactive.js';
+    watch, untrack, readonly, channel }                   from './js/core/reactive.js';
 import { on, once, off, emit, listen, listenOnce, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,

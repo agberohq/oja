@@ -156,8 +156,8 @@ class ReactiveSystem {
             this._sendDevToolsUpdate('persistence:saved', {key, storage});
         } catch (e) {
             const isQuota = e.name === 'QuotaExceededError' ||
-                            e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-                            e.code === 22;
+                e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+                e.code === 22;
             if (isQuota) {
                 console.warn(`[oja/reactive] Storage quota exceeded for key "${key}"`, e);
                 if (typeof onQuotaExceeded === 'function') {
@@ -683,7 +683,7 @@ export function watch(signal, fn, options = {}) {
     });
 }
 
-// ─── untrack(fn) ────────────────────────────────────────────────────────
+// ─── F-13: untrack(fn) ────────────────────────────────────────────────────────
 // Run fn() without tracking any signal reads as dependencies.
 // Use inside effect() to read signals you don't want to subscribe to.
 //
@@ -695,7 +695,7 @@ export function untrack(fn) {
     return _sys._withoutTracking(fn);
 }
 
-// ─── readonly(signal) ───────────────────────────────────────────────────
+// ─── F-16: readonly(signal) ───────────────────────────────────────────────────
 // Wrap a writable signal to expose only the getter.
 // Useful for module encapsulation.
 //
@@ -708,7 +708,7 @@ export function readonly(signal) {
     return read;
 }
 
-// ─── context.subscribe(name, fn) ───────────────────────────────────────
+// ─── F-14: context.subscribe(name, fn) ───────────────────────────────────────
 // Watch a named context value. fn receives (newValue, oldValue).
 // Returns an unsubscribe function.
 context.subscribe = (name, fn) => {
@@ -751,3 +751,152 @@ if (typeof window !== 'undefined') {
         batch: batch
     };
 }
+
+// ─── channel() — reactive same-page pub/sub with current-value semantics ──────
+//
+// Unlike emit/listen (fire-and-forget), a channel holds the last value.
+// Late subscribers receive the current value immediately on subscribe.
+// This makes it the right primitive for component-to-component communication
+// where components mount at different times and need the current state.
+//
+// ─── Usage ────────────────────────────────────────────────────────────────────
+//
+//   // In hosts.html component — write
+//   import { channel } from '../core/reactive.js';
+//   const selected = channel('host:selected');
+//   selected.set({ id: 42, name: 'api.example.com' });
+//
+//   // In sidebar.html component — read (gets current value immediately)
+//   const selected = channel('host:selected');
+//   const off = selected.subscribe(host => {
+//       if (host) renderDetail(host);
+//   });
+//   // off() to unsubscribe
+//
+//   // One-time read without subscribing
+//   const host = selected.get();
+//
+//   // Reset to initial value and notify subscribers
+//   selected.reset();
+//
+//   // Check if anyone is listening
+//   selected.hasSubscribers(); // → boolean
+//
+// ─── Scoped channels ──────────────────────────────────────────────────────────
+//
+//   // Channels are global by default — same name = same channel everywhere.
+//   // Destroy a channel when the page that owns it unmounts:
+//   component.onUnmount(() => channel('host:selected').destroy());
+//
+// ─── Integration with reactive state ──────────────────────────────────────────
+//
+//   // Use with effect() for reactive derived state
+//   const selected = channel('host:selected');
+//   effect(() => {
+//       const host = selected.get();
+//       if (host) document.title = host.name;
+//   });
+
+const _channels = new Map();
+
+export function channel(name, initialValue = undefined) {
+    if (_channels.has(name)) return _channels.get(name);
+
+    let _value       = initialValue;
+    let _hasValue    = initialValue !== undefined;
+    const _listeners = new Set();
+
+    const ch = {
+        /**
+         * Set the current value and notify all subscribers.
+         * @param {*} value
+         */
+        set(value) {
+            _value   = value;
+            _hasValue = true;
+            for (const fn of _listeners) {
+                try { fn(value); } catch (e) {
+                    console.warn(`[oja/channel] subscriber error on "${name}":`, e);
+                }
+            }
+            return this;
+        },
+
+        /**
+         * Get the current value without subscribing.
+         * Returns undefined if no value has been set yet.
+         */
+        get() {
+            return _value;
+        },
+
+        /**
+         * Subscribe to value changes.
+         * The subscriber is called immediately with the current value if one exists.
+         * Returns an unsubscribe function.
+         *
+         * @param {Function} fn — called with (value) on every set()
+         * @returns {Function} unsubscribe
+         */
+        subscribe(fn) {
+            if (typeof fn !== 'function') return () => {};
+            _listeners.add(fn);
+            // Give late subscriber the current value immediately
+            if (_hasValue) {
+                try { fn(_value); } catch (e) {
+                    console.warn(`[oja/channel] subscriber error on "${name}":`, e);
+                }
+            }
+            return () => _listeners.delete(fn);
+        },
+
+        /**
+         * Reset the channel to its initial value and notify subscribers.
+         */
+        reset() {
+            _value    = initialValue;
+            _hasValue = initialValue !== undefined;
+            for (const fn of _listeners) {
+                try { fn(_value); } catch (e) {
+                    console.warn(`[oja/channel] subscriber error on "${name}":`, e);
+                }
+            }
+            return this;
+        },
+
+        /**
+         * Remove all subscribers and delete from the global registry.
+         * Call from component.onUnmount() when the component owns the channel.
+         */
+        destroy() {
+            _listeners.clear();
+            _channels.delete(name);
+        },
+
+        /** True if at least one subscriber is registered. */
+        hasSubscribers() {
+            return _listeners.size > 0;
+        },
+
+        /** Number of active subscribers. */
+        get size() {
+            return _listeners.size;
+        },
+
+        /** The channel name. */
+        get name() {
+            return name;
+        },
+    };
+
+    _channels.set(name, ch);
+    return ch;
+}
+
+/**
+ * Destroy all channels — useful in tests and full app teardown.
+ */
+channel.destroyAll = function() {
+    for (const ch of _channels.values()) ch.destroy();
+    _channels.clear();
+};
