@@ -34,7 +34,9 @@
  */
 
 const DEFAULT_TIMEOUT = 2000;
-const _listeners = new Map(); // type → Set<fn>
+const _listeners = new Map();     // type → Set<fn>
+const _stateListeners = new Set(); // lifecycle state listeners
+let _currentState = 'unknown';    // current SW lifecycle state
 
 // Wire the single shared message listener once
 if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
@@ -42,6 +44,16 @@ if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
         if (!e.data?.type) return;
         const fns = _listeners.get(e.data.type);
         if (fns) fns.forEach(fn => fn(e.data));
+    });
+
+    // Track SW state
+    if (navigator.serviceWorker.controller) {
+        _currentState = 'activated';
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        _currentState = navigator.serviceWorker.controller ? 'activated' : 'redundant';
+        _stateListeners.forEach(fn => { try { fn(_currentState); } catch {} });
     });
 }
 
@@ -64,8 +76,17 @@ export const sw = {
             }
 
             if (navigator.serviceWorker.controller) {
+                // Already controlled — no need to wait for controllerchange
+                _currentState = 'activated';
+                _stateListeners.forEach(fn => { try { fn(_currentState); } catch {} });
                 resolve(reg);
                 return;
+            }
+
+            // track installing state only when SW isn't already active
+            if (!reg.active) {
+                _currentState = 'installing';
+                _stateListeners.forEach(fn => { try { fn(_currentState); } catch {} });
             }
 
             navigator.serviceWorker.addEventListener('controllerchange', () => resolve(reg), { once: true });
@@ -142,9 +163,53 @@ export const sw = {
         return navigator.serviceWorker?.controller || null;
     },
 
+    // Boolean convenience — true if SW is controlling the page.
+    get isControlling() {
+        return !!navigator.serviceWorker?.controller;
+    },
+
     // Returns true if the browser supports service workers.
     get supported() {
         return 'serviceWorker' in navigator;
+    },
+
+    // Wait for a specific message type from the SW (promise-based).
+    // Rejects with an Error on timeout.
+    //
+    //   const data = await sw.waitFor('SW_READY', 3000);
+    waitFor(type, timeout = DEFAULT_TIMEOUT) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                off();
+                reject(new Error(`[oja/sw] Timeout waiting for message: ${type}`));
+            }, timeout);
+            const off = sw.on(type, (data) => {
+                clearTimeout(timer);
+                off();
+                resolve(data);
+            });
+        });
+    },
+
+    // Listen to SW lifecycle state changes.
+    // fn receives one of: 'unknown' | 'installing' | 'installed' | 'activating' | 'activated' | 'redundant'
+    // Returns an unsubscribe function. Calls fn immediately with current state.
+    //
+    //   const off = sw.onStateChange(state => statusEl.textContent = state);
+    onStateChange(fn) {
+        _stateListeners.add(fn);
+        // Call immediately with current state
+        try { fn(_currentState); } catch (e) { console.warn('[oja/sw] onStateChange error:', e); }
+        return () => _stateListeners.delete(fn);
+    },
+
+    // Tell the SW to clear its VFS cache.
+    // Sends CLEAR_VFS, waits for VFS_CLEARED ack.
+    //
+    //   await sw.clearVFS();
+    clearVFS(options = {}) {
+        const { ack = 'VFS_CLEARED', timeout = DEFAULT_TIMEOUT } = options;
+        return sw.send({ type: 'CLEAR_VFS' }, { ack, timeout });
     },
 
     /**
@@ -182,3 +247,13 @@ export const sw = {
         return reg;
     },
 };
+
+// ─── Named exports ──────────────────────────────────────────────────────
+// Consistent with all other Oja ext modules that export named functions.
+export const register = (scriptUrl, options) => sw.register(scriptUrl, options);
+export const send     = (message, options)   => sw.send(message, options);
+export const post     = (message)            => sw.post(message);
+export const on       = (type, fn)           => sw.on(type, fn);
+export const waitFor  = (type, timeout)      => sw.waitFor(type, timeout);
+export const syncVFS  = (files, options)     => sw.syncVFS(files, options);
+export const clearVFS = (options)            => sw.clearVFS(options);
