@@ -57,7 +57,9 @@ export { dragdrop }                                       from './js/ui/dragdrop
 export { popover }                                        from './js/ui/popover.js';
 export { virtualList }                                    from './js/ui/virtual-list.js';
 export { mask }                                           from './js/ui/mask.js';
-export { clickmenu }                                           from './js/ui/clickmenu.js';
+export { clickmenu }                                          from './js/ui/clickmenu.js';
+export { collapse, accordion }                                from './js/ui/collapse.js';
+export { wizard }                                             from './js/ui/wizard.js';
 
 // ─── Extension layer — js/ext/ ────────────────────────────────────────────────
 export { auth }                                           from './js/ext/auth.js';

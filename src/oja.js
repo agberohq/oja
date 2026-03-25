@@ -43,7 +43,8 @@ export { timeout, interval, sleep, defer, withDefer }     from './js/core/system
 
 // ─── State & reactivity ───────────────────────────────────────────────────────
 export { Store }                                          from './js/core/store.js';
-export { state, effect, derived, batch, context }         from './js/core/reactive.js';
+export { state, effect, derived, batch, context,
+    watch, untrack, readonly }                        from './js/core/reactive.js';
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 export { render, renderRaw, fill, each, template }        from './js/core/template.js';
@@ -54,7 +55,7 @@ export { animate }                                        from './js/core/animat
 // ─── Routing ──────────────────────────────────────────────────────────────────
 export { Router }                                         from './js/core/router.js';
 export { component }                                      from './js/core/component.js';
-export { layout }                                         from './js/core/layout.js';
+export { layout, allSlotsReady }           from './js/core/layout.js';
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 export {
@@ -74,6 +75,8 @@ export {
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
     onResize, onMutation,
+    onlyOnce,                    // F-20: was exported from events.js but missing from barrel
+    onClickOutside, onHover, onLongPress,  // F-17/18/19
 }                                                         from './js/core/events.js';
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
@@ -92,8 +95,8 @@ export { Api }                                            from './js/core/api.js
 export { runtime }                                        from './js/core/runtime.js';
 
 // ─── Codecs ───────────────────────────────────────────────────────────────────
-export { JsonCodec, jsonCodec }                           from './js/core/codecs/json.js';
-export { MsgPackCodec }                                   from './js/core/codecs/msgpack.js';
+export { JsonCodec, jsonCodec }                           from '../../../../Downloads/oja.fixed/src/js/core/codecs/json.js';
+export { MsgPackCodec }                                   from '../../../../Downloads/oja.fixed/src/js/core/codecs/msgpack.js';
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 export { plugin }                                         from './js/core/plugin.js';
@@ -103,12 +106,14 @@ export const VERSION = '0.0.1';
 
 // ─── Grouped exports — one import, dot-access ─────────────────────────────────
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
-import { state, effect, derived, batch, context }        from './js/core/reactive.js';
+import { state, effect, derived, batch, context,
+    watch, untrack, readonly }                            from './js/core/reactive.js';
 import { on, once, off, emit, listen, listenOnce, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
-    onResize, onMutation }                                from './js/core/events.js';
+    onResize, onMutation,
+    onlyOnce, onClickOutside, onHover, onLongPress }      from './js/core/events.js';
 import { ui, find, findAll, findAllIn, query, queryAll,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
@@ -117,17 +122,17 @@ import { Store }                                         from './js/core/store.j
 import { render, renderRaw, fill, each, template }       from './js/core/template.js';
 import { Out, Responder }                                from './js/core/out.js';
 import { Api }                                           from './js/core/api.js';
-import { JsonCodec, jsonCodec }                          from './js/core/codecs/json.js';
-import { MsgPackCodec }                                  from './js/core/codecs/msgpack.js';
+import { JsonCodec, jsonCodec }                          from '../../../../Downloads/oja.fixed/src/js/core/codecs/json.js';
+import { MsgPackCodec }                                  from '../../../../Downloads/oja.fixed/src/js/core/codecs/msgpack.js';
 import { Router }                                        from './js/core/router.js';
 import { component }                                     from './js/core/component.js';
-import { layout }                                        from './js/core/layout.js';
+import { layout, allSlotsReady }                         from './js/core/layout.js';
 import { segment }                                       from './js/core/segment.js';
 import { animate }                                       from './js/core/animate.js';
 import { engine }                                        from './js/core/engine.js';
 import { plugin }                                        from './js/core/plugin.js';
 
-export const Reactive = { state, effect, derived, batch, context };
+export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly };
 
 export const Event = {
     on, once, off, emit, listen, listenOnce, waitFor,
@@ -135,6 +140,7 @@ export const Event = {
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
     onResize, onMutation,
+    onlyOnce, onClickOutside, onHover, onLongPress,
 };
 
 export const DOM = {
@@ -155,7 +161,7 @@ export const Oja = {
     Out, Responder, render, renderRaw, fill, each, template,
     segment, animate,
     // Routing
-    Router, component, layout,
+    Router, component, layout, allSlotsReady,
     // DOM
     DOM, ui,
     find, findAll, findAllIn,
