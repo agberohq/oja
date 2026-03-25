@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Out } from '../../src/js/core/out.js';
-import { channel } from '../../src/js/core/reactive.js';
+import { signal } from '../../src/js/core/reactive.js';
 
 beforeEach(() => {
     document.body.innerHTML = '';
-    channel.destroyAll();
+    signal.destroyAll();
 });
 
 // ─── Out.to() — plain OutTarget, no Proxy ─────────────────────────────────────
@@ -89,25 +89,25 @@ describe('Out.skeleton() — still works after Proxy removal', () => {
 
 describe('channel() — reactive same-page pub/sub', () => {
     it('returns the same instance for the same name', () => {
-        const a = channel('test:a');
-        const b = channel('test:a');
+        const a = signal('test:a');
+        const b = signal('test:a');
         expect(a).toBe(b);
     });
 
     it('returns different instances for different names', () => {
-        expect(channel('ch:1')).not.toBe(channel('ch:2'));
+        expect(signal('ch:1')).not.toBe(signal('ch:2'));
     });
 
     it('set() notifies subscribers', () => {
         const fn = vi.fn();
-        const ch = channel('ch:notify');
+        const ch = signal('ch:notify');
         ch.subscribe(fn);
         ch.set({ id: 1 });
         expect(fn).toHaveBeenCalledWith({ id: 1 });
     });
 
     it('subscribe() gives late subscriber the current value immediately', () => {
-        const ch = channel('ch:late');
+        const ch = signal('ch:late');
         ch.set('hello');
 
         const fn = vi.fn();
@@ -117,12 +117,12 @@ describe('channel() — reactive same-page pub/sub', () => {
 
     it('subscribe() does not call fn if no value has been set', () => {
         const fn = vi.fn();
-        channel('ch:empty').subscribe(fn);
+        signal('ch:empty').subscribe(fn);
         expect(fn).not.toHaveBeenCalled();
     });
 
     it('get() returns the current value without subscribing', () => {
-        const ch = channel('ch:get');
+        const ch = signal('ch:get');
         expect(ch.get()).toBeUndefined();
         ch.set(42);
         expect(ch.get()).toBe(42);
@@ -130,7 +130,7 @@ describe('channel() — reactive same-page pub/sub', () => {
 
     it('unsubscribe function removes the subscriber', () => {
         const fn = vi.fn();
-        const ch = channel('ch:unsub');
+        const ch = signal('ch:unsub');
         const off = ch.subscribe(fn);
         fn.mockClear();
         off();
@@ -140,7 +140,7 @@ describe('channel() — reactive same-page pub/sub', () => {
 
     it('reset() restores initial value and notifies', () => {
         const fn = vi.fn();
-        const ch = channel('ch:reset', 'initial');
+        const ch = signal('ch:reset', 'initial');
         ch.set('changed');
         ch.subscribe(fn);
         fn.mockClear();
@@ -150,13 +150,13 @@ describe('channel() — reactive same-page pub/sub', () => {
     });
 
     it('destroy() removes channel from registry', () => {
-        const ch = channel('ch:destroy');
+        const ch = signal('ch:destroy');
         ch.destroy();
-        expect(channel('ch:destroy')).not.toBe(ch);
+        expect(signal('ch:destroy')).not.toBe(ch);
     });
 
     it('hasSubscribers() reflects subscription state', () => {
-        const ch = channel('ch:has');
+        const ch = signal('ch:has');
         expect(ch.hasSubscribers()).toBe(false);
         const off = ch.subscribe(() => {});
         expect(ch.hasSubscribers()).toBe(true);
@@ -165,7 +165,7 @@ describe('channel() — reactive same-page pub/sub', () => {
     });
 
     it('size reflects number of active subscribers', () => {
-        const ch = channel('ch:size');
+        const ch = signal('ch:size');
         const off1 = ch.subscribe(() => {});
         const off2 = ch.subscribe(() => {});
         expect(ch.size).toBe(2);
@@ -174,17 +174,17 @@ describe('channel() — reactive same-page pub/sub', () => {
     });
 
     it('channel.destroyAll() clears all channels', () => {
-        const a = channel('ch:all:a');
-        const b = channel('ch:all:b');
-        channel.destroyAll();
-        expect(channel('ch:all:a')).not.toBe(a);
-        expect(channel('ch:all:b')).not.toBe(b);
+        const a = signal('ch:all:a');
+        const b = signal('ch:all:b');
+        signal.destroyAll();
+        expect(signal('ch:all:a')).not.toBe(a);
+        expect(signal('ch:all:b')).not.toBe(b);
     });
 
     it('multiple subscribers all receive updates', () => {
         const f1 = vi.fn();
         const f2 = vi.fn();
-        const ch = channel('ch:multi');
+        const ch = signal('ch:multi');
         ch.subscribe(f1);
         ch.subscribe(f2);
         ch.set('broadcast');
@@ -193,7 +193,7 @@ describe('channel() — reactive same-page pub/sub', () => {
     });
 
     it('supports initial value via second argument', () => {
-        const ch = channel('ch:init', { id: 0 });
+        const ch = signal('ch:init', { id: 0 });
         const fn = vi.fn();
         ch.subscribe(fn);
         expect(fn).toHaveBeenCalledWith({ id: 0 });
