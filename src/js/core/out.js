@@ -607,6 +607,14 @@ class _FnOut extends _Out {
 
     async render(container, context = {}) {
         try {
+            // Attach the navigation AbortSignal to the container so Out.fn()
+            // callbacks can do: const res = await fetch('/api', { signal: container.signal })
+            // The signal is automatically aborted when the next navigation starts.
+            if (context.signal && !container.signal) {
+                Object.defineProperty(container, 'signal', {
+                    value: context.signal, configurable: true, writable: true,
+                });
+            }
             const result = await this._payload(container, context);
             if (_Out.is(result)) {
                 await result.render(container, context);
