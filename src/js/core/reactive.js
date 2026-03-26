@@ -752,9 +752,9 @@ if (typeof window !== 'undefined') {
     };
 }
 
-// ─── signal() — reactive same-page pub/sub with current-value semantics ──────
+// ─── channel() — reactive same-page pub/sub with current-value semantics ──────
 //
-// Unlike emit/listen (fire-and-forget), a signal holds the last value.
+// Unlike emit/listen (fire-and-forget), a channel holds the last value.
 // Late subscribers receive the current value immediately on subscribe.
 // This makes it the right primitive for component-to-component communication
 // where components mount at different times and need the current state.
@@ -762,12 +762,12 @@ if (typeof window !== 'undefined') {
 // ─── Usage ────────────────────────────────────────────────────────────────────
 //
 //   // In hosts.html component — write
-//   import { signal } from '../core/reactive.js';
-//   const selected = signal('host:selected');
+//   import { channel } from '../core/reactive.js';
+//   const selected = channel('host:selected');
 //   selected.set({ id: 42, name: 'api.example.com' });
 //
 //   // In sidebar.html component — read (gets current value immediately)
-//   const selected = signal('host:selected');
+//   const selected = channel('host:selected');
 //   const off = selected.subscribe(host => {
 //       if (host) renderDetail(host);
 //   });
@@ -782,22 +782,28 @@ if (typeof window !== 'undefined') {
 //   // Check if anyone is listening
 //   selected.hasSubscribers(); // → boolean
 //
-// ─── Scoped signals ──────────────────────────────────────────────────────────
+// ─── Scoped channels ──────────────────────────────────────────────────────────
 //
-//   // Channels are global by default — same name = same signal everywhere.
-//   // Destroy a  signal when the page that owns it unmounts:
-//   component.onUnmount(() => signal('host:selected').destroy());
+//   // Channels are global by default — same name = same channel everywhere.
+//   // Destroy a channel when the page that owns it unmounts:
+//   component.onUnmount(() => channel('host:selected').destroy());
 //
 // ─── Integration with reactive state ──────────────────────────────────────────
 //
 //   // Use with effect() for reactive derived state
-//   const selected = signal('host:selected');
+//   const selected = channel('host:selected');
 //   effect(() => {
 //       const host = selected.get();
 //       if (host) document.title = host.name;
 //   });
 
 const _signals = new Map();
+
+// Hook set by component.js so channel() can auto-register new channels
+// for cleanup when they are created inside a component script.
+// Follows the same pattern as _setComponentScopeHook in events.js.
+let _componentChannelHook = null;
+export function _setComponentChannelHook(fn) { _componentChannelHook = fn; }
 
 export function signal(name, initialValue = undefined) {
     if (_signals.has(name)) return _signals.get(name);
@@ -890,6 +896,12 @@ export function signal(name, initialValue = undefined) {
     };
 
     _signals.set(name, ch);
+
+    // If a component is currently mounting, register this channel for
+    // auto-cleanup when that component unmounts. The owning component is
+    // responsible for destroying the channel — subscribers only unsubscribe.
+    if (_componentChannelHook) _componentChannelHook(ch);
+
     return ch;
 }
 
