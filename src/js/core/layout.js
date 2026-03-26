@@ -210,25 +210,50 @@ export const layout = {
      * @param {number}   [timeout] — ms before rejecting (default 10000)
      * @returns {Promise<void>}
      */
-    allSlotsReady(names, timeout = 10000) {
+    allSlotsReady(names, timeout = 10000, options = {}) {
         if (!names?.length) return Promise.resolve();
+
+        // onTimeout: 'reject' (default) | 'resolve'
+        // Use 'resolve' on slow connections where a timeout should degrade
+        // gracefully rather than crash the init sequence:
+        //   await allSlotsReady(['nav','editor','sidebar'], 10000, { onTimeout: 'resolve' })
+        const onTimeout = options.onTimeout ?? 'reject';
         const pending = new Set(names);
 
         return new Promise((resolve, reject) => {
+            let unsub = () => {};
+
             const timer = setTimeout(() => {
-                reject(new Error(`[oja/layout] allSlotsReady timeout — still waiting: ${[...pending].join(', ')}`));
+                unsub();
+                const msg = `[oja/layout] Slot ready timeout — still waiting: ${[...pending].join(', ')}`;
+                if (onTimeout === 'resolve') {
+                    console.warn(msg + '. Proceeding anyway.');
+                    resolve();
+                } else {
+                    reject(new Error(msg));
+                }
             }, timeout);
 
             const check = (name) => {
+                if (!pending.has(name)) return;
                 pending.delete(name);
-                if (pending.size === 0) { clearTimeout(timer); resolve(); }
+                if (pending.size === 0) { clearTimeout(timer); unsub(); resolve(); }
             };
 
-            // Register per-slot resolve callbacks
+            // Primary path: layout.slotReady(name) called directly from script
             for (const name of names) {
                 if (!_slotReadyMap.has(name)) _slotReadyMap.set(name, []);
                 _slotReadyMap.get(name).push(() => check(name));
             }
+
+            // Secondary path: emit('layout:slot-ready', { name }) on the event bus.
+            // Some components prefer emit() over importing layout directly.
+            // Both mechanisms resolve the same pending set — whichever fires first wins.
+            import('./events.js').then(({ listen }) => {
+                unsub = listen('layout:slot-ready', ({ name }) => {
+                    if (names.includes(name)) check(name);
+                });
+            }).catch(() => {});
         });
     },
 
@@ -515,6 +540,6 @@ function _isSelector(value) {
 // ─── Standalone export ──────────────────────────────────────────────────
 // allSlotsReady is available as layout.allSlotsReady() and also as a named export
 // so apps can import it directly: import { allSlotsReady } from './layout.js'
-export function allSlotsReady(names, timeout = 10000) {
-    return layout.allSlotsReady(names, timeout);
+export function allSlotsReady(names, timeout = 10000, options = {}) {
+    return layout.allSlotsReady(names, timeout, options);
 }

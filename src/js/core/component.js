@@ -79,6 +79,7 @@
 import { render, each, fill }          from './template.js';
 import { execScripts }                 from './_exec.js';
 import { emit, _setComponentScopeHook } from './events.js';
+import { _setComponentChannelHook }      from './reactive.js';
 
 const _cache = new Map();
 
@@ -210,7 +211,7 @@ export function _getScopeForTest(el) {
 function _getScope(el) {
     if (!el) return null;
     if (!_scopes.has(el)) {
-        _scopes.set(el, { mount: [], unmount: [], ready: [], dead: [], intervals: [], timeouts: [], ons: [], controller: new AbortController() });
+        _scopes.set(el, { mount: [], unmount: [], ready: [], dead: [], intervals: [], timeouts: [], ons: [], channels: [], controller: new AbortController() });
     }
     return _scopes.get(el);
 }
@@ -221,6 +222,16 @@ function _getScope(el) {
 _setComponentScopeHook((unsub) => {
     const scope = _getScope(_activeElement);
     if (scope) scope.ons.push(unsub);
+});
+
+// When a channel() is created while a component is mounting, register it
+// for auto-destruction when that component unmounts. This prevents named
+// channels from accumulating in the global _channels Map across navigations.
+// Only the component that CREATES the channel destroys it — subscribers
+// receive the channel reference and call their own unsubscribe function.
+_setComponentChannelHook((ch) => {
+    const scope = _getScope(_activeElement);
+    if (scope) scope.channels.push(ch);
 });
 
 let _hooks = {
@@ -568,6 +579,16 @@ async function _teardownScope(el) {
     // Abort any in-flight fetches that were given this component's signal.
     // Fires before unmount hooks so hooks can react to the abort if needed.
     scope.controller?.abort();
+
+    // Destroy channels created by this component during its lifetime.
+    // Channels are named global pub/sub primitives — without explicit cleanup
+    // they accumulate in reactive.js _channels Map for the app lifetime.
+    // Only the owning component destroys; subscribers just unsubscribe.
+    for (const ch of (scope.channels || [])) {
+        try { ch.destroy(); } catch (e) {
+            console.warn('[oja/component] channel cleanup error:', e);
+        }
+    }
 
     // Call each on() unsub registered during this component's lifetime.
     // This removes delegated DOM listeners that would otherwise accumulate
