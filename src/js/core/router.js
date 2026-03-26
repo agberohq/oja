@@ -111,6 +111,8 @@ const _prefetchQueue = new Set();
 const _prefetchCache = new Map();  // url -> { promise, timestamp, priority }
 const _prefetchLinks = new WeakMap(); // element -> { url, timeout }
 
+const PREFETCH_CACHE_MAX = 100; // max entries — evict oldest on overflow
+
 const PREFETCH_DEFAULTS = {
     delay:         200,
     timeout:       10000,
@@ -158,6 +160,7 @@ export class Router {
         this._params           = {};
         this._started          = false;
         this._navId            = 0;
+        this._navController    = null; // AbortController for in-flight navigation
         this._beforeEach       = [];
         this._afterEach        = [];
         this._prefetchEnabled  = prefetch;
@@ -256,6 +259,10 @@ export class Router {
                 }
 
                 clearTimeout(timeoutId);
+                // Evict oldest entry if cache is at capacity (LRU-lite: insertion order)
+                if (_prefetchCache.size >= PREFETCH_CACHE_MAX) {
+                    _prefetchCache.delete(_prefetchCache.keys().next().value);
+                }
                 _prefetchCache.set(path, { promise, timestamp: Date.now(), priority: options.priority });
                 this._processPrefetchQueue();
             } catch (e) {
@@ -418,6 +425,15 @@ export class Router {
             path = this.path(path, options.params || {});
         }
         const currentNavId = ++this._navId;
+
+        // Abort any in-flight render from the previous navigation.
+        // This cancels fetch() calls inside Out.fn() that were passed
+        // container.signal — they get AbortError instead of resolving into
+        // a DOM node that may no longer be the active page.
+        if (this._navController) this._navController.abort();
+        this._navController = new AbortController();
+        const navSignal = this._navController.signal;
+
         const [pathname, qs] = path.split('?');
         const query          = { ...options.query, ..._parseQuery(qs || '') };
         const container      = document.querySelector(this._outlet);
@@ -562,7 +578,12 @@ export class Router {
         container.classList.remove('oja-leaving');
 
         container.innerHTML = '';
-        await responder.render(container, ctx);
+        // Pass the navigation AbortSignal through context so Out.fn() and
+        // other async responders can cancel in-flight work on next navigation.
+        const renderCtx = this._navController
+            ? { ...ctx, signal: this._navController.signal }
+            : ctx;
+        await responder.render(container, renderCtx);
 
         container.classList.add('oja-entering');
         await _wait(50);
