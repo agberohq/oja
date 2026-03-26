@@ -188,8 +188,15 @@ function _createRuntime() {
          */
         isOriginAllowed(url) {
             if (_origins.length === 0) return true;
-            // Relative URLs (no scheme) are same-origin — always allowed.
-            // A URL is relative when it starts with /, ./, ../, or contains no '://'.
+            // Protocol-relative URLs (//evil.com) are not relative — block and
+            // run them through the whitelist check the same as absolute URLs.
+            if (url.startsWith('//')) {
+                try {
+                    const { origin } = new URL('https:' + url);
+                    return _origins.some(o => o === origin.toLowerCase());
+                } catch { return false; }
+            }
+            // Truly relative URLs (no scheme at all) are same-origin — always allowed.
             if (!url.includes('://')) return true;
             try {
                 const { origin } = new URL(url);
