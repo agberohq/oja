@@ -108,7 +108,7 @@ export const VERSION = '0.0.1';
 // ─── Grouped exports — one import, dot-access ─────────────────────────────────
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
-    watch, untrack, readonly, channel }                   from './js/core/reactive.js';
+    watch, untrack, readonly, signal }                   from './js/core/reactive.js';
 import { on, once, off, emit, listen, listenOnce, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
