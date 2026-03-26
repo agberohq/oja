@@ -182,18 +182,18 @@ describe('placement methods', () => {
         expect(document.querySelector('#box').firstChild?.textContent).toBe('first');
     });
 
-    it('after() inserts as next sibling', () => {
+    it('insertAfter() inserts as next sibling', () => {
         document.body.innerHTML = '<div id="a"></div><div id="c"></div>';
-        make.div({ id: 'b' }).after('#a');
+        make.div({ id: 'b' }).insertAfter('#a');
         const children = Array.from(document.body.children);
         expect(children[0].id).toBe('a');
         expect(children[1].id).toBe('b');
         expect(children[2].id).toBe('c');
     });
 
-    it('before() inserts as previous sibling', () => {
+    it('insertBefore() inserts as previous sibling', () => {
         document.body.innerHTML = '<div id="b"></div>';
-        make.div({ id: 'a' }).before('#b');
+        make.div({ id: 'a' }).insertBefore('#b');
         const children = Array.from(document.body.children);
         expect(children[0].id).toBe('a');
         expect(children[1].id).toBe('b');
@@ -383,7 +383,122 @@ describe('findAll() / queryAll() — all elements enhanced', () => {
         document.body.innerHTML = '<span class="tag">a</span>';
         const [el] = findAll('.tag');
         expect(typeof el.appendTo).toBe('function');
-        expect(typeof el.after).toBe('function');
+        expect(typeof el.insertAfter).toBe('function');
+        expect(typeof el.insertBefore).toBe('function');
         expect(typeof el.replace).toBe('function');
+    });
+});
+
+// ─── el.on() and el.once() ────────────────────────────────────────────────────
+
+describe('el.on() — direct listener', () => {
+    it('fires handler on event', () => {
+        document.body.innerHTML = '<button id="btn">Click</button>';
+        const fn = vi.fn();
+        find('#btn').on('click', fn);
+        find('#btn').click();
+        expect(fn).toHaveBeenCalledOnce();
+    });
+
+    it('returns element for chaining', () => {
+        document.body.innerHTML = '<button id="btn">Click</button>';
+        const el = find('#btn');
+        expect(el.on('click', () => {})).toBe(el);
+    });
+
+    it('chains .on() with .update()', () => {
+        document.body.innerHTML = '<button id="btn">Click</button>';
+        const fn = vi.fn();
+        find('#btn')
+            .on('click', fn)
+            .update({ class: { add: 'active' } });
+        find('#btn').click();
+        expect(fn).toHaveBeenCalledOnce();
+        expect(find('#btn').classList.contains('active')).toBe(true);
+    });
+});
+
+describe('el.on() — delegated listener', () => {
+    it('fires when event target matches selector', () => {
+        document.body.innerHTML = `
+            <ul id="list">
+                <li data-id="1">A</li>
+                <li data-id="2">B</li>
+            </ul>`;
+        const fn = vi.fn();
+        find('#list').on('click', '[data-id]', fn);
+        document.querySelector('[data-id="2"]').click();
+        expect(fn).toHaveBeenCalledOnce();
+        expect(fn.mock.calls[0][1].dataset.id).toBe('2');
+    });
+
+    it('does not fire when target is outside element', () => {
+        document.body.innerHTML = `
+            <ul id="list"><li data-id="1">A</li></ul>
+            <span data-id="outside">Outside</span>`;
+        const fn = vi.fn();
+        find('#list').on('click', '[data-id]', fn);
+        document.querySelector('[data-id="outside"]').click();
+        expect(fn).not.toHaveBeenCalled();
+    });
+});
+
+describe('el.once() — fires only once', () => {
+    it('direct: fires once then stops', () => {
+        document.body.innerHTML = '<button id="btn">Click</button>';
+        const fn = vi.fn();
+        find('#btn').once('click', fn);
+        find('#btn').click();
+        find('#btn').click();
+        expect(fn).toHaveBeenCalledOnce();
+    });
+
+    it('delegated: fires once then stops', () => {
+        document.body.innerHTML = '<ul id="list"><li data-id="1">A</li></ul>';
+        const fn = vi.fn();
+        find('#list').once('click', '[data-id]', fn);
+        document.querySelector('[data-id="1"]').click();
+        document.querySelector('[data-id="1"]').click();
+        expect(fn).toHaveBeenCalledOnce();
+    });
+});
+
+// ─── Placement method renames ─────────────────────────────────────────────────
+
+describe('placement methods — renamed to avoid native collision', () => {
+    it('insertAfter inserts as next sibling', () => {
+        document.body.innerHTML = '<div id="a"></div><div id="c"></div>';
+        make.div({ id: 'b' }).insertAfter('#a');
+        const children = Array.from(document.body.children);
+        expect(children[0].id).toBe('a');
+        expect(children[1].id).toBe('b');
+        expect(children[2].id).toBe('c');
+    });
+
+    it('insertBefore inserts as previous sibling', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        make.div({ id: 'a' }).insertBefore('#b');
+        const children = Array.from(document.body.children);
+        expect(children[0].id).toBe('a');
+        expect(children[1].id).toBe('b');
+    });
+
+    it('native el.after() is NOT overwritten by _renderable', () => {
+        document.body.innerHTML = '<div id="a"></div>';
+        const el = find('#a');
+        // Native .after() inserts nodes AFTER this element — it is a different
+        // operation from our insertAfter() which inserts this element after a target.
+        // Verify the native method is still present and callable.
+        const sibling = document.createElement('span');
+        el.after(sibling); // native — inserts sibling after #a
+        expect(document.body.children[1]).toBe(sibling);
+    });
+
+    it('native el.before() is NOT overwritten by _renderable', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        const el = find('#b');
+        const sibling = document.createElement('span');
+        el.before(sibling); // native — inserts sibling before #b
+        expect(document.body.children[0]).toBe(sibling);
     });
 });

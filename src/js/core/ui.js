@@ -93,8 +93,8 @@
  *   Style these in your app CSS — Oja never sets colors or layout here.
  */
 
-import { listen, emit } from './events.js';
-import { effect }       from './reactive.js';
+import { listen, emit, on as _on, once as _once } from './events.js';
+import { effect }                                    from './reactive.js';
 
 export function find(selector, options = {}) {
     const { required = false, scope = document, timeout = 0 } = options;
@@ -775,19 +775,27 @@ function _renderable(el) {
         return el;
     });
 
-    /** Insert immediately after target (as next sibling). */
-    _define('after', function(target) {
+    /**
+     * Insert this element immediately after target (as next sibling).
+     * Named insertAfter (not after) to avoid overwriting the native
+     * Element.prototype.after() which inserts nodes after this element.
+     */
+    _define('insertAfter', function(target) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.insertBefore(el, t.nextSibling);
-        else console.warn('[oja/make] after: target not found:', target);
+        else console.warn('[oja/make] insertAfter: target not found:', target);
         return el;
     });
 
-    /** Insert immediately before target (as previous sibling). */
-    _define('before', function(target) {
+    /**
+     * Insert this element immediately before target (as previous sibling).
+     * Named insertBefore (not before) to avoid overwriting the native
+     * Element.prototype.before() which inserts nodes before this element.
+     */
+    _define('insertBefore', function(target) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.insertBefore(el, t);
-        else console.warn('[oja/make] before: target not found:', target);
+        else console.warn('[oja/make] insertBefore: target not found:', target);
         return el;
     });
 
@@ -796,6 +804,70 @@ function _renderable(el) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.replaceChild(el, t);
         else console.warn('[oja/make] replace: target not found:', target);
+        return el;
+    });
+
+    // ── el.on(event, fn) / el.on(event, selector, fn) ───────────────────────────
+    //
+    // Attaches an event listener to this element.
+    //
+    //   el.on('click', handler)
+    //     — direct listener on this element, equivalent to addEventListener
+    //       but auto-removed on component unmount.
+    //
+    //   el.on('click', '[data-item]', handler)
+    //     — delegated listener scoped to descendants of this element.
+    //       Fires when e.target.closest(selector) is inside this element.
+    //       Also auto-removed on component unmount.
+    //
+    // Both forms return `this` so the chain continues:
+    //
+    //   find('#list')
+    //     .on('click', '[data-item]', (e, item) => open(item.dataset.id))
+    //     .on('keydown', handleKey)
+    //     .update({ class: { remove: 'loading' } });
+    //
+    _define('on', function(event, selectorOrFn, fn) {
+        if (typeof selectorOrFn === 'function') {
+            // Direct — pass element as EventTarget to _on() so scope cleanup is
+            // registered automatically with the active component.
+            _on(el, event, selectorOrFn);
+        } else if (typeof selectorOrFn === 'string' && typeof fn === 'function') {
+            // Delegated — listen on this element, check if the event originated
+            // from a descendant that matches the selector.
+            const wrapped = (e) => {
+                if (!e.target || typeof e.target.closest !== 'function') return;
+                const target = e.target.closest(selectorOrFn);
+                if (target && (el === target || el.contains(target))) fn(e, target);
+            };
+            // Store original fn reference for potential removal
+            wrapped.__oja_original__ = fn;
+            // Use _on with the element as EventTarget — handles scope cleanup
+            _on(el, event, wrapped);
+        }
+        return el;
+    });
+
+    // ── el.once(event, fn) / el.once(event, selector, fn) ────────────────────
+    //
+    // Same as el.on() but the handler removes itself after the first call.
+    //
+    _define('once', function(event, selectorOrFn, fn) {
+        if (typeof selectorOrFn === 'function') {
+            _once(el, event, selectorOrFn);
+        } else if (typeof selectorOrFn === 'string' && typeof fn === 'function') {
+            // Delegated once — wrap to self-remove after first match
+            let wrapped;
+            wrapped = (e) => {
+                if (!e.target || typeof e.target.closest !== 'function') return;
+                const target = e.target.closest(selectorOrFn);
+                if (target && (el === target || el.contains(target))) {
+                    el.removeEventListener(event, wrapped);
+                    fn(e, target);
+                }
+            };
+            _on(el, event, wrapped);
+        }
         return el;
     });
 
