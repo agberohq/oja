@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en" style="scroll-behavior: smooth;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="../assets/favicon.ico">
+    <title>Introduction · Oja Tutorial</title>
+    <style>
+        :root {
+            --bs-orange: #ed7d06;
+            --bs-oranger-rgb: 237, 125, 6;
+            --bg-color: #ffffff;
+            --sidebar-bg: #f8f9fa;
+            --text-main: #212529;
+            --text-muted: #6c757d;
+            --border-color: #dee2e6;
+            --code-bg: #f8f9fa;
+            --pre-color: #d63384;
+            --search-bg: #ffffff;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #212529;
+            --sidebar-bg: #1a1d20;
+            --text-main: #f8f9fa;
+            --text-muted: #adb5bd;
+            --border-color: #444;
+            --code-bg: #2b3035;
+            --pre-color: #e685b5;
+            --search-bg: #2b3035;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        .navbar {
+            background-color: var(--bs-orange);
+            padding: 0.75rem 1rem;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 1080;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .nav-brand-container { display: flex; align-items: center; gap: 10px; }
+        .navbar-brand { font-weight: 600; font-size: 1.25rem; text-decoration: none; color: white; }
+        
+        .menu-toggle {
+            display: none;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .theme-toggle {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        /* Search Bar */
+        .search-container { margin-bottom: 1.5rem; }
+        .search-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background-color: var(--search-bg);
+            color: var(--text-main);
+            box-sizing: border-box;
+        }
+
+        /* Layout Grid */
+        .container-fluid {
+            display: grid;
+            grid-template-columns: 280px 1fr 240px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            height: calc(100vh - 56px);
+            position: sticky;
+            top: 56px;
+            overflow-y: auto;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .sidebar h5 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin: 1.5rem 0 0.5rem 0; }
+        .sidebar ul { list-style: none; padding: 0; margin: 0; }
+        .sidebar a { text-decoration: none; color: var(--text-muted); display: block; padding: 0.4rem 0; font-size: 0.95rem; }
+        .sidebar a.active { color: var(--bs-orange); font-weight: 700; }
+
+        /* Content */
+        .content { padding: 2rem 3rem; max-width: 900px; min-height: 80vh; }
+        .content h1 { font-size: 2.25rem; margin-top: 0; font-weight: 700; }
+        .content h2 { font-size: 1.75rem; margin-top: 2.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        .lead { font-size: 1.15rem; color: var(--text-muted); margin-bottom: 2rem; }
+
+        pre { background: var(--code-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); color: var(--pre-color); overflow-x: auto; font-size: 0.85rem; }
+
+        /* Scroll to Top Button */
+        #back-to-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--bs-orange);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 1.2rem;
+        }
+
+        /* TOC */
+        .toc { padding: 2rem 1rem; position: sticky; top: 56px; height: fit-content; }
+        .toc h6 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.75rem; }
+        .toc ul { list-style: none; padding-left: 1rem; border-left: 2px solid var(--border-color); }
+        .toc a { text-decoration: none; color: var(--text-muted); font-size: 0.85rem; display: block; margin-bottom: 0.4rem; }
+
+        .hidden { display: none; }
+
+        @media (max-width: 1100px) {
+            .container-fluid { grid-template-columns: 240px 1fr; }
+            .toc { display: none; }
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle { display: block; }
+            .container-fluid { grid-template-columns: 1fr; }
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 56px;
+                width: 280px;
+                z-index: 1050;
+                transform: translateX(-100%);
+                box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+            }
+            .sidebar.active { transform: translateX(0); }
+            .content { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app"></div>
+    <button id="back-to-top" title="Go to top">↑</button>
+
+    <script type="module">
+        const state = { 
+            theme: localStorage.getItem('theme') || 'light',
+            searchTerm: '',
+            isMobileMenuOpen: false
+        };
+        
+        const oja = { render: (template, el) => { el.innerHTML = template; } };
+
+        const renderApp = () => {
+            document.documentElement.setAttribute('data-theme', state.theme);
+            oja.render(App(), document.getElementById('app'));
+            
+            const searchInput = document.getElementById('search-docs');
+            if (searchInput && state.searchTerm) {
+                searchInput.value = state.searchTerm;
+                if (window.innerWidth > 768) searchInput.focus();
+            }
+        };
+
+        const isVisible = (text) => {
+            if (!state.searchTerm) return true;
+            return text.toLowerCase().includes(state.searchTerm.toLowerCase());
+        };
+
+        const Navbar = () => `
+            <header class="navbar">
+                <div class="nav-brand-container">
+                    <button id="menu-btn" class="menu-toggle">☰</button>
+                    <a class="navbar-brand" href="#">Oja Framework</a>
+                </div>
+                <button id="theme-btn" class="theme-toggle">
+                    ${state.theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+                </button>
+            </header>
+        `;
+
+        const Sidebar = () => `
+            <aside class="sidebar ${state.isMobileMenuOpen ? 'active' : ''}">
+                <div class="search-container">
+                    <input type="text" id="search-docs" class="search-input" placeholder="Search docs...">
+                </div>
+                <h5>Getting Started</h5>
+                <ul>
+                    <li><a href="#intro" class="active">Introduction</a></li>
+                    <li><a href="#install">Installation</a></li>
+                </ul>
+                <h5>Core Primitives</h5>
+                <ul>
+                    <li><a href="#state">State & Effect</a></li>
+                    <li><a href="#derived">Derived Values</a></li>
+                    <li><a href="#context">Context (Shared)</a></li>
+                </ul>
+                <h5>DOM Building</h5>
+                <ul>
+                    <li><a href="#make">The make() function</a></li>
+                </ul>
+            </aside>
+        `;
+
+        const MainContent = () => {
+            const sections = [
+                { id: 'intro', title: 'Introduction', content: 'Oja — Learn by Building. A minimal, reactive framework for building web apps with no build step.' },
+                { id: 'install', title: 'Before you start', content: 'Get Oja. No install needed. Add a stylesheet link and an import map to index.html.' },
+                { id: 'state', title: 'State and Effect', content: 'state(initialValue) returns a tuple [getter, setter]. effect(fn) runs immediately and re-runs on changes.' },
+                { id: 'derived', title: 'Derived Values', content: 'A read-only signal whose value is always computed from other signals.' },
+                { id: 'context', title: 'Context (Shared State)', content: 'State that lives at the application level. Any module can read or write it.' },
+                { id: 'make', title: 'The make() function', content: 'Oja builds DOM without HTML strings or innerHTML using a chainable builder.' }
+            ];
+
+            return `
+            <main class="content">
+                ${sections.map(s => `
+                    <section id="${s.id}" class="${isVisible(s.title + s.content) ? '' : 'hidden'}">
+                        ${s.id === 'intro' ? `<h1>${s.title}</h1><p class="lead">${s.content}</p>` : `<h2>${s.title}</h2>`}
+                        
+                        ${s.id === 'install' ? `
+                            <h3>Get Oja</h3>
+                            <p>No install needed. Add a stylesheet link and an import map to <code>index.html</code>:</p>
+                            <pre><code>&lt;link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css"&gt;</code></pre>
+                        ` : ''}
+
+                        ${s.id === 'state' ? `
+                            <h3>state(initialValue)</h3>
+                            <p>State returns a tuple. The first is a <b>getter</b>, the second is a <b>setter</b>.</p>
+                            <pre><code>const [count, setCount] = state(0);</code></pre>
+                        ` : ''}
+
+                        ${s.id === 'derived' ? `<p>Use derived when a value is a pure function of state.</p><pre><code>const total = derived(() => price() * quantity());</code></pre>` : ''}
+                        
+                        ${s.id === 'context' ? `<p>Any module anywhere can read or write it and effects update automatically.</p><pre><code>export const [user, setUser] = context('user', null);</code></pre>` : ''}
+                        
+                        ${s.id === 'make' ? `<p>make() builds DOM — no HTML strings, no innerHTML.</p><pre><code>make.button({ class: 'btn-primary' }, 'Save').appendTo('#app');</code></pre>` : ''}
+                    </section>
+                `).join('')}
+            </main>
+        `;};
+
+        const App = () => `
+            ${Navbar()}
+            <div class="container-fluid">
+                ${Sidebar()}
+                ${MainContent()}
+                <aside class="toc">
+                    <h6>On this page</h6>
+                    <ul>
+                        <li><a href="#install">Installation</a></li>
+                        <li><a href="#state">State & Effect</a></li>
+                        <li><a href="#make">Building DOM</a></li>
+                    </ul>
+                </aside>
+            </div>
+        `;
+
+        // Logic & Scroll Events
+        window.addEventListener('scroll', () => {
+            const btn = document.getElementById('back-to-top');
+            if (window.scrollY > 300) btn.style.display = 'block';
+            else btn.style.display = 'none';
+        });
+
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'search-docs') {
+                state.searchTerm = e.target.value;
+                renderApp();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'back-to-top') window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (e.target.closest('#theme-btn')) {
+                state.theme = state.theme === 'light' ? 'dark' : 'light';
+                localStorage.setItem('theme', state.theme);
+                renderApp();
+            }
+            if (e.target.closest('#menu-btn')) {
+                state.isMobileMenuOpen = !state.isMobileMenuOpen;
+                renderApp();
+            }
+            if (e.target.closest('.sidebar a')) {
+                state.isMobileMenuOpen = false;
+                renderApp();
+            }
+        });
+
+        renderApp();
+    </script>
+</body>
+</html>
