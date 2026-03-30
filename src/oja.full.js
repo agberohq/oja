@@ -59,6 +59,7 @@ export { virtualList }                                    from './js/ui/virtual-
 export { mask }                                           from './js/ui/mask.js';
 export { clickmenu }                                          from './js/ui/clickmenu.js';
 export { collapse, accordion }                                from './js/ui/collapse.js';
+export { countdown }                                          from './js/ui/countdown.js';
 export { wizard }                                             from './js/ui/wizard.js';
 
 // ─── Extension layer — js/ext/ ────────────────────────────────────────────────
