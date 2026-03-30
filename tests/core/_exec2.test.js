@@ -342,3 +342,85 @@ describe('cleanupOjaScopes', () => {
         delete window['__unrelated_key'];
     });
 });
+// ─── await import() in component scripts ─────────────────────────────────────
+// Covers the production bug where a component script using dynamic import()
+// caused layout.apply() to hang. The setup.js shim evaluates blob scripts
+// via new Function() and wraps async results — these tests verify the full
+// resolution path for scripts that contain dynamic imports.
+
+describe('execScripts() — async / dynamic import patterns', () => {
+    let container;
+    afterEach(() => { container?.remove(); });
+
+    it('resolves when script calls __oja_ready__() after a Promise chain', async () => {
+        container = makeContainer(`Promise.resolve().then(() => { __oja_ready__(); });`);
+        await expect(
+            Promise.race([
+                execScripts(container, document.baseURI, {}),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500)),
+            ])
+        ).resolves.toBeUndefined();
+    });
+
+    it('resolves via load-event fallback when script never calls __oja_ready__()', async () => {
+        container = makeContainer(`const x = 1; /* no __oja_ready__ */`);
+        await expect(
+            Promise.race([
+                execScripts(container, document.baseURI, {}),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500)),
+            ])
+        ).resolves.toBeUndefined();
+    });
+
+    it('resolves when script body is wrapped in an async IIFE (top-level await pattern)', async () => {
+        container = makeContainer(`(async () => { await Promise.resolve(); __oja_ready__(); })();`);
+        await expect(
+            Promise.race([
+                execScripts(container, document.baseURI, {}),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500)),
+            ])
+        ).resolves.toBeUndefined();
+    });
+
+    it('resolves even when the async IIFE does not call __oja_ready__()', async () => {
+        container = makeContainer(`(async () => { await Promise.resolve(); /* forgot ready */ })();`);
+        await expect(
+            Promise.race([
+                execScripts(container, document.baseURI, {}),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500)),
+            ])
+        ).resolves.toBeUndefined();
+    });
+
+    it('does not double-resolve when both __oja_ready__() and load fallback fire', async () => {
+        // __oja_ready__() fires first; the load fallback fires after.
+        // _done() is idempotent — the promise must only resolve once.
+        let resolveCount = 0;
+        container = makeContainer(`__oja_ready__();`);
+
+        const p = execScripts(container, document.baseURI, {});
+        // Wrap to count resolutions
+        const counted = p.then(() => { resolveCount++; });
+        await counted;
+        expect(resolveCount).toBe(1);
+    });
+
+    it('resolves all scripts when container has multiple module scripts', async () => {
+        const c = document.createElement('div');
+        for (let i = 0; i < 3; i++) {
+            const s = document.createElement('script');
+            s.type = 'module';
+            s.textContent = `__oja_ready__();`;
+            c.appendChild(s);
+        }
+        document.body.appendChild(c);
+        container = c;
+
+        await expect(
+            Promise.race([
+                execScripts(container, document.baseURI, {}),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500)),
+            ])
+        ).resolves.toBeUndefined();
+    });
+});

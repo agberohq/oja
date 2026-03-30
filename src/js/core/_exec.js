@@ -182,10 +182,13 @@ function _rewriteImports(source, base) {
             continue;
         }
 
-        // import('./rel')
-        const dynM = rem.match(/^import\s*\(\s*(['"])(\.\.?[^'"]+)\1\s*\)/);
+        // import('./rel') or await import('./rel')
+        const dynM = rem.match(/^(await\s+)?import\s*\(\s*(['"])(\.\.?[^'"]+)\2\s*\)/);
         if (dynM) {
-            out += `import(${dynM[1]}${_abs(dynM[2], base)}${dynM[1]})`;
+            const awaitPrefix = dynM[1] || '';
+            const quote = dynM[2];
+            const path = dynM[3];
+            out += `${awaitPrefix}import(${quote}${_abs(path, base)}${quote})`;
             i += dynM[0].length;
             continue;
         }
