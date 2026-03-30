@@ -180,3 +180,139 @@ describe('accordion.render(container, items)', () => {
         expect(container.innerHTML).toBe('');
     });
 });
+
+// ─── collapse.toggleCard() ────────────────────────────────────────────────────
+
+describe('collapse.toggleCard()', () => {
+    function makeCard(checked = false) {
+        const card   = document.createElement('div');
+        card.className = 'wz-toggle-card';
+
+        const header = document.createElement('div');
+        header.setAttribute('data-target', 'body1');
+
+        const switchWrap = document.createElement('label');
+        switchWrap.className = 'wz-switch';
+
+        const cb = document.createElement('input');
+        cb.type    = 'checkbox';
+        cb.checked = checked;
+
+        switchWrap.appendChild(cb);
+        header.appendChild(switchWrap);
+
+        const body = document.createElement('div');
+        body.id = 'body1';
+
+        card.appendChild(header);
+        card.appendChild(body);
+        document.body.appendChild(card);
+
+        return { card, header, switchWrap, cb, body };
+    }
+
+    it('returns a handle with open/close/toggle/isOpen/destroy', () => {
+        const { card, cb, body } = makeCard();
+        const handle = collapse.toggleCard(card, { checkbox: cb, body });
+        expect(typeof handle.open).toBe('function');
+        expect(typeof handle.close).toBe('function');
+        expect(typeof handle.toggle).toBe('function');
+        expect(typeof handle.isOpen).toBe('function');
+        expect(typeof handle.destroy).toBe('function');
+    });
+
+    it('starts closed when checkbox is unchecked', () => {
+        const { card, cb, body } = makeCard(false);
+        collapse.toggleCard(card, { checkbox: cb, body });
+        expect(body.style.display).toBe('none');
+    });
+
+    it('starts open when checkbox is checked', () => {
+        const { card, cb, body } = makeCard(true);
+        collapse.toggleCard(card, { checkbox: cb, body });
+        expect(body.style.display).not.toBe('none');
+    });
+
+    it('open() shows body and syncs checkbox', () => {
+        const { card, cb, body } = makeCard(false);
+        const handle = collapse.toggleCard(card, { checkbox: cb, body });
+        handle.open();
+        expect(body.style.display).not.toBe('none');
+        expect(cb.checked).toBe(true);
+    });
+
+    it('close() hides body and syncs checkbox', () => {
+        const { card, cb, body } = makeCard(true);
+        const handle = collapse.toggleCard(card, { checkbox: cb, body });
+        handle.close();
+        expect(body.style.display).toBe('none');
+        expect(cb.checked).toBe(false);
+    });
+
+    it('isOpen() reflects current state', () => {
+        const { card, cb, body } = makeCard(false);
+        const handle = collapse.toggleCard(card, { checkbox: cb, body });
+        expect(handle.isOpen()).toBe(false);
+        handle.open();
+        expect(handle.isOpen()).toBe(true);
+    });
+
+    it('onChange fires exactly once when checkbox change event is dispatched', () => {
+        const onChange = vi.fn();
+        const { card, cb, body } = makeCard(false);
+        collapse.toggleCard(card, { checkbox: cb, body, onChange });
+
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenCalledWith(true);
+    });
+
+    it('onChange fires exactly once when header is clicked (not the switch)', () => {
+        const onChange = vi.fn();
+        const { card, cb, body, header, switchWrap } = makeCard(false);
+        collapse.toggleCard(card, { checkbox: cb, body, onChange });
+
+        // Click the header area (not the switch)
+        const e = new MouseEvent('click', { bubbles: true });
+        Object.defineProperty(e, 'target', { value: header, configurable: true });
+        // Simulate: e.target.closest('.wz-switch') returns null (clicked header not switch)
+        header.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('clicking switch label does not cause double onChange via header handler', () => {
+        const onChange = vi.fn();
+        const { card, cb, body, switchWrap } = makeCard(false);
+        collapse.toggleCard(card, { checkbox: cb, body, onChange });
+
+        // Simulate clicking the switch label — header click guard should bail out
+        // and only the checkbox change event fires onChange.
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('destroy() removes listeners — subsequent checkbox change does not call onChange', () => {
+        const onChange = vi.fn();
+        const { card, cb, body } = makeCard(false);
+        const handle = collapse.toggleCard(card, { checkbox: cb, body, onChange });
+
+        handle.destroy();
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('returns nullHandle when body is missing', () => {
+        const card = document.createElement('div');
+        document.body.appendChild(card);
+        const handle = collapse.toggleCard(card, { body: null });
+        expect(() => handle.open()).not.toThrow();
+        expect(handle.isOpen()).toBe(false);
+    });
+});

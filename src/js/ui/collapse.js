@@ -194,6 +194,101 @@ export const collapse = {
         if (hidden) await this.show(target, options);
         else        await this.hide(target, options);
     },
+
+    /**
+     * Wire a toggle-card: a panel with a header row that contains a checkbox
+     * which controls both the visual expanded state and a boolean data value.
+     *   const card = collapse.toggleCard(cardEl, {
+     *       checkbox: cb,
+     *       body:     bodyEl,
+     *       open:     cb.checked,
+     *       animation: false,
+     *       onChange: (open) => { route.engineData.web_static_on = open; },
+     *   });
+     *   card.open();
+     *   card.close();
+     *   card.isOpen();
+     *   card.destroy();
+     */
+    toggleCard(cardEl, options = {}) {
+        const {
+            checkbox,
+            body,
+            open      = checkbox ? checkbox.checked : false,
+            animation = false,
+            duration  = 150,
+            onChange  = null,
+        } = options;
+
+        if (!body) {
+            console.warn('[oja/collapse] toggleCard: body element is required');
+            return _nullHandle();
+        }
+
+        let _open = open;
+
+        // Set initial visual state without triggering onChange
+        if (_open) {
+            body.style.display = '';
+        } else {
+            body.style.display = 'none';
+        }
+        if (checkbox) checkbox.checked = _open;
+
+        function _applyState(nextOpen) {
+            if (nextOpen === _open) return;
+            _open = nextOpen;
+            if (checkbox) checkbox.checked = _open;
+            if (_open) {
+                body.style.display = '';
+            } else {
+                body.style.display = 'none';
+            }
+            if (onChange) onChange(_open);
+        }
+
+        // Checkbox change handler — fires when the user interacts with the
+        // checkbox/label directly (not through header click).
+        function _onCheckboxChange() {
+            _applyState(checkbox.checked);
+        }
+
+        // Header click handler — fires when the user clicks the card header
+        // outside the switch label. We must NOT let the browser's label-for
+        // mechanism fire change again for the same interaction, so we
+        // preventDefault on the header click when it reaches a label element.
+        function _onHeaderClick(e) {
+            // If the click hit the switch wrapper or any element inside it,
+            // let the checkbox handle it — do not also toggle here.
+            if (e.target.closest && e.target.closest('.wz-switch')) return;
+            e.stopPropagation();
+            // Toggle state ourselves; do NOT modify checkbox.checked here
+            // and then also dispatch change — _applyState sets checkbox.checked.
+            _applyState(!_open);
+        }
+
+        if (checkbox) {
+            checkbox.addEventListener('change', _onCheckboxChange);
+        }
+
+        const header = cardEl ? cardEl.querySelector('[data-target]') : null;
+        if (header) {
+            header.addEventListener('click', _onHeaderClick);
+        }
+
+        const handle = {
+            open()    { _applyState(true);  return this; },
+            close()   { _applyState(false); return this; },
+            toggle()  { _applyState(!_open); return this; },
+            isOpen()  { return _open; },
+            destroy() {
+                if (checkbox) checkbox.removeEventListener('change', _onCheckboxChange);
+                if (header)   header.removeEventListener('click', _onHeaderClick);
+            },
+        };
+
+        return handle;
+    },
 };
 
 // ─── accordion ────────────────────────────────────────────────────────────────
