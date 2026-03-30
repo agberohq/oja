@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+    on,
     emit, listen, listenOnce, waitFor,
     debounce, throttle, rafThrottle,
 } from '../../src/js/core/events.js';
@@ -257,5 +258,111 @@ describe('rafThrottle()', () => {
         throttled.cancel();
         vi.runAllTimers();
         expect(fn).not.toHaveBeenCalled();
+    });
+});
+// ─── on() — scoped delegation ────────────────────────────────────────────────
+// on(scopeEl, childSelector, eventName, fn) delegates within scopeEl only.
+// This form is detected when arg1 is an Element and arg2 is a CSS string.
+
+describe('on() — scoped delegation', () => {
+    let scope, sibling;
+
+    beforeEach(() => {
+        vi.useRealTimers();
+        scope   = document.createElement('div');
+        sibling = document.createElement('div');
+        document.body.appendChild(scope);
+        document.body.appendChild(sibling);
+    });
+
+    afterEach(() => {
+        scope.remove();
+        sibling.remove();
+    });
+
+    it('fires handler when matching child inside scope is clicked', () => {
+        const fn  = vi.fn();
+        const btn = document.createElement('button');
+        btn.className = 'scoped-btn';
+        scope.appendChild(btn);
+
+        on(scope, '.scoped-btn', 'click', fn);
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn.mock.calls[0][1]).toBe(btn);
+    });
+
+    it('does NOT fire for the same selector in a sibling container', () => {
+        const fn       = vi.fn();
+        const inScope  = document.createElement('button');
+        const outScope = document.createElement('button');
+        inScope.className  = 'scoped-btn';
+        outScope.className = 'scoped-btn';
+        scope.appendChild(inScope);
+        sibling.appendChild(outScope);
+
+        on(scope, '.scoped-btn', 'click', fn);
+        outScope.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('returns an unsub function that stops the handler', () => {
+        const fn  = vi.fn();
+        const btn = document.createElement('button');
+        btn.className = 'scoped-btn2';
+        scope.appendChild(btn);
+
+        const unsub = on(scope, '.scoped-btn2', 'click', fn);
+        unsub();
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('matches descendants of scope, not just direct children', () => {
+        const fn    = vi.fn();
+        const wrap  = document.createElement('div');
+        const inner = document.createElement('span');
+        inner.className = 'deep-target';
+        wrap.appendChild(inner);
+        scope.appendChild(wrap);
+
+        on(scope, '.deep-target', 'click', fn);
+        inner.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('multiple scoped handlers on the same element are independent', () => {
+        const fn1 = vi.fn();
+        const fn2 = vi.fn();
+        const btn = document.createElement('button');
+        btn.className = 'shared-btn';
+        scope.appendChild(btn);
+
+        on(scope, '.shared-btn', 'click', fn1);
+        on(scope, '.shared-btn', 'click', fn2);
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn1).toHaveBeenCalledTimes(1);
+        expect(fn2).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsubbing one scoped handler does not affect the other', () => {
+        const fn1 = vi.fn();
+        const fn2 = vi.fn();
+        const btn = document.createElement('button');
+        btn.className = 'ind-btn';
+        scope.appendChild(btn);
+
+        const unsub1 = on(scope, '.ind-btn', 'click', fn1);
+        on(scope, '.ind-btn', 'click', fn2);
+        unsub1();
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(fn1).not.toHaveBeenCalled();
+        expect(fn2).toHaveBeenCalledTimes(1);
     });
 });

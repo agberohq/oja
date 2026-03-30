@@ -111,6 +111,35 @@ function _registerWithActiveComponent(unsub) {
  *   on(myButtonEl,    'click', (e, el) => doSomething());
  */
 export function on(selector, eventName, fn, options = {}) {
+    // ── Scoped delegation: on(scopeEl, cssSelector, eventName, fn, options) ──
+    // When the first argument is an Element and the second is a CSS selector
+    // string (not an event name), delegate within scopeEl only.
+    // This lets dynamically-rendered panels wire children without leaking
+    // matches into sibling panels — eliminating the need for raw addEventListener.
+    //
+    //   on(panelEl, '.wz-be-addr', 'input', (e, el) => { ... });
+    //
+    if (selector instanceof Element && typeof eventName === 'string' && typeof fn === 'string') {
+        const scopeEl      = selector;
+        const childSel     = eventName;
+        const realEvent    = fn;
+        const realFn       = options;
+        const realOptions  = arguments[4] || {};
+
+        const { passive = _passiveEvents.has(realEvent), capture = false } = realOptions;
+
+        const scopedHandler = (e) => {
+            if (!e.target || typeof e.target.closest !== 'function') return;
+            const target = e.target.closest(childSel);
+            if (target && scopeEl.contains(target)) realFn(e, target);
+        };
+
+        scopeEl.addEventListener(realEvent, scopedHandler, { passive, capture });
+        const unsub = () => scopeEl.removeEventListener(realEvent, scopedHandler, { capture });
+        _registerWithActiveComponent(unsub);
+        return unsub;
+    }
+
     const { passive = _passiveEvents.has(eventName), capture = false } = options;
 
     if (selector instanceof EventTarget) {
