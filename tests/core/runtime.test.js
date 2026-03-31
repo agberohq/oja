@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runtime } from '../../src/js/core/runtime.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Capture all runtime:error events fired on document */
 function listenRuntimeError() {
@@ -15,13 +14,11 @@ function listenRuntimeError() {
     };
 }
 
-// ─── Teardown ─────────────────────────────────────────────────────────────────
 
 afterEach(() => {
     runtime.destroy();
 });
 
-// ─── env ──────────────────────────────────────────────────────────────────────
 
 describe('runtime.env()', () => {
     it('defaults to development', () => {
@@ -49,7 +46,6 @@ describe('runtime.env()', () => {
     });
 });
 
-// ─── define / get ─────────────────────────────────────────────────────────────
 
 describe('runtime.define() / runtime.get()', () => {
     it('round-trips a string', () => {
@@ -88,7 +84,6 @@ describe('runtime.define() / runtime.get()', () => {
     });
 });
 
-// ─── sandbox ──────────────────────────────────────────────────────────────────
 
 describe('runtime.sandbox()', () => {
     it('defaults to false', () => {
@@ -116,7 +111,6 @@ describe('runtime.sandbox()', () => {
     });
 });
 
-// ─── allowOrigins / isOriginAllowed ───────────────────────────────────────────
 
 describe('runtime.allowOrigins() / runtime.isOriginAllowed()', () => {
     it('empty list allows everything (default)', () => {
@@ -157,7 +151,6 @@ describe('runtime.allowOrigins() / runtime.isOriginAllowed()', () => {
     });
 });
 
-// ─── onFetch / runFetchHooks ──────────────────────────────────────────────────
 
 describe('runtime.onFetch() / runtime.runFetchHooks()', () => {
     it('returns opts unchanged when no hooks are registered', () => {
@@ -222,7 +215,6 @@ describe('runtime.onFetch() / runtime.runFetchHooks()', () => {
     });
 });
 
-// ─── onError / reportError ────────────────────────────────────────────────────
 
 describe('runtime.onError() / runtime.reportError()', () => {
     it('fires all registered handlers', () => {
@@ -262,7 +254,6 @@ describe('runtime.onError() / runtime.reportError()', () => {
     });
 });
 
-// ─── onNavigate / runNavigateHooks ────────────────────────────────────────────
 
 describe('runtime.onNavigate() / runtime.runNavigateHooks()', () => {
     const base = {
@@ -332,7 +323,6 @@ describe('runtime.onNavigate() / runtime.runNavigateHooks()', () => {
     });
 });
 
-// ─── ready() ─────────────────────────────────────────────────────────────────
 
 describe('runtime.ready()', () => {
     it('fires immediately (via microtask) when DOM is already loaded', async () => {
@@ -360,7 +350,6 @@ describe('runtime.ready()', () => {
     });
 });
 
-// ─── destroy() ────────────────────────────────────────────────────────────────
 
 describe('runtime.destroy()', () => {
     it('clears all fetch hooks', () => {
@@ -419,7 +408,6 @@ describe('runtime.destroy()', () => {
     });
 });
 
-// ─── Chaining ─────────────────────────────────────────────────────────────────
 
 describe('method chaining', () => {
     it('all setters chain correctly', () => {

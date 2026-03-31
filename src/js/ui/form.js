@@ -152,7 +152,6 @@
  *   });
  */
 
-// ─── Dirty tracking state ─────────────────────────────────────────────────────
 
 import { Out }          from '../core/out.js';
 import { autocomplete } from './autocomplete.js';
@@ -162,7 +161,6 @@ const _dirtyListeners = new WeakMap(); // form -> Set<function>
 const _fieldWatchers = new WeakMap(); // field -> Set<{ type, fn, debounced }>
 const _editorInstances = new Map(); // field -> editor instance — must be Map, not WeakMap, because collect() iterates it
 
-// ─── Core form handling ───────────────────────────────────────────────────────
 
 export const form = {
 
@@ -1523,7 +1521,6 @@ export const form = {
     },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Unwraps the { state: Map, dispose: fn } entry stored by _setupDirtyTracking.
 // Returns the inner Map, or null if the form has not been tracked yet.

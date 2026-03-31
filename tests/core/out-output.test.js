@@ -7,7 +7,6 @@ import { Out } from '../../src/js/core/out.js';
 
 afterEach(() => { Out.clearCache(); vi.restoreAllMocks(); });
 
-// ─── Out.html().output() ──────────────────────────────────────────────────────
 
 describe('Out.html().output()', () => {
     it('returns the HTML string', async () => {
@@ -32,7 +31,6 @@ describe('Out.html().output()', () => {
     });
 });
 
-// ─── Out.raw().output() ───────────────────────────────────────────────────────
 
 describe('Out.raw().output()', () => {
     it('returns raw HTML without script execution', async () => {
@@ -42,7 +40,6 @@ describe('Out.raw().output()', () => {
     });
 });
 
-// ─── Out.text().output() ──────────────────────────────────────────────────────
 
 describe('Out.text().output()', () => {
     it('returns the text safely as a text node', async () => {
@@ -57,7 +54,6 @@ describe('Out.text().output()', () => {
     });
 });
 
-// ─── Out.component().output() ────────────────────────────────────────────────
 
 describe('Out.component().output()', () => {
     it('fetches and returns the component HTML as a string', async () => {
@@ -73,7 +69,6 @@ describe('Out.component().output()', () => {
     });
 });
 
-// ─── Out.is() still works ─────────────────────────────────────────────────────
 
 describe('Out.is() still works after output() addition', () => {
     it('Out.is() returns true for all Out types', () => {
@@ -91,7 +86,6 @@ describe('Out.is() still works after output() addition', () => {
     });
 });
 
-// ─── output() does not mutate the Out ────────────────────────────────────────
 
 describe('Out.output() is non-destructive', () => {
     it('calling output() twice returns the same HTML', async () => {

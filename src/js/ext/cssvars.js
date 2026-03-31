@@ -100,13 +100,11 @@
  *   cssVars.reset();
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _observers = new Map(); // varName -> Set of observers
 const _globalObservers = new Set(); // observers that watch all changes
 const _defaults = new Map(); // varName -> default value
 
-// ─── Core API ─────────────────────────────────────────────────────────────────
 
 export const cssVars = {
     /**

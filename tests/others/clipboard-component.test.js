@@ -27,7 +27,6 @@ afterEach(() => {
     clipboard.clearComponent();
 });
 
-// ─── hasComponent ─────────────────────────────────────────────────────────────
 
 describe('clipboard.hasComponent()', () => {
     it('returns false initially', () => {
@@ -48,7 +47,6 @@ describe('clipboard.hasComponent()', () => {
     });
 });
 
-// ─── copyComponent ────────────────────────────────────────────────────────────
 
 describe('clipboard.copyComponent()', () => {
     it('returns true when element is found', () => {
@@ -130,7 +128,6 @@ describe('clipboard.copyComponent()', () => {
     });
 });
 
-// ─── pasteComponent ───────────────────────────────────────────────────────────
 
 describe('clipboard.pasteComponent()', () => {
     it('returns false when clipboard is empty', () => {
@@ -198,7 +195,6 @@ describe('clipboard.pasteComponent()', () => {
     });
 });
 
-// ─── clearComponent ───────────────────────────────────────────────────────────
 
 describe('clipboard.clearComponent()', () => {
     it('does not throw when already empty', () => {

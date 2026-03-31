@@ -61,7 +61,6 @@
 import { listen, emit } from '../core/events.js';
 import { Out }          from '../core/out.js';
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 let _container = null;
 let _banner    = null;
@@ -69,7 +68,6 @@ let _position  = 'top-right';
 let _idCounter = 0;
 let _announcer = null;
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TYPES = {
     success : { cls: 'oja-toast-success', icon: '✓', role: 'status',  live: 'polite'   },
@@ -89,7 +87,6 @@ const DEFAULTS = {
     announce    : true,
 };
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const notify = {
 
@@ -403,7 +400,6 @@ export const notify = {
     },
 };
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 function _show(type, message, options = {}) {
     _ensureContainer();
@@ -612,7 +608,6 @@ function _esc(str) {
         .replace(/'/g, '&#039;');
 }
 
-// ─── Auto-initialize announcer on DOM ready ───────────────────────────────────
 
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {

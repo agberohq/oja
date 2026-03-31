@@ -67,7 +67,6 @@
 import { Store }       from '../core/store.js';
 import { emit, listen } from '../core/events.js';
 
-// ─── Token storage ────────────────────────────────────────────────────────────
 // Cascade: sessionStorage (encrypted) → localStorage (encrypted) → memory
 // Token is encrypted at rest. Metadata (exp, payload) is stored unencrypted
 // in a separate store so synchronous reads (isActive, user) work without
@@ -76,11 +75,9 @@ import { emit, listen } from '../core/events.js';
 const _tokenStore = new Store('oja:auth',      { encrypt: true, prefer: 'session' });
 const _metaStore  = new Store('oja:auth:meta');  // non-sensitive: exp, payload, intendedPath
 
-// ─── Level registry ───────────────────────────────────────────────────────────
 
 const _levels = new Map(); // name → () => bool
 
-// ─── Session state ────────────────────────────────────────────────────────────
 
 const _hooks = new Map([
     ['start', []],
@@ -101,7 +98,6 @@ let _refreshSubscribers = [];
 const REFRESH_THRESHOLD = 5 * 60 * 1000;
 const REFRESH_BUFFER = 30 * 1000;
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const auth = {
 
@@ -476,7 +472,6 @@ export const auth = {
     }
 };
 
-// ─── Hook management ──────────────────────────────────────────────────────────
 
 function _addHook(type, fn) {
     if (!_hooks.has(type)) return;
@@ -494,7 +489,6 @@ function _runHooks(type, ...args) {
     }
 }
 
-// ─── Timer management ─────────────────────────────────────────────────────────
 
 function _setTimer(type, fn, delay) {
     _clearTimer(type);
@@ -519,7 +513,6 @@ function _stopAllTimers() {
     }
 }
 
-// ─── Expiry watch ─────────────────────────────────────────────────────────────
 
 function _startExpiryWatch(expMs) {
     const now = Date.now();
@@ -582,7 +575,6 @@ async function _handleRefresh() {
     }
 }
 
-// ─── JWT decode ───────────────────────────────────────────────────────────────
 
 function _decodeJWT(token) {
     if (!token || typeof token !== 'string') return null;
@@ -603,7 +595,6 @@ function _decodeJWT(token) {
     }
 }
 
-// ─── Listen for api:unauthorized ─────────────────────────────────────────────
 
 listen('api:unauthorized', async () => {
     if (!auth.session.isActive()) return;

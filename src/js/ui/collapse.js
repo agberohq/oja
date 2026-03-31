@@ -54,7 +54,6 @@
 import { animate } from '../core/animate.js';
 import { Out }     from '../core/out.js';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -66,7 +65,6 @@ function _setAriaExpanded(triggerEl, open) {
     if (triggerEl) triggerEl.setAttribute('aria-expanded', String(open));
 }
 
-// ─── collapse ─────────────────────────────────────────────────────────────────
 
 export const collapse = {
 
@@ -291,7 +289,6 @@ export const collapse = {
     },
 };
 
-// ─── accordion ────────────────────────────────────────────────────────────────
 
 export const accordion = {
 
@@ -473,7 +470,6 @@ export const accordion = {
     },
 };
 
-// ─── Internals ────────────────────────────────────────────────────────────────
 
 let _idCounter = 0;
 

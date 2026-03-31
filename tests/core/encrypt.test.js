@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { encrypt } from '../../src/js/utils/encrypt.js';
 
-// ─── available ────────────────────────────────────────────────────────────────
 
 describe('encrypt — available()', () => {
     it('returns true in jsdom environment', () => {
@@ -9,7 +8,6 @@ describe('encrypt — available()', () => {
     });
 });
 
-// ─── isSealed ─────────────────────────────────────────────────────────────────
 
 describe('encrypt — isSealed()', () => {
     it('returns false for a plain string', () => {
@@ -26,7 +24,6 @@ describe('encrypt — isSealed()', () => {
     });
 });
 
-// ─── seal / open ──────────────────────────────────────────────────────────────
 
 describe('encrypt — seal() and open()', () => {
     it('round-trips a plain string', async () => {
@@ -81,7 +78,6 @@ describe('encrypt — seal() and open()', () => {
     });
 });
 
-// ─── rotate ───────────────────────────────────────────────────────────────────
 
 describe('encrypt — rotate()', () => {
     it('re-encrypts under a new passphrase and decrypts correctly', async () => {
@@ -98,7 +94,6 @@ describe('encrypt — rotate()', () => {
     });
 });
 
-// ─── sign / verify ────────────────────────────────────────────────────────────
 
 describe('encrypt — sign() and verify()', () => {
     it('produces a hex string signature', async () => {

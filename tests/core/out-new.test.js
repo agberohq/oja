@@ -10,7 +10,6 @@ function el(html = '') {
     return div;
 }
 
-// ─── OutTarget DOM helpers ─────────────────────────────────────────────
 
 describe('OutTarget DOM helpers', () => {
     it('show() removes display:none', () => {
@@ -92,7 +91,6 @@ describe('OutTarget DOM helpers', () => {
     });
 });
 
-// ─── OutTarget render mode ─────────────────────────────────────────────
 
 describe('OutTarget.mode() — append/prepend', () => {
     it('mode("append") adds content without clearing existing', async () => {
@@ -110,7 +108,6 @@ describe('OutTarget.mode() — append/prepend', () => {
     });
 });
 
-// ─── Out.sparkline ─────────────────────────────────────────────────────
 
 describe('Out.sparkline()', () => {
     it('renders an SVG into the container', async () => {
@@ -128,7 +125,6 @@ describe('Out.sparkline()', () => {
     });
 });
 
-// ─── Out.timeSeries ────────────────────────────────────────────────────
 
 describe('Out.timeSeries()', () => {
     it('renders an SVG into the container', async () => {

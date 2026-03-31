@@ -8,7 +8,6 @@ beforeEach(() => {
     context.delete('__test_reset__');
 });
 
-// ─── watch() ───────────────────────────────────────────────────────────
 
 describe('watch(signal, fn)', () => {
     it('does NOT run immediately by default', () => {
@@ -45,7 +44,6 @@ describe('watch(signal, fn)', () => {
     });
 });
 
-// ─── F-13: untrack() ─────────────────────────────────────────────────────────
 
 describe('untrack(fn)', () => {
     it('reads a signal value without subscribing the current effect', async () => {
@@ -71,7 +69,6 @@ describe('untrack(fn)', () => {
     });
 });
 
-// ─── readonly() ────────────────────────────────────────────────────────
 
 describe('readonly(signal)', () => {
     it('returns a getter that reads the current value', () => {
@@ -95,7 +92,6 @@ describe('readonly(signal)', () => {
     });
 });
 
-// ─── context.subscribe() ───────────────────────────────────────────────
 
 describe('context.subscribe(name, fn)', () => {
     it('calls fn with (newVal, oldVal) when context changes', async () => {
@@ -126,7 +122,6 @@ describe('context.subscribe(name, fn)', () => {
     });
 });
 
-// ─── context.reset() ───────────────────────────────────────────────────
 
 describe('context.reset(name)', () => {
     it('restores the context value to its initial value', async () => {
@@ -144,7 +139,6 @@ describe('context.reset(name)', () => {
     });
 });
 
-// ─── storage listener dedup (integration check) ────────────────────────
 
 describe('persistentState storage listener dedup', () => {
     it('wires at most one storage listener per key', () => {

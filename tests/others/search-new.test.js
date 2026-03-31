@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Trie, Search } from '../../src/js/utils/search.js';
 
-// ─── B-05: import() restores on error ────────────────────────────────────────
 
 describe('B-05: Search.import() — restores state on malformed data', () => {
     it('keeps previous state when import data is invalid', () => {
@@ -27,7 +26,6 @@ describe('B-05: Search.import() — restores state on malformed data', () => {
     });
 });
 
-// ─── D-04: _fieldForTerm cache ────────────────────────────────────────────────
 
 describe('D-04: Search — _fieldForTerm uses index-time cache', () => {
     it('search results include correct field in matches', () => {
@@ -41,7 +39,6 @@ describe('D-04: Search — _fieldForTerm uses index-time cache', () => {
     });
 });
 
-// ─── F-42: Trie.startsWith() ─────────────────────────────────────────────────
 
 describe('F-42: Trie.startsWith(prefix)', () => {
     it('returns true when any key starts with prefix', () => {
@@ -68,7 +65,6 @@ describe('F-42: Trie.startsWith(prefix)', () => {
     });
 });
 
-// ─── F-43: Search.suggest() ──────────────────────────────────────────────────
 
 describe('F-43: Search.suggest(query)', () => {
     it('returns closest matching term for a typo', () => {
@@ -93,7 +89,6 @@ describe('F-43: Search.suggest(query)', () => {
     });
 });
 
-// ─── D-05/D-06: fuzzy visit cap ──────────────────────────────────────────────
 
 describe('D-05/D-06: fuzzy search visit cap', () => {
     it('completes fuzzy search without hanging on a large index', () => {

@@ -657,7 +657,6 @@ context.inspect = () => {
 };
 
 
-// ─── watch(signal, fn, options) ────────────────────────────────────────
 // Like effect() but explicit about what to watch, passes (newVal, oldVal),
 // and does not run immediately by default.
 //
@@ -683,7 +682,6 @@ export function watch(signal, fn, options = {}) {
     });
 }
 
-// ─── F-13: untrack(fn) ────────────────────────────────────────────────────────
 // Run fn() without tracking any signal reads as dependencies.
 // Use inside effect() to read signals you don't want to subscribe to.
 //
@@ -695,7 +693,6 @@ export function untrack(fn) {
     return _sys._withoutTracking(fn);
 }
 
-// ─── F-16: readonly(signal) ───────────────────────────────────────────────────
 // Wrap a writable signal to expose only the getter.
 // Useful for module encapsulation.
 //
@@ -708,7 +705,6 @@ export function readonly(signal) {
     return read;
 }
 
-// ─── F-14: context.subscribe(name, fn) ───────────────────────────────────────
 // Watch a named context value. fn receives (newValue, oldValue).
 // Returns an unsubscribe function.
 context.subscribe = (name, fn) => {
@@ -721,7 +717,6 @@ context.subscribe = (name, fn) => {
     return watch(read, fn);
 };
 
-// ─── context.reset(name) ───────────────────────────────────────────────
 // Restore a context value to its initial value and re-persist if applicable.
 context.reset = (name) => {
     if (!_ctx.has(name)) return;
@@ -752,14 +747,12 @@ if (typeof window !== 'undefined') {
     };
 }
 
-// ─── channel() — reactive same-page pub/sub with current-value semantics ──────
 //
 // Unlike emit/listen (fire-and-forget), a channel holds the last value.
 // Late subscribers receive the current value immediately on subscribe.
 // This makes it the right primitive for component-to-component communication
 // where components mount at different times and need the current state.
 //
-// ─── Usage ────────────────────────────────────────────────────────────────────
 //
 //   // In hosts.html component — write
 //   import { channel } from '../core/reactive.js';
@@ -782,13 +775,11 @@ if (typeof window !== 'undefined') {
 //   // Check if anyone is listening
 //   selected.hasSubscribers(); // → boolean
 //
-// ─── Scoped channels ──────────────────────────────────────────────────────────
 //
 //   // Channels are global by default — same name = same channel everywhere.
 //   // Destroy a channel when the page that owns it unmounts:
 //   component.onUnmount(() => channel('host:selected').destroy());
 //
-// ─── Integration with reactive state ──────────────────────────────────────────
 //
 //   // Use with effect() for reactive derived state
 //   const selected = channel('host:selected');

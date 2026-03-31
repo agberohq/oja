@@ -62,7 +62,6 @@ const SEP_CLASS    = 'oja-ctx-sep';
 const DANGER_CLASS = 'danger';
 const DIS_CLASS    = 'disabled';
 
-// ── Internal state ────────────────────────────────────────────────────────────
 
 let _current    = null;   // active menu element
 let _onClose    = null;   // close callback
@@ -250,7 +249,6 @@ function _mount(menu, opts = {}) {
     };
 }
 
-// ── Styles injection (once) ───────────────────────────────────────────────────
 
 function _injectStyles() {
     if (document.getElementById('oja-ctx-styles')) return;
@@ -350,7 +348,6 @@ if (typeof document !== 'undefined') {
     }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
 
 export const clickmenu = {
 

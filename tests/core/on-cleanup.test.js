@@ -14,7 +14,6 @@ import { on, off, emit }                                    from '../../src/js/c
 import { component, _setActiveForTest, _getScopeForTest }  from '../../src/js/core/component.js';
 import { query }                                            from '../../src/js/core/ui.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeEl(tag = 'div', attrs = {}) {
     const el = document.createElement(tag);
@@ -41,7 +40,6 @@ afterEach(() => {
     _setActiveForTest(null);
 });
 
-// ─── 1. on() returns a callable unsub ─────────────────────────────────────────
 
 describe('on() — return value is a callable unsub', () => {
 
@@ -111,7 +109,6 @@ describe('on() — return value is a callable unsub', () => {
     });
 });
 
-// ─── 2. on() auto-cleanup when component unmounts ─────────────────────────────
 
 describe('on() — auto-cleanup on component unmount via _activeElement', () => {
 
@@ -238,7 +235,6 @@ describe('on() — auto-cleanup on component unmount via _activeElement', () => 
     });
 });
 
-// ─── 3. query() ───────────────────────────────────────────────────────────────
 
 describe('query()', () => {
 
@@ -289,7 +285,6 @@ describe('query()', () => {
     });
 });
 
-// ─── 4. findAll name-conflict — why query() is the fix ────────────────────────
 
 describe('findAll name-conflict — query() is the safe alternative', () => {
 

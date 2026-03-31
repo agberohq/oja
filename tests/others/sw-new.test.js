@@ -20,7 +20,6 @@ beforeEach(() => {
 
 afterEach(() => { vi.useRealTimers(); });
 
-// ─── sw.waitFor() ──────────────────────────────────────────────────────
 
 describe('sw.waitFor(type, timeout)', () => {
     it('is a function', () => {
@@ -54,7 +53,6 @@ describe('sw.waitFor(type, timeout)', () => {
     });
 });
 
-// ─── sw.onStateChange() ────────────────────────────────────────────────
 
 describe('sw.onStateChange(fn)', () => {
     it('is a function', () => {
@@ -78,7 +76,6 @@ describe('sw.onStateChange(fn)', () => {
     });
 });
 
-// ─── sw.clearVFS() ─────────────────────────────────────────────────────
 
 describe('sw.clearVFS()', () => {
     it('is a function', () => {
@@ -98,7 +95,6 @@ describe('sw.clearVFS()', () => {
     });
 });
 
-// ─── named exports ─────────────────────────────────────────────────────
 
 describe('named exports from sw.js', () => {
     it('exports register, send, post, on, waitFor, syncVFS, clearVFS as named functions', async () => {
@@ -113,7 +109,6 @@ describe('named exports from sw.js', () => {
     });
 });
 
-// ─── sw.isControlling ──────────────────────────────────────────────────
 
 describe('sw.isControlling', () => {
     it('returns false when no controller', () => {

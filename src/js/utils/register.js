@@ -47,7 +47,6 @@
 
 import { emit as _emit, listen as _listen } from '../core/events.js';
 
-// ─── First-party Oja event catalogue ─────────────────────────────────────────
 // All events emitted internally by Oja modules are pre-registered here.
 // Apps that call events.register([...]) + events.strictMode(true) will get
 // validation on their own events AND catch typos in Oja's built-in names.

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VFS } from '../../src/js/ext/vfs.js';
 
-// ─── vfs.persist() and vfs.quota() ─────────────────────────────────────
 
 describe('VFS.persist() and VFS.quota()', () => {
     it('persist() is a function', async () => {
@@ -50,7 +49,6 @@ describe('VFS.persist() and VFS.quota()', () => {
     });
 });
 
-// ─── VFS encrypt hook ──────────────────────────────────────────────────
 
 describe('VFS encrypt hook', () => {
     it('calls seal() before writing when encrypt hook is provided', async () => {

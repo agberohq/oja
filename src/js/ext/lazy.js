@@ -83,13 +83,11 @@
  *   lazy.preloadAll(['/js/one.js', '/js/two.js']);
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _cache = new Map(); // url -> promise
 const _loaded = new Map(); // url -> true/false
 const _observers = new Map(); // element -> observer
 
-// ─── Core API ─────────────────────────────────────────────────────────────────
 
 export const lazy = {
     /**

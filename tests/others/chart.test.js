@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { chart } from '../../src/js/ext/chart.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeContainer(w = 400, h = 120) {
     const el = document.createElement('div');
@@ -18,7 +17,6 @@ function cleanup(el) {
 const VALUES     = [10, 20, 15, 30, 25];
 const TIMESTAMPS = [1700000000, 1700000060, 1700000120, 1700000180, 1700000240];
 
-// ─── chart.line ───────────────────────────────────────────────────────────────
 
 describe('chart.line()', () => {
     let el;
@@ -133,7 +131,6 @@ describe('chart.line()', () => {
     });
 });
 
-// ─── chart.bar ────────────────────────────────────────────────────────────────
 
 describe('chart.bar()', () => {
     let el;
@@ -237,7 +234,6 @@ describe('chart.bar()', () => {
     });
 });
 
-// ─── chart.hbar ───────────────────────────────────────────────────────────────
 
 describe('chart.hbar()', () => {
     let el;
@@ -301,7 +297,6 @@ describe('chart.hbar()', () => {
     });
 });
 
-// ─── chart.pie ────────────────────────────────────────────────────────────────
 
 describe('chart.pie()', () => {
     let el;
@@ -370,7 +365,6 @@ describe('chart.pie()', () => {
     });
 });
 
-// ─── chart.gauge ──────────────────────────────────────────────────────────────
 
 describe('chart.gauge()', () => {
     let el;
@@ -433,7 +427,6 @@ describe('chart.gauge()', () => {
     });
 });
 
-// ─── chart.health ─────────────────────────────────────────────────────────────
 
 describe('chart.health()', () => {
     let el;
@@ -498,7 +491,6 @@ describe('chart.health()', () => {
     });
 });
 
-// ─── chart.area ───────────────────────────────────────────────────────────────
 
 describe('chart.area()', () => {
     let el;
@@ -551,7 +543,6 @@ describe('chart.area()', () => {
     });
 });
 
-// ─── chart.scatter ────────────────────────────────────────────────────────────
 
 describe('chart.scatter()', () => {
     let el;
@@ -617,7 +608,6 @@ describe('chart.scatter()', () => {
     });
 });
 
-// ─── chart.clear ──────────────────────────────────────────────────────────────
 
 describe('chart.clear()', () => {
     let el;
@@ -635,7 +625,6 @@ describe('chart.clear()', () => {
     });
 });
 
-// ─── chart.exportSVG ──────────────────────────────────────────────────────────
 
 describe('chart.exportSVG()', () => {
     let el;

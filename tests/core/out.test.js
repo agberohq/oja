@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Out } from '../../src/js/core/out.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeContainer() {
     const el = document.createElement('div');
@@ -21,7 +20,6 @@ function stubFetch(html) {
     }));
 }
 
-// ─── Out.raw() ────────────────────────────────────────────────────────────────
 
 describe('Out.raw()', () => {
     let el;
@@ -48,7 +46,6 @@ describe('Out.raw()', () => {
     });
 });
 
-// ─── Out.if() ─────────────────────────────────────────────────────────────────
 
 describe('Out.if()', () => {
     let el;
@@ -103,7 +100,6 @@ describe('Out.if()', () => {
     });
 });
 
-// ─── Out.promise() ────────────────────────────────────────────────────────────
 
 describe('Out.promise()', () => {
     let el;
@@ -184,7 +180,6 @@ describe('Out.promise()', () => {
     });
 });
 
-// ─── Out.list() ───────────────────────────────────────────────────────────────
 
 describe('Out.list()', () => {
     let el;
@@ -262,7 +257,6 @@ describe('Out.list()', () => {
     });
 });
 
-// ─── Out.vfsUse / vfsGet ──────────────────────────────────────────────────────
 
 describe('Out — vfsUse() and vfsGet()', () => {
     afterEach(() => { Out.vfsUse(null); vi.restoreAllMocks(); });
@@ -283,7 +277,6 @@ describe('Out — vfsUse() and vfsGet()', () => {
     });
 });
 
-// ─── vfsOverride (instance-scoped VFS) ───────────────────────────────────────
 
 describe('Out.component() — vfsOverride', () => {
     let el;
@@ -332,7 +325,6 @@ describe('Out.component() — vfsOverride', () => {
     });
 });
 
-// ─── Out.is() ─────────────────────────────────────────────────────────────────
 
 describe('Out.is()', () => {
     it('returns true for any Out instance', () => {
@@ -352,7 +344,6 @@ describe('Out.is()', () => {
     });
 });
 
-// ─── cacheStats / clearCache ──────────────────────────────────────────────────
 
 describe('Out — cacheStats() and clearCache()', () => {
     afterEach(() => { Out.clearCache(); vi.restoreAllMocks(); });
@@ -381,7 +372,6 @@ describe('Out — cacheStats() and clearCache()', () => {
     });
 });
 
-// ─── Out.to() — tagged template literal ──────────────────────────────────────
 
 describe('Out.tag() — tagged template literal', () => {
     let el;
@@ -443,7 +433,6 @@ describe('Out.tag() — tagged template literal', () => {
     });
 });
 
-// ─── Out.to().render(Out) — symmetry with find().render(out) ─────────────────
 
 describe('Out.to().render(Out)', () => {
     let el;
@@ -485,7 +474,6 @@ describe('Out.to().render(Out)', () => {
     });
 });
 
-// ─── Out.component() — non-string url warning ─────────────────────────────────
 
 describe('Out.component() — non-string url warning', () => {
     it('warns when url is an _Out object', () => {

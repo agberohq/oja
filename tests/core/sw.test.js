@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sw } from '../../src/js/ext/sw.js';
 
-// ─── ServiceWorker environment shim ──────────────────────────────────────────
 
 function makeSwShim(overrides = {}) {
     return {
@@ -26,7 +25,6 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-// ─── sw.on / unsub (existing) ─────────────────────────────────────────────────
 
 describe('sw.on()', () => {
     it('registers a listener and calls it when invoked', () => {
@@ -59,7 +57,6 @@ describe('sw.on()', () => {
     });
 });
 
-// ─── sw.post (existing) ───────────────────────────────────────────────────────
 
 describe('sw.post()', () => {
     it('calls postMessage on the active controller', () => {
@@ -75,7 +72,6 @@ describe('sw.post()', () => {
     });
 });
 
-// ─── sw.send without ack (existing) ──────────────────────────────────────────
 
 describe('sw.send() without ack', () => {
     it('posts the message and resolves null immediately', async () => {
@@ -92,7 +88,6 @@ describe('sw.send() without ack', () => {
     });
 });
 
-// ─── sw.send with ack (existing) ─────────────────────────────────────────────
 
 describe('sw.send() with ack', () => {
     it('resolves null after timeout if no ACK arrives', async () => {
@@ -105,7 +100,6 @@ describe('sw.send() with ack', () => {
     });
 });
 
-// ─── sw.syncVFS (existing) ────────────────────────────────────────────────────
 
 describe('sw.syncVFS()', () => {
     it('sends a SYNC_VFS message with the files map', async () => {
@@ -138,7 +132,6 @@ describe('sw.syncVFS()', () => {
     });
 });
 
-// ─── sw.register (existing) ───────────────────────────────────────────────────
 
 describe('sw.register()', () => {
     it('resolves null when serviceWorker is not supported', async () => {
@@ -173,7 +166,6 @@ describe('sw.register()', () => {
     });
 });
 
-// ─── sw.supported / sw.active (existing) ─────────────────────────────────────
 
 describe('sw.supported', () => {
     it('returns true when serviceWorker is in navigator', () => {
@@ -194,7 +186,6 @@ describe('sw.active', () => {
     });
 });
 
-// ─── sw.registerAppWorker() (new) ────────────────────────────────────────────
 
 describe('sw.registerAppWorker()', () => {
     it('is a method on the sw object', () => {

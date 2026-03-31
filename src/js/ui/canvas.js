@@ -90,7 +90,6 @@
  *   const url = canvas.toDataURL('#myCanvas');
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} CanvasSize
@@ -99,12 +98,10 @@
  * @property {number} dpr - Device pixel ratio
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _responsiveInstances = new WeakMap(); // canvas -> { observer, drawFn }
 const _animationInstances  = new WeakMap(); // canvas -> { rafId, drawFn, startTime }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function _resolveCanvas(target) {
     const el = typeof target === 'string' ? document.querySelector(target) : target;
@@ -128,7 +125,6 @@ function _sizeOf(el) {
     };
 }
 
-// ─── Core utilities ───────────────────────────────────────────────────────────
 
 /**
  * Get a canvas 2D context, optionally setting physical dimensions.
@@ -217,7 +213,6 @@ export function draw(target, drawFn) {
     ctx.restore();
 }
 
-// ─── Responsive canvas ────────────────────────────────────────────────────────
 
 /**
  * Make a canvas responsive — redraws automatically whenever its size changes.
@@ -265,7 +260,6 @@ export function responsive(target, drawFn) {
     };
 }
 
-// ─── Image loading ────────────────────────────────────────────────────────────
 
 /**
  * Load an image into a canvas, resizing the canvas to match.
@@ -358,7 +352,6 @@ export function download(target, filename = 'canvas.png', type = 'image/png', qu
     link.click();
 }
 
-// ─── Drawing helpers ──────────────────────────────────────────────────────────
 
 /**
  * Draw a grid of evenly-spaced lines across the canvas.
@@ -409,7 +402,6 @@ export function drawAxes(ctx, width, height, options = {}) {
     ctx.restore();
 }
 
-// ─── Chart helpers ────────────────────────────────────────────────────────────
 
 /**
  * Draw a bar chart.
@@ -559,7 +551,6 @@ export function pieChart(target, data, options = {}) {
     });
 }
 
-// ─── Animation ────────────────────────────────────────────────────────────────
 
 /**
  * Animate canvas drawing using requestAnimationFrame.
@@ -609,7 +600,6 @@ export function animate(target, drawFn, duration = Infinity) {
     };
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
 
 export const canvas = {
     get,

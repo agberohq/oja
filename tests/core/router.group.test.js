@@ -14,7 +14,6 @@ beforeEach(() => {
     window.location.hash = '';
 });
 
-// ─── Group prefix composition ─────────────────────────────────────────────────
 
 describe('Router.Group() — prefix composition', () => {
     it('composes group prefix with child routes', () => {
@@ -57,7 +56,6 @@ describe('Router.Group() — prefix composition', () => {
     });
 });
 
-// ─── Group middleware scoping ─────────────────────────────────────────────────
 
 describe('Router.Group() — middleware scoping', () => {
     it('group Use() does not affect parent routes', () => {
@@ -107,7 +105,6 @@ describe('Router.Group() — middleware scoping', () => {
     });
 });
 
-// ─── Named routes propagate to parent ────────────────────────────────────────
 
 describe('Router.Group() — named routes', () => {
     it('group.name() registers on the parent router', () => {
@@ -130,7 +127,6 @@ describe('Router.Group() — named routes', () => {
     });
 });
 
-// ─── Route() nested param blocks ─────────────────────────────────────────────
 
 describe('Router.Route() — param blocks', () => {
     it('Route() registers nested param routes', () => {

@@ -15,7 +15,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { canvas, transformable, selectionBox } from '../../src/js/ui/dragdrop.js';
 
-// ─── Global jsdom shims ───────────────────────────────────────────────────────
 // setPointerCapture / releasePointerCapture are not implemented in jsdom.
 // Patch them onto Element.prototype once so every element gets them.
 
@@ -41,7 +40,6 @@ function makeEl() {
     return el;
 }
 
-// ─── dragdrop.canvas() ────────────────────────────────────────────────────────
 
 describe('dragdrop.canvas()', () => {
     it('returns an object with a destroy() function', () => {
@@ -136,7 +134,6 @@ describe('dragdrop.canvas()', () => {
     });
 });
 
-// ─── dragdrop.transformable() ─────────────────────────────────────────────────
 
 describe('dragdrop.transformable()', () => {
     function makeTransformEl() {
@@ -225,7 +222,6 @@ describe('dragdrop.transformable()', () => {
     });
 });
 
-// ─── dragdrop.selectionBox() ─────────────────────────────────────────────────
 
 describe('dragdrop.selectionBox()', () => {
     function makeContainer() {

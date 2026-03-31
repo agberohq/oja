@@ -13,7 +13,6 @@ import { layout }                                           from '../../src/js/c
 import { component, _setActiveForTest, _getScopeForTest }  from '../../src/js/core/component.js';
 import { form }                                             from '../../src/js/ui/form.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeContainer(html = '') {
     const el = document.createElement('div');
@@ -42,7 +41,6 @@ afterEach(() => {
     _setActiveForTest(null);
 });
 
-// ─── 1. layout.signal ─────────────────────────────────────────────────────────
 
 describe('layout.signal', () => {
 
@@ -110,7 +108,6 @@ describe('layout.signal', () => {
     });
 });
 
-// ─── 2. layout outside-context warnings ───────────────────────────────────────
 
 describe('layout.onUnmount() — improved outside-context warning', () => {
 
@@ -185,7 +182,6 @@ describe('layout.timeout() — outside-context warning', () => {
     });
 });
 
-// ─── 3. component.signal ──────────────────────────────────────────────────────
 
 describe('component.signal', () => {
 
@@ -266,7 +262,6 @@ describe('component.signal', () => {
     });
 });
 
-// ─── 4. form.serialize ────────────────────────────────────────────────────────
 
 describe('form.serialize()', () => {
 

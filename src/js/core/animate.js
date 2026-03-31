@@ -99,7 +99,6 @@
  *   });
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} AnimationOptions
@@ -109,7 +108,6 @@
  * @property {boolean} fill - Keep final state (default: true)
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 // Keyed by element so animate.stop(el) can cancel all active animations on it.
 const _animations = new Map(); // element -> Set<Animation>
@@ -121,7 +119,6 @@ const _defaults = {
     fill: true,
 };
 
-// ─── Transform properties ─────────────────────────────────────────────────────
 //
 // These properties are animated via element.style.transform rather than
 // individual CSS properties (which don't exist or have very limited support).
@@ -164,7 +161,6 @@ const EASINGS = {
     },
 };
 
-// ─── Transform helpers ────────────────────────────────────────────────────────
 
 /**
  * Read current transform-related values from a computed style.
@@ -254,7 +250,6 @@ function _buildTransformString(transformValues) {
     return parts.join(' ') || 'none';
 }
 
-// ─── Core Animation Class ─────────────────────────────────────────────────────
 
 class Animation {
     constructor(element, properties, options = {}) {
@@ -496,7 +491,6 @@ class Animation {
     }
 }
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /**
  * Register an animation in the global map and start it.
@@ -520,7 +514,6 @@ function _createAndPlay(element, properties, options) {
     return anim;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const animate = {
     /**

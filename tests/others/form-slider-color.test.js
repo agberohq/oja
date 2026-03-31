@@ -20,7 +20,6 @@ function el() {
     return `#${div.id}`;
 }
 
-// ─── form.slider() ────────────────────────────────────────────────────────────
 
 describe('form.slider()', () => {
     it('returns null for an unknown target', () => {
@@ -98,7 +97,6 @@ describe('form.slider()', () => {
     });
 });
 
-// ─── form.colorPicker() ───────────────────────────────────────────────────────
 
 describe('form.colorPicker()', () => {
     it('returns null for an unknown target', () => {

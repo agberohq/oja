@@ -10,7 +10,6 @@ function el(style = '') {
     return div;
 }
 
-// ─── animate.collapse / animate.expand ─────────────────────────────────
 
 describe('animate.collapse() and animate.expand()', () => {
     it('collapse() sets display:none after completing', async () => {
@@ -44,7 +43,6 @@ describe('animate.collapse() and animate.expand()', () => {
     });
 });
 
-// ─── animate.countUp() ─────────────────────────────────────────────────
 
 describe('animate.countUp(element, from, to, options)', () => {
     it('sets the "from" value synchronously before animation starts', () => {
@@ -91,7 +89,6 @@ describe('animate.countUp(element, from, to, options)', () => {
     });
 });
 
-// ─── F-40: animate.typewriter() ──────────────────────────────────────────────
 
 describe('animate.typewriter(element, text, options)', () => {
     it('returns a handle with stop() and promise', () => {
@@ -131,7 +128,6 @@ describe('animate.typewriter(element, text, options)', () => {
     });
 });
 
-// ─── animate.shake() ───────────────────────────────────────────────────
 
 describe('animate.shake(element)', () => {
     it('returns a Promise', () => {

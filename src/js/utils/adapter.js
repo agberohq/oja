@@ -38,11 +38,9 @@
  *   adapter.list();          // → [{ name: 'd3', version: '7.8.5', lazy: false }, ...]
  */
 
-// ─── Registry ─────────────────────────────────────────────────────────────────
 
 const _registry = new Map(); // name → { instance, version, lazy, factory }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const adapter = {
 
@@ -158,7 +156,6 @@ export const adapter = {
     }
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function _detectVersion(instance) {
     if (!instance) return null;

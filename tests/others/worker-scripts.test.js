@@ -7,7 +7,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OjaWorker, _resetWorkerDetectionCache } from '../../src/js/ext/worker.js';
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
 
 let importScriptsCalls = [];
 
@@ -26,7 +25,6 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-// ─── scripts injection ────────────────────────────────────────────────────────
 
 describe('OjaWorker — options.scripts', () => {
     it('calls importScripts with a single URL before handler runs', async () => {
@@ -125,7 +123,6 @@ describe('OjaWorker — options.scripts', () => {
     });
 });
 
-// ─── Core OjaWorker behaviour ─────────────────────────────────────────────────
 
 describe('OjaWorker — core behaviour unchanged', () => {
     it('call() resolves with handler return value', async () => {
@@ -147,7 +144,6 @@ describe('OjaWorker — core behaviour unchanged', () => {
     });
 });
 
-// ─── Mode awareness ───────────────────────────────────────────────────────────
 
 describe('OjaWorker — mode', () => {
     it('auto mode resolves to classic or inline-module', () => {

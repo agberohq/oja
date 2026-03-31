@@ -248,7 +248,6 @@ export const sw = {
     },
 };
 
-// ─── Named exports ──────────────────────────────────────────────────────
 // Consistent with all other Oja ext modules that export named functions.
 export const register = (scriptUrl, options) => sw.register(scriptUrl, options);
 export const send     = (message, options)   => sw.send(message, options);

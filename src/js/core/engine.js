@@ -86,7 +86,6 @@ import {
     formatBytes, formatPercent, fallback, booleanClass, booleanStatus,
 } from '../utils/formatter.js';
 
-// ─── Internal Store (lazy fallback) ──────────────────────────────────────────
 
 // Created on first use if engine.useStore() was never called.
 // Uses in-memory storage — no sessionStorage/localStorage pollution.
@@ -97,7 +96,6 @@ function _getStore() {
     return _store;
 }
 
-// ─── Binding Registries ───────────────────────────────────────────────────────
 
 // storeKey → Set<Binding>   (for store change dispatch)
 const _bindings    = new Map();
@@ -111,7 +109,6 @@ const _morphCache  = new WeakMap();
 // Global MutationObserver — only active when enableAutoBind() is called
 let _observer = null;
 
-// ─── Public: Store Registration ──────────────────────────────────────────────
 
 /**
  * Swap the engine's internal store for the app's store instance.
@@ -136,7 +133,6 @@ export function get(key, fallback = null) {
     return _getStore().get(key, fallback);
 }
 
-// ─── Formatter Registry ───────────────────────────────────────────────────────
 
 /**
  * CSP-safe transformation registry for data-oja-transform attributes.
@@ -156,7 +152,6 @@ export const formatters = {
     booleanStatus,
 };
 
-// ─── Morphing Engine ──────────────────────────────────────────────────────────
 
 /**
  * Diff container against newHtml and surgically patch only what changed.
@@ -333,7 +328,6 @@ function _morphChildren(parent, newParent, opts) {
     }
 }
 
-// ─── Reactive Binding Engine ─────────────────────────────────────────────────
 
 /**
  * One-time synchronous scan of a container for data-oja-bind attributes.
@@ -518,7 +512,6 @@ function _unbind(el, storeKey) {
     _elementKeys.get(el)?.delete(storeKey);
 }
 
-// ─── Keyed List Engine ────────────────────────────────────────────────────────
 
 /**
  * Reconcile a keyed array into a container with minimal DOM operations.
@@ -638,7 +631,6 @@ export async function listAsync(container, items, options = {}) {
     emit('engine:list-updated', { container: parent, count: items.length });
 }
 
-// ─── Batch ────────────────────────────────────────────────────────────────────
 
 /**
  * Defer a nextFrame of store updates to the next animation frame.
@@ -653,7 +645,6 @@ export function nextFrame(fn) {
     return new Promise(resolve => requestAnimationFrame(() => { fn(); resolve(); }));
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -731,7 +722,6 @@ function _restoreSelection(state) {
     } catch { /* selection restoration is best-effort */ }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const engine = {
     useStore,

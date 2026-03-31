@@ -8,7 +8,6 @@ import {
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
 
-// ─── emit / listen ────────────────────────────────────────────────────────────
 
 describe('emit() + listen()', () => {
     it('delivers detail to a registered listener', () => {
@@ -55,7 +54,6 @@ describe('emit() + listen()', () => {
     });
 });
 
-// ─── listenOnce ───────────────────────────────────────────────────────────────
 
 describe('listenOnce()', () => {
     it('fires exactly once then stops', () => {
@@ -75,7 +73,6 @@ describe('listenOnce()', () => {
     });
 });
 
-// ─── waitFor ──────────────────────────────────────────────────────────────────
 
 describe('waitFor()', () => {
     it('resolves with the event detail when the event fires', async () => {
@@ -92,7 +89,6 @@ describe('waitFor()', () => {
     });
 });
 
-// ─── wildcard listener ────────────────────────────────────────────────────────
 
 describe("listen('*')", () => {
     it('receives all emitted events', () => {
@@ -115,7 +111,6 @@ describe("listen('*')", () => {
     });
 });
 
-// ─── debounce ─────────────────────────────────────────────────────────────────
 
 describe('debounce()', () => {
     it('fires once after the delay when called multiple times', () => {
@@ -181,7 +176,6 @@ describe('debounce()', () => {
     });
 });
 
-// ─── throttle ─────────────────────────────────────────────────────────────────
 
 describe('throttle()', () => {
     it('fires immediately on first call', () => {
@@ -223,7 +217,6 @@ describe('throttle()', () => {
     });
 });
 
-// ─── rafThrottle ──────────────────────────────────────────────────────────────
 
 describe('rafThrottle()', () => {
     it('fires the function on the next animation frame', () => {
@@ -260,7 +253,6 @@ describe('rafThrottle()', () => {
         expect(fn).not.toHaveBeenCalled();
     });
 });
-// ─── on() — scoped delegation ────────────────────────────────────────────────
 // on(scopeEl, childSelector, eventName, fn) delegates within scopeEl only.
 // This form is detected when arg1 is an Element and arg2 is a CSS string.
 

@@ -29,7 +29,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { execScripts, cleanupOjaScopes } from '../../src/js/core/_exec.js';
 import { state } from '../../src/js/core/reactive.js';
 
-// ── Test helpers ──────────────────────────────────────────────────────────────
 
 function makeContainer(scriptContent, type = 'module') {
     const container = document.createElement('div');
@@ -45,7 +44,6 @@ function cleanup(...containers) {
     containers.forEach(c => c?.remove());
 }
 
-// ── Input validation ──────────────────────────────────────────────────────────
 
 describe('execScripts — input validation', () => {
     it('rejects when container is null', async () => {
@@ -65,7 +63,6 @@ describe('execScripts — input validation', () => {
     });
 });
 
-// ── Resolution paths ──────────────────────────────────────────────────────────
 
 describe('execScripts — resolution paths', () => {
     let container;
@@ -105,7 +102,6 @@ describe('execScripts — resolution paths', () => {
     });
 });
 
-// ── Confirms the old bug ──────────────────────────────────────────────────────
 
 describe('window[scopeKey] deletion — confirms why old fallback was broken', () => {
     it('window[scopeKey] is always undefined after preamble delete', () => {
@@ -124,7 +120,6 @@ describe('window[scopeKey] deletion — confirms why old fallback was broken', (
     });
 });
 
-// ── Scope injection ───────────────────────────────────────────────────────────
 
 describe('execScripts — scope injection', () => {
     let container;
@@ -207,7 +202,6 @@ describe('execScripts — scope injection', () => {
     });
 });
 
-// ── Props proxy ───────────────────────────────────────────────────────────────
 
 describe('execScripts — props proxy', () => {
     let container;
@@ -279,7 +273,6 @@ describe('execScripts — props proxy', () => {
     });
 });
 
-// ── Multiple scripts ──────────────────────────────────────────────────────────
 
 describe('execScripts — multiple scripts', () => {
     let container;
@@ -319,7 +312,6 @@ describe('execScripts — multiple scripts', () => {
     });
 });
 
-// ── Classic scripts and cleanupOjaScopes ─────────────────────────────────────
 
 describe('execScripts — classic scripts', () => {
     it('resolves immediately for classic scripts', async () => {
@@ -342,7 +334,6 @@ describe('cleanupOjaScopes', () => {
         delete window['__unrelated_key'];
     });
 });
-// ─── await import() in component scripts ─────────────────────────────────────
 // Covers the production bug where a component script using dynamic import()
 // caused layout.apply() to hang. The setup.js shim evaluates blob scripts
 // via new Function() and wraps async results — these tests verify the full

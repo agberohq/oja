@@ -11,7 +11,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── countdown.attach() ───────────────────────────────────────────────────────
 
 describe('countdown.attach()', () => {
     it('returns a handle with destroy()', () => {
@@ -119,7 +118,6 @@ describe('countdown.attach()', () => {
     });
 });
 
-// ─── countdown.start() ───────────────────────────────────────────────────────
 
 describe('countdown.start()', () => {
     it('returns a handle with stop() and reset()', () => {
@@ -195,7 +193,6 @@ describe('countdown.start()', () => {
     });
 });
 
-// ─── countdown.daysLeft() ────────────────────────────────────────────────────
 
 describe('countdown.daysLeft()', () => {
     it('returns null for null input', () => {
@@ -233,7 +230,6 @@ describe('countdown.daysLeft()', () => {
     });
 });
 
-// ─── countdown.daysLabel() ───────────────────────────────────────────────────
 
 describe('countdown.daysLabel()', () => {
     it('returns "—" for null', () => {
@@ -269,7 +265,6 @@ describe('countdown.daysLabel()', () => {
     });
 });
 
-// ─── countdown.daysColor() ───────────────────────────────────────────────────
 
 describe('countdown.daysColor()', () => {
     it('returns var(--danger) for null', () => {

@@ -192,7 +192,6 @@ function _trackRender(url, ms) {
 const _scopes = new WeakMap();
 export let _activeElement = null;
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
 // Exported only for use in tests — allow tests to set the active component
 // context and inspect scope state without going through the full mount pipeline.
 //

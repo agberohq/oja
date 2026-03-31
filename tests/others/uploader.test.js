@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { uploader } from '../../src/js/ext/uploader.js';
 
-// ─── MockFile ──────────────────────────────────────────────────────────────────
 // Node has a native File class since v20, but it lacks the .content property that
 // the FileReader mock relies on. Always override so the worker receives an object
 // with .content, .slice(), and .arrayBuffer() that work in this environment.
@@ -23,7 +22,6 @@ class MockFile {
 // Override unconditionally — Node's native File lacks .content/.slice compatibility
 globalThis.File = MockFile;
 
-// ─── FileReader mock for base64 tests ─────────────────────────────────────────
 // Uses setTimeout(10) to simulate async read — same latency as the XHR mock.
 globalThis.FileReader = class {
     readAsDataURL(blob) {
@@ -35,14 +33,12 @@ globalThis.FileReader = class {
     }
 };
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
 // Drain pending microtasks (Promise continuations, queueMicrotask callbacks).
 // Does NOT advance fake timers.
 async function flushMicrotasks(n = 5) {
     for (let i = 0; i < n; i++) await Promise.resolve();
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
 describe('OjaUploader', () => {
     let xhrInstances = [];
 

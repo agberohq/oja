@@ -35,7 +35,6 @@ import { emit } from '../core/events.js';
 import { dragdrop } from '../ui/dragdrop.js';
 import { formatBytes } from '../utils/formatter.js';
 
-// ─── Worker Thread Code ───────────────────────────────────────────────────────
 // This runs entirely in the background. Main thread is never blocked.
 
 const WORKER_FN = function(self) {
@@ -252,7 +251,6 @@ const WORKER_FN = function(self) {
     });
 };
 
-// ─── Main Thread Controller ───────────────────────────────────────────────────
 
 export class OjaUploader {
     constructor(options = {}) {

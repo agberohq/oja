@@ -35,7 +35,6 @@
  *   [ERROR] 12:34:02.001  component     Load failed     {url: 'hosts.html'}
  */
 
-// ─── Levels ───────────────────────────────────────────────────────────────────
 
 const LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3, NONE: 4 };
 
@@ -46,14 +45,12 @@ const STYLES = {
     ERROR : 'color:#dc3545; font-weight:500',
 };
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 let _level      = LEVELS.INFO;
 let _handlers   = [];
 let _history    = [];         // in-memory ring buffer
 const MAX_HIST  = 500;
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const logger = {
 
@@ -124,7 +121,6 @@ if (typeof window !== 'undefined') {
     if (!isDev) _level = LEVELS.WARN;
 }
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 function _log(levelName, component, message, data) {
     if (LEVELS[levelName] < _level) return;

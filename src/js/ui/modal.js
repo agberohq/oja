@@ -65,7 +65,6 @@
 import { emit, listen, on } from '../core/events.js';
 import { Out }              from '../core/out.js';
 
-// ─── Focus trap ───────────────────────────────────────────────────────────────
 
 const FOCUSABLE_SELECTORS = [
     'button:not([disabled])',
@@ -150,14 +149,12 @@ function _getAllFocusable(container) {
         .filter(el => el.offsetParent !== null);
 }
 
-// ─── Stack ────────────────────────────────────────────────────────────────────
 
 const _stack = [];
 const _hooks = new Map();
 const _closeGuards = new Map();
 let   _backdrop = null;
 
-// ─── Accessibility helpers ────────────────────────────────────────────────────
 
 // Hidden sibling tracking for aria isolation
 const _hiddenSiblings = [];
@@ -198,14 +195,12 @@ function _announce(message) {
     announcer.textContent = message;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 // Tracks any in-flight confirm promise resolver keyed by modal ID.
 // A second call before the first resolves dismisses the previous one gracefully.
 const _pendingConfirms = new Map();
 
 
-// ─── Internal render helper ───────────────────────────────────────────────────
 // Used by modal.open() to render a body Out and return its completion promise.
 class _ModalOutTarget {
     constructor(el) { this._el = el; }
@@ -603,7 +598,6 @@ export const modal = {
     },
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _esc(str) {
     return String(str)
@@ -613,7 +607,6 @@ function _esc(str) {
         .replace(/"/g, '&quot;');
 }
 
-// ─── Keyboard and event wiring ────────────────────────────────────────────────
 
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || _stack.length === 0) return;
@@ -638,7 +631,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (backdrop && !_backdrop) modal.setBackdrop(backdrop);
 });
 
-// ─── Internals ────────────────────────────────────────────────────────────────
 
 function _showBackdrop() {
     if (!_backdrop) {

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sw } from '../../src/js/ext/sw.js';
 
-// ─── ServiceWorker environment shim ──────────────────────────────────────────
 // sw.js guards all navigator.serviceWorker access at call time, so we can
 // install a minimal shim per test without reloading the module.
 
@@ -32,7 +31,6 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-// ─── sw.on / unsub ────────────────────────────────────────────────────────────
 
 describe('sw.on()', () => {
     it('registers a listener and calls it when a message of that type fires', () => {
@@ -83,7 +81,6 @@ describe('sw.on()', () => {
     });
 });
 
-// ─── sw.post ──────────────────────────────────────────────────────────────────
 
 describe('sw.post()', () => {
     it('calls postMessage on the active controller', () => {
@@ -100,7 +97,6 @@ describe('sw.post()', () => {
     });
 });
 
-// ─── sw.send (no-ack path) ────────────────────────────────────────────────────
 
 describe('sw.send() without ack', () => {
     it('posts the message and resolves null immediately', async () => {
@@ -119,7 +115,6 @@ describe('sw.send() without ack', () => {
     });
 });
 
-// ─── sw.send (ack path) ───────────────────────────────────────────────────────
 
 describe('sw.send() with ack', () => {
     it('resolves with the ACK data when the SW replies in time', async () => {
@@ -168,7 +163,6 @@ describe('sw.send() with ack', () => {
     });
 });
 
-// ─── sw.syncVFS ───────────────────────────────────────────────────────────────
 
 describe('sw.syncVFS()', () => {
     it('sends a SYNC_VFS message with the files map', async () => {
@@ -212,7 +206,6 @@ describe('sw.syncVFS()', () => {
     });
 });
 
-// ─── sw.register ──────────────────────────────────────────────────────────────
 
 describe('sw.register()', () => {
     it('resolves null when serviceWorker is not supported', async () => {
@@ -261,7 +254,6 @@ describe('sw.register()', () => {
     });
 });
 
-// ─── sw.supported / sw.active ─────────────────────────────────────────────────
 
 describe('sw.supported', () => {
     it('returns true when serviceWorker is in navigator', () => {

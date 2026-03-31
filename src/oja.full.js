@@ -40,10 +40,8 @@
  *     formatter, register
  */
 
-// ─── Kernel ───────────────────────────────────────────────────────────────────
 export * from './oja.js';
 
-// ─── UI layer — js/ui/ ────────────────────────────────────────────────────────
 export { modal }                                          from './js/ui/modal.js';
 export { notify }                                         from './js/ui/notify.js';
 export { clipboard }                                      from './js/ui/clipboard.js';
@@ -62,7 +60,6 @@ export { collapse, accordion }                                from './js/ui/coll
 export { countdown }                                          from './js/ui/countdown.js';
 export { wizard }                                             from './js/ui/wizard.js';
 
-// ─── Extension layer — js/ext/ ────────────────────────────────────────────────
 export { auth }                                           from './js/ext/auth.js';
 export { pagination }                                     from './js/ext/pagination.js';
 export { chart }                                          from './js/ext/chart.js';
@@ -85,7 +82,6 @@ export { exporter }                                       from './js/ext/export.
 export { uploader }                                       from './js/ext/uploader.js';
 export { analytics }                                      from './js/ext/analytics.js';
 
-// ─── Utilities — js/utils/ ────────────────────────────────────────────────────
 export { encrypt }                                        from './js/utils/encrypt.js';
 export { logger }                                         from './js/utils/logger.js';
 export { debug }                                          from './js/utils/debug.js';

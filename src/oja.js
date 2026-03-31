@@ -38,26 +38,21 @@
  *   Out.t()  → Out.text()
  */
 
-// ─── System ───────────────────────────────────────────────────────────────────
 export { timeout, interval, sleep, defer, withDefer }     from './js/core/system.js';
 
-// ─── State & reactivity ───────────────────────────────────────────────────────
 export { Store }                                          from './js/core/store.js';
 export { state, effect, derived, batch, context,
     watch, untrack, readonly, signal }              from './js/core/reactive.js';
 
-// ─── Rendering ────────────────────────────────────────────────────────────────
 export { render, renderRaw, fill, each, template }        from './js/core/template.js';
 export { Out, Responder }                                 from './js/core/out.js';
 export { segment }                                        from './js/core/segment.js';
 export { animate }                                        from './js/core/animate.js';
 
-// ─── Routing ──────────────────────────────────────────────────────────────────
 export { Router }                                         from './js/core/router.js';
 export { component }                                      from './js/core/component.js';
 export { layout, allSlotsReady }           from './js/core/layout.js';
 
-// ─── DOM helpers ──────────────────────────────────────────────────────────────
 export {
     ui,
     find, findAll, findAllIn,
@@ -68,7 +63,6 @@ export {
     matches, closest,
 }                                                         from './js/core/ui.js';
 
-// ─── Events ───────────────────────────────────────────────────────────────────
 export {
     on, once, off, emit, listen, listenOnce, waitFor,
     debounce, throttle, rafThrottle,
@@ -80,7 +74,6 @@ export {
     onClickOutside, onHover, onLongPress,  // F-17/18/19
 }                                                         from './js/core/events.js';
 
-// ─── Engine ───────────────────────────────────────────────────────────────────
 export {
     engine,
     morph, shouldMorph,
@@ -91,21 +84,16 @@ export {
     formatters,
 }                                                         from './js/core/engine.js';
 
-// ─── Network ──────────────────────────────────────────────────────────────────
 export { Api }                                            from './js/core/api.js';
 export { runtime }                                        from './js/core/runtime.js';
 
-// ─── Codecs ───────────────────────────────────────────────────────────────────
 export { JsonCodec, jsonCodec }                           from './js/core/codecs/json.js';
 export { MsgPackCodec }                                   from './js/core/codecs/msgpack.js';
 
-// ─── Plugin ───────────────────────────────────────────────────────────────────
 export { plugin }                                         from './js/core/plugin.js';
 
-// ─── Version ──────────────────────────────────────────────────────────────────
 export const VERSION = '0.0.1';
 
-// ─── Grouped exports — one import, dot-access ─────────────────────────────────
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
     watch, untrack, readonly, signal }                   from './js/core/reactive.js';

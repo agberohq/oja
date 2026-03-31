@@ -10,7 +10,6 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-// ─── clearAll() namespace isolation ─────────────────────────────────────
 
 describe('B-01: store.clearAll() — namespace isolation', () => {
     it('clears only keys belonging to its own namespace', () => {
@@ -41,7 +40,6 @@ describe('B-01: store.clearAll() — namespace isolation', () => {
     });
 });
 
-// ─── getOrSet ───────────────────────────────────────────────────────────
 
 describe('F-21: store.getOrSet()', () => {
     it('returns existing value without calling factory', () => {
@@ -66,7 +64,6 @@ describe('F-21: store.getOrSet()', () => {
     });
 });
 
-// ─── onChange('*') wildcard ────────────────────────────────────────────
 
 describe('F-22: store.onChange("*") wildcard', () => {
     it('fires for any key change with (key, newVal, oldVal)', () => {
@@ -95,7 +92,6 @@ describe('F-22: store.onChange("*") wildcard', () => {
     });
 });
 
-// ─── size getter ────────────────────────────────────────────────────────
 
 describe('store.size', () => {
     it('returns 0 for an empty store', () => {
@@ -125,7 +121,6 @@ describe('store.size', () => {
     });
 });
 
-// ─── ttl ────────────────────────────────────────────────────────────────
 
 describe('store.ttl()', () => {
     it('removes the key after the timeout', async () => {
@@ -153,7 +148,6 @@ describe('store.ttl()', () => {
     });
 });
 
-// ─── onChange returns unsub function ─────────────────────────────────────────
 
 describe('store.onChange() unsub', () => {
     it('returns a function that removes the specific listener', () => {

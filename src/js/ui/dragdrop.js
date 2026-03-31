@@ -77,7 +77,6 @@
  *   });
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _dragState = {
     active: false,
@@ -94,7 +93,6 @@ const _dragState = {
 let _animationFrame = null;
 let _touchListenersAdded = false;
 
-// ─── Reorderable lists ────────────────────────────────────────────────────────
 
 const _reorderLists = new Map(); // listElement -> { opts, observer }
 
@@ -332,7 +330,6 @@ function _destroyReorder(list) {
     });
 }
 
-// ─── File drop zones ──────────────────────────────────────────────────────────
 
 const _dropZones = new Map(); // zoneElement -> options
 
@@ -433,7 +430,6 @@ export function dropZone(target, options = {}) {
     };
 }
 
-// ─── Custom drag sources ──────────────────────────────────────────────────────
 
 const _dragSources = new WeakMap(); // element -> options
 
@@ -522,7 +518,6 @@ export function draggable(target, options = {}) {
     };
 }
 
-// ─── Custom drop targets ──────────────────────────────────────────────────────
 
 const _dropTargets = new WeakMap(); // element -> options
 
@@ -619,7 +614,6 @@ export function dropTarget(target, options = {}) {
     };
 }
 
-// ─── Sortable between lists ───────────────────────────────────────────────────
 
 /**
  * Create sortable lists that can exchange items.
@@ -717,7 +711,6 @@ export function sortable(lists, options = {}) {
     };
 }
 
-// ─── Touch support ────────────────────────────────────────────────────────────
 
 /**
  * Enable touch drag and drop for all draggable elements.
@@ -934,7 +927,6 @@ export function resizable(target, options = {}) {
     };
 }
 
-// ─── Canvas helpers ────────────────────────────────────────────────────────
 
 export function canvas(target, options = {}) {
     const el = typeof target === 'string' ? document.querySelector(target) : target;

@@ -11,7 +11,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── Channel ──────────────────────────────────────────────────────────────────
 
 describe('progress() — named channels', () => {
     it('returns the same instance for the same name', () => {
@@ -35,7 +34,6 @@ describe('progress() — named channels', () => {
     });
 });
 
-// ─── Core state ───────────────────────────────────────────────────────────────
 
 describe('state machine', () => {
     it('starts idle', () => {
@@ -107,7 +105,6 @@ describe('state machine', () => {
     });
 });
 
-// ─── set / inc ────────────────────────────────────────────────────────────────
 
 describe('set() and inc()', () => {
     it('clamps value between 0 and 100', () => {
@@ -133,7 +130,6 @@ describe('set() and inc()', () => {
     });
 });
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
 
 describe('on() — milestone hooks', () => {
     it('fires when value crosses a milestone going up', () => {
@@ -228,7 +224,6 @@ describe('on() — milestone hooks', () => {
     });
 });
 
-// ─── Lifecycle hooks ──────────────────────────────────────────────────────────
 
 describe('on() — lifecycle events', () => {
     it('fires "start" hook on start()', () => {
@@ -279,7 +274,6 @@ describe('on() — lifecycle events', () => {
     });
 });
 
-// ─── action() ─────────────────────────────────────────────────────────────────
 
 describe('action()', () => {
     it('registers multiple hooks from one object', () => {
@@ -318,7 +312,6 @@ describe('action()', () => {
     });
 });
 
-// ─── Color ────────────────────────────────────────────────────────────────────
 
 describe('color()', () => {
     it('is chainable', () => {
@@ -351,7 +344,6 @@ describe('color()', () => {
     });
 });
 
-// ─── reverse ─────────────────────────────────────────────────────────────────
 
 describe('reverse()', () => {
     it('sets value to the target', () => {
@@ -378,7 +370,6 @@ describe('reverse()', () => {
     });
 });
 
-// ─── DOM bar ──────────────────────────────────────────────────────────────────
 
 describe('DOM bar rendering', () => {
     it('injects a bar into the DOM on first set()', () => {

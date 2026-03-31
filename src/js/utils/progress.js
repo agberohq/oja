@@ -112,7 +112,6 @@
  *              failed
  */
 
-// ─── Channel registry ─────────────────────────────────────────────────────────
 
 const _channels = new Map();
 
@@ -146,7 +145,6 @@ progress.destroyAll = function() {
     _channels.clear();
 };
 
-// ─── Channel factory ──────────────────────────────────────────────────────────
 
 function _createChannel(name) {
 
@@ -755,7 +753,6 @@ function _createChannel(name) {
     return channel;
 }
 
-// ─── Lazy event import ────────────────────────────────────────────────────────
 // Avoids a hard circular dependency — progress.js is in utils/, not core/.
 // We import events lazily only when bind() actually needs it.
 

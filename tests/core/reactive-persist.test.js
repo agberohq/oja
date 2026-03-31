@@ -10,7 +10,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { context } from '../../src/js/core/reactive.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 let keyCounter = 0;
 function freshKey() { return `persist-test-${Date.now()}-${++keyCounter}`; }
@@ -28,7 +27,6 @@ function mockSetItemQuota() {
     });
 }
 
-// ─── onQuotaExceeded callback ─────────────────────────────────────────────────
 
 describe('context.persist — onQuotaExceeded callback', () => {
     let key;
@@ -85,7 +83,6 @@ describe('context.persist — onQuotaExceeded callback', () => {
     });
 });
 
-// ─── oja:quota-exceeded window event ──────────────────────────────────────────
 
 describe('context.persist — oja:quota-exceeded window event', () => {
     let spy;
@@ -157,7 +154,6 @@ describe('context.persist — oja:quota-exceeded window event', () => {
     });
 });
 
-// ─── Normal persist behaviour unchanged ───────────────────────────────────────
 
 describe('context.persist — normal behaviour unchanged', () => {
     afterEach(() => {

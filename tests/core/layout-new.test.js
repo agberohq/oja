@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { layout, allSlotsReady } from '../../src/js/core/layout.js';
 import { emit } from '../../src/js/core/events.js';
 
-// ─── allSlotsReady standalone export ───────────────────────────────────
 
 describe('F-30: allSlotsReady() standalone export', () => {
     it('is exported as a named function', () => {

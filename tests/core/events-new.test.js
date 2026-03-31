@@ -4,7 +4,6 @@ import {
     onMutation, debounce, onlyOnce,
 } from '../../src/js/core/events.js';
 
-// ─── onMutation multi-handler ──────────────────────────────────────────
 
 describe('onMutation() — multiple handlers on same element', () => {
     it('supports two independent handlers on the same element', () => {
@@ -35,7 +34,6 @@ describe('onMutation() — multiple handlers on same element', () => {
     });
 });
 
-// ─── D-02: debounce maxWait ───────────────────────────────────────────────────
 
 describe('debounce() — maxWait fires correctly', () => {
     it('does not fire maxWait timer on the very first call', () => {
@@ -67,7 +65,6 @@ describe('debounce() — maxWait fires correctly', () => {
     });
 });
 
-// ─── onClickOutside ────────────────────────────────────────────────────
 
 describe('onClickOutside(target, fn)', () => {
     beforeEach(() => { vi.useFakeTimers(); });
@@ -113,7 +110,6 @@ describe('onClickOutside(target, fn)', () => {
     });
 });
 
-// ───  onHover ───────────────────────────────────────────────────────────
 
 describe('onHover(target, enter, leave)', () => {
     it('calls enter on mouseenter and leave on mouseleave', () => {
@@ -142,7 +138,6 @@ describe('onHover(target, enter, leave)', () => {
     });
 });
 
-// ─── F-19: onLongPress ───────────────────────────────────────────────────────
 
 describe('F-19: onLongPress(target, fn, duration)', () => {
     it('fires fn after pointer is held for duration', () => {
@@ -174,7 +169,6 @@ describe('F-19: onLongPress(target, fn, duration)', () => {
     });
 });
 
-// ─── onlyOnce export ────────────────────────────────────────────────────
 
 describe('onlyOnce export', () => {
     it('is a function', () => {

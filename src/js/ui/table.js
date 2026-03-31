@@ -52,7 +52,6 @@
  *                   — enables remote mode; called on mount, sort, page change
  */
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -152,7 +151,6 @@ function _buildTd(cell, header, row, opts) {
     return td;
 }
 
-// ─── Main API ─────────────────────────────────────────────────────────────────
 
 export const table = {
 

@@ -53,7 +53,6 @@
 
 import { emit as _emit } from '../core/events.js';
 
-// ─── Default JSON codec ───────────────────────────────────────────────────────
 
 const JsonCodec = {
     encode: (data)    => JSON.stringify(data),
@@ -65,7 +64,6 @@ const JsonCodec = {
     binaryType: 'text'
 };
 
-// ─── OjaSSE ───────────────────────────────────────────────────────────────────
 
 export class OjaSSE {
     /**
@@ -208,7 +206,6 @@ export class OjaSSE {
     }
 }
 
-// ─── OjaSocket ───────────────────────────────────────────────────────────────
 
 export class OjaSocket {
     /**

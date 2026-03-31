@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { segment, _segmentRender } from '../../src/js/core/segment.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function addTemplate(name, html, keep = false) {
     const tmpl = document.createElement('template');
@@ -31,7 +30,6 @@ afterEach(() => {
     document.querySelectorAll('[data-test-container]').forEach(t => t.remove());
 });
 
-// ─── scan() ───────────────────────────────────────────────────────────────────
 
 describe('segment.scan()', () => {
     it('picks up templates from the document', () => {
@@ -86,7 +84,6 @@ describe('segment.scan()', () => {
     });
 });
 
-// ─── auto-scan via ensureScanned ──────────────────────────────────────────────
 
 describe('auto-scan on first use', () => {
     it('has() triggers auto-scan', () => {
@@ -113,7 +110,6 @@ describe('auto-scan on first use', () => {
     });
 });
 
-// ─── define() / defineAll() ───────────────────────────────────────────────────
 
 describe('segment.define()', () => {
     it('registers a segment from an HTML string', () => {
@@ -152,7 +148,6 @@ describe('segment.defineAll()', () => {
     });
 });
 
-// ─── has() / get() / list() ───────────────────────────────────────────────────
 
 describe('segment.has()', () => {
     it('returns true for registered name',    () => { segment.define('q', '<q>'); expect(segment.has('q')).toBe(true); });
@@ -178,7 +173,6 @@ describe('segment.list()', () => {
     });
 });
 
-// ─── undefine() / clearCache() ────────────────────────────────────────────────
 
 describe('segment.undefine()', () => {
     it('removes a single segment', () => {
@@ -209,7 +203,6 @@ describe('segment.clearCache()', () => {
     });
 });
 
-// ─── _segmentRender() ─────────────────────────────────────────────────────────
 
 describe('_segmentRender()', () => {
     let container;

@@ -40,7 +40,6 @@
 
 import { Out } from '../core/out.js';
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _scrollInstances = new WeakMap(); // container -> instance data
 
@@ -71,7 +70,6 @@ const DEFAULT_LOADING = Out.html(`
     </div>
 `);
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 /**
  * Initialize infinite scroll on a container

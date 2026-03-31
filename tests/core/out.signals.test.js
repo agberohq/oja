@@ -7,7 +7,6 @@ beforeEach(() => {
     signal.destroyAll();
 });
 
-// ─── Out.to() — plain OutTarget, no Proxy ─────────────────────────────────────
 
 describe('Out.to() — plain OutTarget', () => {
     it('returns an OutTarget instance directly', () => {
@@ -47,7 +46,6 @@ describe('Out.to() — plain OutTarget', () => {
     });
 });
 
-// ─── Out.tag() — tagged template entry point ─────────────────────────────────
 
 describe('Out.tag() — tagged template literal', () => {
     it('is a function (callable as tagged template)', () => {
@@ -73,7 +71,6 @@ describe('Out.tag() — tagged template literal', () => {
     });
 });
 
-// ─── Out.skeleton() still works ───────────────────────────────────────────────
 
 describe('Out.skeleton() — still works after Proxy removal', () => {
     it('returns an object with html and component properties', () => {
@@ -85,7 +82,6 @@ describe('Out.skeleton() — still works after Proxy removal', () => {
     });
 });
 
-// ─── channel() ───────────────────────────────────────────────────────────────
 
 describe('channel() — reactive same-page pub/sub', () => {
     it('returns the same instance for the same name', () => {

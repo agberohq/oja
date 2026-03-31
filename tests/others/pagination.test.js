@@ -9,7 +9,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { pagination } from '../../src/js/ext/pagination.js';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makePager(opts = {}) {
     return pagination({ total: 100, pageSize: 10, ...opts });
@@ -33,7 +32,6 @@ function clickPage(container, pageNum) {
     btn.click();
 }
 
-// ── State reads ───────────────────────────────────────────────────────────────
 
 describe('pagination() — initial state', () => {
     it('reads total, page, pageSize, totalPages', () => {
@@ -57,7 +55,6 @@ describe('pagination() — initial state', () => {
     });
 });
 
-// ── Navigation ────────────────────────────────────────────────────────────────
 
 describe('goTo()', () => {
     it('moves to the specified page', () => {
@@ -93,7 +90,6 @@ describe('goTo()', () => {
     });
 });
 
-// ── updateTotal ───────────────────────────────────────────────────────────────
 
 describe('updateTotal()', () => {
     it('updates total and recalculates totalPages', () => {
@@ -116,7 +112,6 @@ describe('updateTotal()', () => {
     });
 });
 
-// ── changeSize ────────────────────────────────────────────────────────────────
 
 describe('changeSize()', () => {
     it('updates pageSize', () => {
@@ -141,7 +136,6 @@ describe('changeSize()', () => {
     });
 });
 
-// ── reset ─────────────────────────────────────────────────────────────────────
 
 describe('reset()', () => {
     it('returns to page 1', () => {
@@ -151,7 +145,6 @@ describe('reset()', () => {
     });
 });
 
-// ── slice ─────────────────────────────────────────────────────────────────────
 
 describe('slice()', () => {
     const items = Array.from({ length: 95 }, (_, i) => i + 1);
@@ -178,7 +171,6 @@ describe('slice()', () => {
     });
 });
 
-// ── render ────────────────────────────────────────────────────────────────────
 
 describe('render()', () => {
     it('returns empty string when total is 0', () => {
@@ -235,7 +227,6 @@ describe('render()', () => {
     });
 });
 
-// ── mount — event delegation ──────────────────────────────────────────────────
 
 describe('mount() — event delegation', () => {
     let container, pg, stop;

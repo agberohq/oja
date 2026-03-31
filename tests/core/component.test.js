@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { component, _activeElement } from '../../src/js/core/component.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeContainer(html = '<div></div>') {
     const el = document.createElement('div');
@@ -21,7 +20,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── onReady() ────────────────────────────────────────────────────────────────
 
 describe('component.onReady()', () => {
     it('queues a hook that _runReady() calls in order', async () => {
@@ -84,7 +82,6 @@ describe('component.onReady()', () => {
     });
 });
 
-// ─── onDead() ────────────────────────────────────────────────────────────────
 
 describe('component.onDead()', () => {
     it('returns the component object for chaining', () => {
@@ -99,7 +96,6 @@ describe('component.onDead()', () => {
     });
 });
 
-// ─── _runMount / _runReady / _runDead ─────────────────────────────────────────
 
 describe('component._runMount()', () => {
     it('calls all mount hooks registered on the element scope', async () => {
@@ -130,7 +126,6 @@ describe('component._runMount()', () => {
     });
 });
 
-// ─── mount() — script execution and hook sequencing ──────────────────────────
 
 describe('component.mount()', () => {
     beforeEach(() => {
@@ -195,7 +190,6 @@ describe('component.mount()', () => {
     });
 });
 
-// ─── clearCache ───────────────────────────────────────────────────────────────
 
 describe('component.clearCache()', () => {
     it('returns the component object for chaining', () => {

@@ -105,7 +105,6 @@ import { emit as _emit }  from './events.js';
 
 const _store = new Store('oja:router');
 
-// ─── Prefetching ──────────────────────────────────────────────────────────────
 
 const _prefetchQueue = new Set();
 const _prefetchCache = new Map();  // url -> { promise, timestamp, priority }
@@ -123,7 +122,6 @@ const PREFETCH_DEFAULTS = {
 let _prefetchConfig = { ...PREFETCH_DEFAULTS };
 let _prefetchActive = 0;
 
-// ─── Route trie node ──────────────────────────────────────────────────────────
 
 class _RouteNode {
     constructor(segment = '') {
@@ -137,7 +135,6 @@ class _RouteNode {
     }
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
 
 export class Router {
     /**
@@ -786,7 +783,6 @@ export class Router {
     }
 }
 
-// ─── Group proxy ──────────────────────────────────────────────────────────────
 // A lightweight proxy over a parent Router that scopes route registration to a
 // path prefix. Does NOT create a new Router instance — all navigation, named
 // routes, and lifecycle stay on the parent. This means:
@@ -862,7 +858,6 @@ class _GroupProxy {
     afterEach(fn)       { this._parent.afterEach(fn);       return this; }
 }
 
-// ─── Built-in middleware ──────────────────────────────────────────────────────
 
 Router.middleware = {
 
@@ -922,7 +917,6 @@ Router.middleware = {
     },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function _segments(path) {
     return path.split('/').filter(Boolean);

@@ -51,7 +51,6 @@
 
 import { encrypt } from '../utils/encrypt.js';
 
-// ─── Storage adapters ─────────────────────────────────────────────────────────
 
 class _SessionAdapter {
     get name() { return 'session'; }
@@ -92,7 +91,6 @@ class _MemoryAdapter {
     clearNamespace(prefix) { for (const k of [...this._map.keys()]) if (k.startsWith(prefix)) this._map.delete(k); }
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
 
 export class Store {
     /**

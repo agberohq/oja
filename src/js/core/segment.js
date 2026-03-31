@@ -95,7 +95,6 @@ import { render as templateRender, fill } from './template.js';
 import { execScripts }                    from './_exec.js';
 import { emit }                           from './events.js';
 
-// ─── Registry ─────────────────────────────────────────────────────────────────
 
 const _registry = new Map(); // name → html string
 let   _scanned  = false;
@@ -120,7 +119,6 @@ function _scanRoot(root) {
     });
 }
 
-// ─── Internal render — called by _SegmentOut in out.js ───────────────────────
 
 export async function _segmentRender(container, name, data, context = {}) {
     _ensureScanned();
@@ -149,7 +147,6 @@ export async function _segmentRender(container, name, data, context = {}) {
     emit('segment:rendered', { name, container });
 }
 
-// ─── Public API (Layer 2 — power users) ──────────────────────────────────────
 
 export const segment = {
 

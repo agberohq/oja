@@ -126,7 +126,6 @@
  *   const text = validate.stripHtml(html);
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} ValidationResult
@@ -135,7 +134,6 @@
  * @property {any} [value]
  */
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 export const validate = {
     // ─── String validators ───────────────────────────────────────────────────

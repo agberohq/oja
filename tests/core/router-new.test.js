@@ -6,7 +6,6 @@ beforeEach(() => {
     window.location.hash = '';
 });
 
-// ─── router.destroy() ──────────────────────────────────────────────────
 
 describe('router.destroy()', () => {
     it('exposes a destroy() method', () => {
@@ -31,7 +30,6 @@ describe('router.destroy()', () => {
     });
 });
 
-// ─── named routes ───────────────────────────────────────────────────────
 
 describe('router.name() / router.path() / router.navigateTo()', () => {
     it('path() returns URL built from named route and params', () => {
@@ -60,7 +58,6 @@ describe('router.name() / router.path() / router.navigateTo()', () => {
     });
 });
 
-// ─── router.is() ───────────────────────────────────────────────────────
 
 describe('router.is(pattern)', () => {
     it('returns false when no current route', () => {
@@ -86,7 +83,6 @@ describe('router.is(pattern)', () => {
     });
 });
 
-// ─── router.param() ────────────────────────────────────────────────────
 
 describe('router.param(name)', () => {
     it('returns null when no params', () => {

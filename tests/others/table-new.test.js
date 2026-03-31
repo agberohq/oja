@@ -23,7 +23,6 @@ function makeContainer() {
 
 beforeEach(() => { document.body.innerHTML = ''; });
 
-// ─── column visibility ──────────────────────────────────────────────────
 
 describe('table column visibility controls', () => {
     it('hideColumn() removes a column from the rendered table', () => {
@@ -107,7 +106,6 @@ describe('table column visibility controls', () => {
     });
 });
 
-// ─── F-37: row expansion ─────────────────────────────────────────────────────
 
 describe('F-37: table.enableRowExpansion(factory)', () => {
     it('enableRowExpansion() is a function on the table handle', () => {

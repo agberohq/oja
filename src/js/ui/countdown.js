@@ -45,7 +45,6 @@
  *   ms ≤ 0       → 'Expired'
  */
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -64,7 +63,6 @@ function _defaultFormat(ms) {
     return `${s}s`;
 }
 
-// ─── countdown ────────────────────────────────────────────────────────────────
 
 export const countdown = {
 

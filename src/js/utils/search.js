@@ -39,7 +39,6 @@
  *   search2.import(JSON.parse(localStorage.getItem('idx')));
  */
 
-// ─── Trie node ────────────────────────────────────────────────────────────────
 
 class TrieNode {
     constructor() {
@@ -49,9 +48,7 @@ class TrieNode {
     }
 }
 
-// ─── Trie ─────────────────────────────────────────────────────────────────────
 
-// ─── Runtime-configurable fuzzy visit cap ───────────────────────────────
 // Default: 10_000 visited nodes per fuzzy search. Increase for large indexes:
 //   import { runtime } from './runtime.js';
 //   runtime.define('search.fuzzyVisitCap', 50_000);
@@ -328,7 +325,6 @@ export class Trie {
     }
 }
 
-// ─── Search ───────────────────────────────────────────────────────────────────
 
 export class Search {
     /**
@@ -732,7 +728,6 @@ export class Search {
     }
 }
 
-// ─── Module-level pure helpers ────────────────────────────────────────────────
 
 // Escape HTML for safe innerHTML injection in highlightSnippet().
 function _escHtml(str) {

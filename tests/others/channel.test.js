@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Channel, go } from '../../src/js/ext/channel.js';
 
-// ─── Channel — basic send / receive ───────────────────────────────────────────
 
 describe('Channel — unbuffered', () => {
     it('send and receive transfer a value', async () => {
@@ -56,7 +55,6 @@ describe('Channel — buffered', () => {
     });
 });
 
-// ─── async iteration ──────────────────────────────────────────────────────────
 
 describe('Channel — async iteration', () => {
     it('for-await collects all sent values and stops on close', async () => {
@@ -75,7 +73,6 @@ describe('Channel — async iteration', () => {
     });
 });
 
-// ─── go ───────────────────────────────────────────────────────────────────────
 
 describe('go()', () => {
     it('runs the async function as a fire-and-forget goroutine', async () => {

@@ -12,7 +12,6 @@ beforeEach(() => {
     }));
 });
 
-// ─── collapse.attach() ────────────────────────────────────────────────────────
 
 describe('collapse.attach(trigger, panel)', () => {
     it('returns a handle with open/close/toggle/isOpen/destroy', () => {
@@ -84,7 +83,6 @@ describe('collapse.attach(trigger, panel)', () => {
     });
 });
 
-// ─── collapse imperative API ──────────────────────────────────────────────────
 
 describe('collapse.show() / hide() / toggle()', () => {
     it('show() makes the element visible (no animation)', async () => {
@@ -113,7 +111,6 @@ describe('collapse.show() / hide() / toggle()', () => {
     });
 });
 
-// ─── accordion.render() ───────────────────────────────────────────────────────
 
 describe('accordion.render(container, items)', () => {
     it('renders one item per entry', () => {
@@ -181,7 +178,6 @@ describe('accordion.render(container, items)', () => {
     });
 });
 
-// ─── collapse.toggleCard() ────────────────────────────────────────────────────
 
 describe('collapse.toggleCard()', () => {
     function makeCard(checked = false) {

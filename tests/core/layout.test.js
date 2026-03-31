@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { layout } from '../../src/js/core/layout.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeOut(html) {
     return {
@@ -21,7 +20,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── inject() (existing behaviour preserved) ──────────────────────────────────
 
 describe('layout.inject()', () => {
     it('writes an HTML string into an element matched by selector', async () => {
@@ -69,7 +67,6 @@ describe('layout.inject()', () => {
     });
 });
 
-// ─── onReady() (existing behaviour preserved) ─────────────────────────────────
 
 describe('layout.onReady()', () => {
     it('calls the hook when layout:mounted fires (outside a script context)', async () => {
@@ -92,7 +89,6 @@ describe('layout.onReady()', () => {
     });
 });
 
-// ─── slot() (existing behaviour preserved) ────────────────────────────────────
 
 describe('layout.slot()', () => {
     it('fills a [data-slot] element with an HTML string', async () => {
@@ -132,7 +128,6 @@ describe('layout.slot()', () => {
     });
 });
 
-// ─── slotReady() (new) ────────────────────────────────────────────────────────
 
 describe('layout.slotReady()', () => {
     it('is a function on the layout object', () => {
@@ -206,7 +201,6 @@ describe('layout.slotReady()', () => {
     });
 });
 
-// ─── allSlotsReady() (new) ────────────────────────────────────────────────────
 
 describe('layout.allSlotsReady()', () => {
     it('is a function on the layout object', () => {

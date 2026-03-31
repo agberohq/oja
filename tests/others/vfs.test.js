@@ -10,7 +10,6 @@ async function freshVFS() {
     return vfs;
 }
 
-// ─── Construction ──────────────────────────────────────────────────────────────
 
 describe('VFS — construction', () => {
     it('throws when name is missing', () => {
@@ -24,7 +23,6 @@ describe('VFS — construction', () => {
     });
 });
 
-// ─── write / readText / read ──────────────────────────────────────────────────
 
 describe('VFS — write and read', () => {
     let vfs;
@@ -64,7 +62,6 @@ describe('VFS — write and read', () => {
     });
 });
 
-// ─── rm ───────────────────────────────────────────────────────────────────────
 
 describe('VFS — rm', () => {
     let vfs;
@@ -82,7 +79,6 @@ describe('VFS — rm', () => {
     });
 });
 
-// ─── ls / tree ────────────────────────────────────────────────────────────────
 
 describe('VFS — ls', () => {
     let vfs;
@@ -122,7 +118,6 @@ describe('VFS — tree', () => {
     });
 });
 
-// ─── clear ────────────────────────────────────────────────────────────────────
 
 describe('VFS — clear', () => {
     let vfs;
@@ -136,7 +131,6 @@ describe('VFS — clear', () => {
     });
 });
 
-// ─── count signal ─────────────────────────────────────────────────────────────
 
 describe('VFS — count signal', () => {
     let vfs;
@@ -155,7 +149,6 @@ describe('VFS — count signal', () => {
     });
 });
 
-// ─── onChange ─────────────────────────────────────────────────────────────────
 
 describe('VFS — onChange', () => {
     let vfs;
@@ -199,7 +192,6 @@ describe('VFS — onChange', () => {
     });
 });
 
-// ─── toBlobMap ────────────────────────────────────────────────────────────────
 
 describe('VFS — toBlobMap', () => {
     let vfs;
@@ -222,7 +214,6 @@ describe('VFS — toBlobMap', () => {
     });
 });
 
-// ─── mime ─────────────────────────────────────────────────────────────────────
 
 describe('VFS — mime()', () => {
     it('returns correct MIME types', () => {
@@ -237,7 +228,6 @@ describe('VFS — mime()', () => {
     });
 });
 
-// ─── persist() (new) ─────────────────────────────────────────────────────────
 
 describe('VFS — persist()', () => {
     it('is a method on VFS instances', async () => {
@@ -321,7 +311,6 @@ describe('VFS — persist()', () => {
     });
 });
 
-// ─── quota() (new) ───────────────────────────────────────────────────────────
 
 describe('VFS — quota()', () => {
     it('is a method on VFS instances', () => {

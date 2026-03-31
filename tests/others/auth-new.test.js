@@ -5,7 +5,6 @@ beforeEach(async () => {
     await auth.session.end();
 });
 
-// ─── auth.session.start() with non-JWT token ───────────────────────────
 
 describe('auth.session.start() — non-JWT token support', () => {
     it('isActive() returns false for opaque token with no options (original behaviour)', async () => {
@@ -47,7 +46,6 @@ describe('auth.session.start() — non-JWT token support', () => {
     });
 });
 
-// ─── auth.middleware() with callback ────────────────────────────────────
 
 describe('auth.middleware() — callback redirect support', () => {
     it('calls a function instead of ctx.redirect when guard fails', async () => {

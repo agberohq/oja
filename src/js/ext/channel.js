@@ -81,7 +81,6 @@
 
 import { debug } from '../utils/debug.js';
 
-// ─── Channel ──────────────────────────────────────────────────────────────────
 
 export class Channel {
     #buffer    = [];
@@ -419,7 +418,6 @@ export class Channel {
     }
 }
 
-// ─── Concurrency primitives ───────────────────────────────────────────────────
 
 /**
  * go — run an async function as a concurrent microtask.

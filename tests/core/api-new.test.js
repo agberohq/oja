@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Api } from '../../src/js/core/api.js';
 
-// ─── L-02: Api.destroy() removes online/offline listeners ────────────────────
 
 describe('L-02: Api.destroy()', () => {
     it('exposes a destroy() method', () => {

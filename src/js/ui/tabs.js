@@ -54,7 +54,6 @@
  *   variant  : 'line' | 'pill' — visual style (default: 'line')
  */
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -62,7 +61,6 @@ function _resolve(target) {
     return document.querySelector(target);
 }
 
-// ─── Main API ─────────────────────────────────────────────────────────────────
 
 export const tabs = {
 

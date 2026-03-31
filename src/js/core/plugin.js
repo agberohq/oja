@@ -264,7 +264,6 @@ import { adapter }           from '../utils/adapter.js';
 import { auth }              from '../ext/auth.js';
 import { Out }               from './out.js';
 
-// ─── Internal state ───────────────────────────────────────────────────────────
 
 // Named socket codecs — { name → codec instance }
 const _codecs = new Map();
@@ -275,7 +274,6 @@ const _renderers = new Map();
 // The router instance, set via plugin.router()
 let _router = null;
 
-// ─── Plugin facade ────────────────────────────────────────────────────────────
 
 export const plugin = {
 
@@ -690,7 +688,6 @@ export const plugin = {
     },
 };
 
-// ─── lib.lazy — attach lazy registration directly to plugin.lib ───────────────
 //
 // This allows the chained form:
 //   plugin.lib.lazy('chart', () => import('chart.js'))

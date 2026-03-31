@@ -97,7 +97,6 @@
  *   });
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 // Check if Clipboard API is supported
 const HAS_CLIPBOARD = !!(navigator.clipboard?.write);
@@ -106,7 +105,6 @@ const HAS_PICKER = !!(navigator.clipboard?.read);
 // Fallback for older browsers
 let _fallbackTextarea    = null;
 
-// ─── Core API ─────────────────────────────────────────────────────────────────
 
 export const clipboard = {
     /**

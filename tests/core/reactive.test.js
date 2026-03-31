@@ -10,7 +10,6 @@ beforeEach(() => {
     context.delete('req-pair');
 });
 
-// ─── state ────────────────────────────────────────────────────────────────────
 
 describe('state()', () => {
     it('returns initial value', () => {
@@ -58,7 +57,6 @@ describe('state()', () => {
     });
 });
 
-// ─── effect ───────────────────────────────────────────────────────────────────
 
 describe('effect()', () => {
     it('runs immediately on creation', () => {
@@ -103,7 +101,6 @@ describe('effect()', () => {
     });
 });
 
-// ─── derived ──────────────────────────────────────────────────────────────────
 
 describe('derived()', () => {
     it('computes initial value from dependencies', () => {
@@ -123,7 +120,6 @@ describe('derived()', () => {
     });
 });
 
-// ─── batch ────────────────────────────────────────────────────────────────────
 
 describe('batch()', () => {
     it('fires effect only once for multiple updates inside a batch', async () => {
@@ -142,7 +138,6 @@ describe('batch()', () => {
     });
 });
 
-// ─── context ──────────────────────────────────────────────────────────────────
 
 describe('context()', () => {
     it('creates a named reactive value', () => {
@@ -185,7 +180,6 @@ describe('context()', () => {
     });
 });
 
-// ─── context.require ──────────────────────────────────────────────────────────
 
 describe('context.require()', () => {
     it('throws if the key has not been registered', () => {

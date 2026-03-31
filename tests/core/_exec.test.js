@@ -16,7 +16,6 @@ beforeEach(() => {
     Object.keys(window).filter(k => k.startsWith('__oja_')).forEach(k => delete window[k]);
 });
 
-// ─── preamble injection (existing behaviour preserved) ────────────────────────
 
 describe('execScripts() — preamble injection', () => {
     it('injects container when the script does not declare it', () => {
@@ -161,7 +160,6 @@ describe('execScripts() — __oja_ready__ signal', () => {
     });
 });
 
-// ─── classic (non-module) scripts ────────────────────────────────────────────
 //
 // jsdom does NOT execute scripts added via innerHTML or replaceWith() —
 // that is a hard jsdom constraint. The existing test suite (original _exec.test.js)
@@ -197,7 +195,6 @@ describe('execScripts() — classic scripts', () => {
     });
 });
 
-// ─── empty container / no scripts ────────────────────────────────────────────
 
 describe('execScripts() — no scripts', () => {
     it('returns a resolved Promise when container has no scripts', async () => {

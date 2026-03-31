@@ -67,7 +67,6 @@
 import { debug }   from '../utils/debug.js';
 import { runtime } from '../core/runtime.js';
 
-// ─── Bootstrap code ───────────────────────────────────────────────────────────
 
 // Classic bootstrap — runs as a top-level classic worker script.
 // Uses bare `onmessage =` so the WorkerShim in tests captures it correctly.
@@ -135,7 +134,6 @@ ${innerSrc}
 `;
 }
 
-// ─── Feature detection ────────────────────────────────────────────────────────
 
 let _detectionCache = null;
 
@@ -193,7 +191,6 @@ export function _resetWorkerDetectionCache() {
     _detectionCache = null;
 }
 
-// ─── Construction helpers ─────────────────────────────────────────────────────
 
 function _buildClassicWorker(workerFn, scripts, name) {
     const importBlock = scripts.length
@@ -233,7 +230,6 @@ _userFn(_api);
     return w;
 }
 
-// ─── OjaWorker ────────────────────────────────────────────────────────────────
 
 export class OjaWorker {
     /**

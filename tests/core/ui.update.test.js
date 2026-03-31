@@ -5,7 +5,6 @@ import { state } from '../../src/js/core/reactive.js';
 beforeEach(() => { document.body.innerHTML = ''; });
 afterEach(() => { document.body.innerHTML = ''; });
 
-// ─── make() — element creation ───────────────────────────────────────────────
 
 describe('make() — element creation', () => {
     it('creates an element with the given tag', () => {
@@ -112,7 +111,6 @@ describe('make() — element creation', () => {
     });
 });
 
-// ─── make shorthand factories ─────────────────────────────────────────────────
 
 describe('make shorthand factories', () => {
     it('make.div creates a DIV', () => {
@@ -160,7 +158,6 @@ describe('make shorthand factories', () => {
     });
 });
 
-// ─── Placement methods ────────────────────────────────────────────────────────
 
 describe('placement methods', () => {
     it('appendTo() appends inside target selector', () => {
@@ -236,7 +233,6 @@ describe('placement methods', () => {
     });
 });
 
-// ─── el.update() ─────────────────────────────────────────────────────────────
 
 describe('el.update() — static', () => {
     it('text', () => {
@@ -316,7 +312,6 @@ describe('el.update() — reactive', () => {
     });
 });
 
-// ─── el.list() ───────────────────────────────────────────────────────────────
 
 describe('el.list()', () => {
     it('renders items', async () => {
@@ -364,7 +359,6 @@ describe('el.list()', () => {
     });
 });
 
-// ─── findAll / queryAll ───────────────────────────────────────────────────────
 
 describe('findAll() / queryAll() — all elements enhanced', () => {
     it('findAll elements have update()', () => {
@@ -389,7 +383,6 @@ describe('findAll() / queryAll() — all elements enhanced', () => {
     });
 });
 
-// ─── el.on() and el.once() ────────────────────────────────────────────────────
 
 describe('el.on() — direct listener', () => {
     it('fires handler on event', () => {
@@ -463,7 +456,6 @@ describe('el.once() — fires only once', () => {
     });
 });
 
-// ─── Placement method renames ─────────────────────────────────────────────────
 
 describe('placement methods — renamed to avoid native collision', () => {
     it('insertAfter inserts as next sibling', () => {

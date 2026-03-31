@@ -22,7 +22,6 @@ beforeEach(() => {
     modal.closeAll();
 });
 
-// ─── modal.open() returns Promise<Element> ─────────────────────────────
 
 describe('modal.open() returns Promise<Element>', () => {
     it('returns a Promise', () => {
@@ -46,7 +45,6 @@ describe('modal.open() returns Promise<Element>', () => {
     });
 });
 
-// ─── modal.prompt() ────────────────────────────────────────────────────
 
 describe('modal.prompt()', () => {
     it('is a function', () => {
@@ -81,7 +79,6 @@ describe('modal.prompt()', () => {
     });
 });
 
-// ─── modal.beforeClose() guard ─────────────────────────────────────────
 
 describe('modal.beforeClose() guard', () => {
     it('prevents close when guard returns false', async () => {
@@ -109,7 +106,6 @@ describe('modal.beforeClose() guard', () => {
     });
 });
 
-// ─── modal size option ─────────────────────────────────────────────────
 
 describe('modal.open() size option', () => {
     it('adds oja-modal-{size} class to modal inner', async () => {

@@ -244,7 +244,6 @@ export const autocomplete = {
     },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Resolve a CSS selector string or Element to an Element.
 function _resolveEl(target) {

@@ -393,7 +393,6 @@ export function make(tag, optionsOrChild, ...rest) {
     return _renderable(el);
 }
 
-// ── Shorthand factories ────────────────────────────────────────────────────
 // make.div(...), make.span(...), make.button(...) etc.
 // Each accepts the same (options?, ...children) signature as make().
 

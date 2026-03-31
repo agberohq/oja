@@ -17,7 +17,6 @@ const STEPS = [
     { key: 'step3', label: 'Confirm',    body: Out.html('<p>Confirm your details</p>'), final: true },
 ];
 
-// ─── render() ────────────────────────────────────────────────────────────────
 
 describe('wizard.render()', () => {
     it('returns a handle with required methods', () => {
@@ -69,7 +68,6 @@ describe('wizard.render()', () => {
     });
 });
 
-// ─── next() and back() ───────────────────────────────────────────────────────
 
 describe('wizard.next() and wizard.back()', () => {
     it('next() advances to the next step', async () => {
@@ -112,7 +110,6 @@ describe('wizard.next() and wizard.back()', () => {
     });
 });
 
-// ─── goTo() ──────────────────────────────────────────────────────────────────
 
 describe('wizard.goTo()', () => {
     it('jumps to step by key', async () => {
@@ -154,7 +151,6 @@ describe('wizard.goTo()', () => {
     });
 });
 
-// ─── validation ──────────────────────────────────────────────────────────────
 
 describe('wizard validation', () => {
     it('blocks next() when validate returns an error string', async () => {
@@ -195,7 +191,6 @@ describe('wizard validation', () => {
     });
 });
 
-// ─── data collection ─────────────────────────────────────────────────────────
 
 describe('wizard.data()', () => {
     it('returns empty object before any step completes', () => {
@@ -226,7 +221,6 @@ describe('wizard.data()', () => {
     });
 });
 
-// ─── onComplete ──────────────────────────────────────────────────────────────
 
 describe('wizard onComplete', () => {
     it('calls onComplete with merged data after final step next()', async () => {
@@ -252,7 +246,6 @@ describe('wizard onComplete', () => {
     });
 });
 
-// ─── currentStep() ───────────────────────────────────────────────────────────
 
 describe('wizard.currentStep()', () => {
     it('returns current step info', async () => {
@@ -267,7 +260,6 @@ describe('wizard.currentStep()', () => {
     });
 });
 
-// ─── destroy() ───────────────────────────────────────────────────────────────
 
 describe('wizard.destroy()', () => {
     it('clears the container', async () => {

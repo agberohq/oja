@@ -70,7 +70,6 @@
  *   };
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _peers = new Map(); // peerId -> RTCPeerConnection
 const _channels = new Map(); // channelId -> RTCDataChannel
@@ -88,7 +87,6 @@ const DEFAULT_CONFIG = {
     iceCandidatePoolSize: 10,
 };
 
-// ─── Core API ─────────────────────────────────────────────────────────────────
 
 export const webrtc = {
     /**

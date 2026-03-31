@@ -43,7 +43,6 @@
  *   App code can call it too — useful for tracing page logic.
  */
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 let _enabled    = new Set();   // active namespace patterns
 let _all        = false;       // '*' wildcard
@@ -52,7 +51,6 @@ const MAX_ENTRIES = 1000;
 
 const SLOW_THRESHOLD_MS = 200;
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const debug = {
 
@@ -169,7 +167,6 @@ export const debug = {
     }
 };
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 function _record(ns, action, data, warn) {
     const now = new Date();

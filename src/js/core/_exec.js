@@ -77,7 +77,6 @@ import { find as _find, findAll as _findAll } from './ui.js';
  * @returns {Promise<void>}
  */
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 
 const SCOPE_PREFIX = '__oja_scope_';
 const EXEC_TIMEOUT = 30_000; // 30s — catches while(true) and infinite await chains
@@ -85,7 +84,6 @@ const EXEC_TIMEOUT = 30_000; // 30s — catches while(true) and infinite await c
 // Monotonic counter prevents key collision even in the same millisecond
 let _scopeCounter = 0;
 
-// ── Declaration detection ─────────────────────────────────────────────────────
 //
 // Returns true if `name` is declared as a binding in `source`.
 // Strips strings and comments first to avoid false positives.
@@ -129,7 +127,6 @@ function _declares(source, name) {
     ].some(re => re.test(clean));
 }
 
-// ── Import rewriting ──────────────────────────────────────────────────────────
 //
 // Rewrites relative import specifiers to absolute URLs using the component's
 // base URL. Uses a character-by-character parser to correctly skip strings,
@@ -212,7 +209,6 @@ function _abs(spec, base) {
     catch { return spec; }
 }
 
-// ── Props proxy ───────────────────────────────────────────────────────────────
 //
 // Read-only Proxy over propsData. Signals (.__isOjaSignal) are unwrapped on
 // read. All traps are implemented so Object.keys(), 'key' in props, and
@@ -255,7 +251,6 @@ function _makeProps(propsData) {
     });
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
 
 export function execScripts(container, sourceUrl, propsData = {}) {
     if (!container || !(container instanceof Element)) {

@@ -86,7 +86,6 @@
 import { Out } from '../core/out.js';
 import { emit, listen } from '../core/events.js';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _resolve(target) {
     if (!target) return null;
@@ -112,7 +111,6 @@ function _collectFields(container) {
     return data;
 }
 
-// ─── wizard ───────────────────────────────────────────────────────────────────
 
 export const wizard = {
 
@@ -421,7 +419,6 @@ export const wizard = {
     },
 };
 
-// ─── Null handle (returned on error) ─────────────────────────────────────────
 
 function _nullHandle() {
     const noop = () => Promise.resolve(_nullHandle());

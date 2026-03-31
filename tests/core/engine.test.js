@@ -10,7 +10,6 @@ import {
 } from '../../src/js/core/engine.js';
 import { Store } from '../../src/js/core/store.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeEl(html = '') {
     const div = document.createElement('div');
@@ -23,7 +22,6 @@ function cleanup(...els) {
     for (const el of els) el?.remove();
 }
 
-// ─── morph() ──────────────────────────────────────────────────────────────────
 
 describe('morph()', () => {
     let el;
@@ -85,7 +83,6 @@ describe('morph()', () => {
     });
 });
 
-// ─── shouldMorph() ────────────────────────────────────────────────────────────
 
 describe('shouldMorph()', () => {
     let el;
@@ -109,7 +106,6 @@ describe('shouldMorph()', () => {
     });
 });
 
-// ─── bindText() ───────────────────────────────────────────────────────────────
 
 describe('bindText()', () => {
     let el, store;
@@ -165,7 +161,6 @@ describe('bindText()', () => {
     });
 });
 
-// ─── bindToggle() ─────────────────────────────────────────────────────────────
 
 describe('bindToggle()', () => {
     let el, store;
@@ -195,7 +190,6 @@ describe('bindToggle()', () => {
     });
 });
 
-// ─── bindAttr() ───────────────────────────────────────────────────────────────
 
 describe('bindAttr()', () => {
     let el, store;
@@ -225,7 +219,6 @@ describe('bindAttr()', () => {
     });
 });
 
-// ─── unbind() ─────────────────────────────────────────────────────────────────
 
 describe('unbind()', () => {
     let el, store;
@@ -242,7 +235,6 @@ describe('unbind()', () => {
     });
 });
 
-// ─── scan() ───────────────────────────────────────────────────────────────────
 
 describe('scan()', () => {
     let el, store;
@@ -273,7 +265,6 @@ describe('scan()', () => {
     });
 });
 
-// ─── list() ───────────────────────────────────────────────────────────────────
 
 describe('list()', () => {
     let el;
@@ -350,7 +341,6 @@ describe('list()', () => {
     });
 });
 
-// ─── listAsync() ──────────────────────────────────────────────────────────────
 
 describe('listAsync()', () => {
     let el;
@@ -390,7 +380,6 @@ describe('listAsync()', () => {
     });
 });
 
-// ─── useStore() ───────────────────────────────────────────────────────────────
 
 describe('useStore()', () => {
     afterEach(() => useStore(null));   // reset to lazy fallback
@@ -407,7 +396,6 @@ describe('useStore()', () => {
     });
 });
 
-// ─── batch() ──────────────────────────────────────────────────────────────────
 
 describe('batch()', () => {
     it('resolves after the callback runs', async () => {
@@ -421,7 +409,6 @@ describe('batch()', () => {
     });
 });
 
-// ─── formatters ───────────────────────────────────────────────────────────────
 
 describe('formatters', () => {
     it('exposes formatPercent', () => expect(formatters.formatPercent(50)).toBe('50.0%'));

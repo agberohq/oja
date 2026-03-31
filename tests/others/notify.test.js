@@ -14,7 +14,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── dismiss(id) ──────────────────────────────────────────────────────────────
 
 describe('notify.dismiss(id)', () => {
     it('removes the toast with the matching id', () => {
@@ -66,7 +65,6 @@ describe('notify.dismiss(id)', () => {
     });
 });
 
-// ─── dismissAll() ─────────────────────────────────────────────────────────────
 
 describe('notify.dismissAll()', () => {
     it('removes all visible toasts', () => {
@@ -91,7 +89,6 @@ describe('notify.dismissAll()', () => {
     });
 });
 
-// ─── show helpers ─────────────────────────────────────────────────────────────
 
 describe('notify.success / info / warn / error', () => {
     it('each returns a string id', () => {
@@ -118,7 +115,6 @@ describe('notify.success / info / warn / error', () => {
     });
 });
 
-// ─── count() ──────────────────────────────────────────────────────────────────
 
 describe('notify.count()', () => {
     it('returns 0 when no toasts are shown', () => {

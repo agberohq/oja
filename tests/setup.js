@@ -1,13 +1,3 @@
-// tests/setup.js
-// Provides Worker, URL.createObjectURL/revokeObjectURL, and IndexedDB shims
-// so Runner and VFS tests run fully in-process under jsdom/Vitest.
-//
-// Worker shim design constraint: Runner calls URL.createObjectURL(blob) then
-// immediately passes the URL to new Worker(url). The shim must have the source
-// text available synchronously — any async read drops messages and causes timeouts.
-// We intercept Blob construction to capture text at creation time.
-
-// ─── Blob interception ────────────────────────────────────────────────────────
 
 const _blobSources = new Map();
 let   _blobCounter = 0;
@@ -30,7 +20,6 @@ URL.revokeObjectURL = (url) => {
     _blobSources.delete(url);
 };
 
-// ─── Worker shim ──────────────────────────────────────────────────────────────
 // Evaluates the worker source synchronously via new Function so #workerOnmessage
 // is captured before the constructor returns and no messages are dropped.
 //
@@ -98,7 +87,6 @@ __capture__(onmessage ?? self.onmessage);`;
 
 global.Worker = WorkerShim;
 
-// ─── IndexedDB shim ───────────────────────────────────────────────────────────
 // VFS uses: indexedDB.open, onupgradeneeded, onsuccess, onerror,
 // objectStoreNames.contains, createObjectStore, db.transaction,
 // store.put({ path, content, meta, updatedAt }), store.get(key),
@@ -167,7 +155,6 @@ globalThis.indexedDB = {
     },
 };
 
-// ─── LocalStorage / SessionStorage Shim (Node 22 support) ──────────────────────
 
 const mockStorage = () => {
     let store = new Map();
@@ -193,7 +180,6 @@ Object.defineProperty(globalThis, 'sessionStorage', {
     writable: true,
     configurable: true,
 });
-// ─── Module script execution shim for _exec.js tests ─────────────────────────
 // jsdom cannot execute blob: URL module scripts — setting script.src to a
 // blob: URL does nothing and the load event never fires. This causes all
 // _exec.js tests to timeout waiting for Promise resolution.

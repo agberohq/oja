@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { config } from '../../src/js/ext/config.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function mockFetch(responses) {
     const fn = vi.fn().mockImplementation((url) => {
@@ -43,7 +42,6 @@ const FULL_CONFIG = {
     },
 };
 
-// ─── load ─────────────────────────────────────────────────────────────────────
 
 describe('config — load()', () => {
     beforeEach(() => config.reset());
@@ -108,7 +106,6 @@ describe('config — load()', () => {
     });
 });
 
-// ─── get ──────────────────────────────────────────────────────────────────────
 
 describe('config — get()', () => {
     beforeEach(async () => {
@@ -137,7 +134,6 @@ describe('config — get()', () => {
     });
 });
 
-// ─── all ──────────────────────────────────────────────────────────────────────
 
 describe('config — all()', () => {
     afterEach(() => { vi.restoreAllMocks(); config.reset(); });
@@ -161,7 +157,6 @@ describe('config — all()', () => {
     });
 });
 
-// ─── reset ────────────────────────────────────────────────────────────────────
 
 describe('config — reset()', () => {
     afterEach(() => vi.restoreAllMocks());
@@ -176,7 +171,6 @@ describe('config — reset()', () => {
     });
 });
 
-// ─── applyVFS ─────────────────────────────────────────────────────────────────
 
 describe('config — applyVFS()', () => {
     afterEach(() => { vi.restoreAllMocks(); config.reset(); });
@@ -240,7 +234,6 @@ describe('config — applyVFS()', () => {
     });
 });
 
-// ─── applyRouter ──────────────────────────────────────────────────────────────
 
 describe('config — applyRouter()', () => {
     afterEach(() => { vi.restoreAllMocks(); config.reset(); });

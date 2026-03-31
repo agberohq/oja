@@ -4,7 +4,6 @@ import { segment } from '../../src/js/core/segment.js';
 beforeEach(() => { segment.clearCache(); });
 afterEach(() => { document.querySelectorAll('template[data-oja-segment]').forEach(t => t.remove()); });
 
-// ─── scan(element) vs scan(document) ────────────────────────────────────
 
 describe('segment.scan(root) — correct branch', () => {
     it('scan(document) scans the whole document', () => {

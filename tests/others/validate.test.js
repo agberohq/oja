@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validate } from '../../src/js/ui/validate.js';
 
-// ─── required ─────────────────────────────────────────────────────────────────
 
 describe('validate.required()', () => {
     it('passes for a non-empty string', () => {
@@ -38,7 +37,6 @@ describe('validate.required()', () => {
     });
 });
 
-// ─── email ────────────────────────────────────────────────────────────────────
 
 describe('validate.email()', () => {
     it('passes for a valid email', () => {
@@ -66,7 +64,6 @@ describe('validate.email()', () => {
     });
 });
 
-// ─── url ──────────────────────────────────────────────────────────────────────
 
 describe('validate.url()', () => {
     it('passes for a valid https URL', () => {
@@ -94,7 +91,6 @@ describe('validate.url()', () => {
     });
 });
 
-// ─── uuid ─────────────────────────────────────────────────────────────────────
 
 describe('validate.uuid()', () => {
     it('passes a valid v4 UUID', () => {
@@ -110,7 +106,6 @@ describe('validate.uuid()', () => {
     });
 });
 
-// ─── regex ────────────────────────────────────────────────────────────────────
 
 describe('validate.regex()', () => {
     it('passes when the pattern matches', () => {

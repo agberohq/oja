@@ -10,7 +10,6 @@ beforeEach(() => {
     });
 });
 
-// ─── infinite eviction loop ────────────────────────────────────────────
 
 describe('component cache — no infinite loop on oversized payload', () => {
     it('does not loop when a single fetch exceeds maxMemory', async () => {

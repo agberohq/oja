@@ -82,7 +82,6 @@
  *   on('#scrollable',  'scroll', throttle(updateNav, 100));
  */
 
-// ─── Delegated DOM events ─────────────────────────────────────────────────────
 
 const _registry = new Map(); // event → [{ selector, fn, original, options }]
 const _passiveEvents = new Set(['scroll', 'touchstart', 'touchmove', 'wheel']);
@@ -217,7 +216,6 @@ export function off(selector, eventName, fn) {
     if (idx !== -1) handlers.splice(idx, 1);
 }
 
-// ─── Custom events (cross-component messaging) ────────────────────────────────
 
 const _wildcardListeners = new Set(); // for '*' wildcard
 
@@ -284,7 +282,6 @@ export function waitFor(name, timeout = 0) {
     });
 }
 
-// ─── Keyboard shortcuts ───────────────────────────────────────────────────────
 
 const _shortcutGroups = new Set(); // groups of shortcuts
 const _activeShortcuts = new Map(); // key → Set of handlers
@@ -447,7 +444,6 @@ keys.getAll = () => {
     return result;
 };
 
-// ─── Scroll and Intersection Observers ────────────────────────────────────────
 
 const _scrollListeners = new Map(); // element → Set of handlers
 const _scrollRaf = new Map(); // element → raf id
@@ -594,7 +590,6 @@ export function getViewportPosition(el) {
     };
 }
 
-// ─── Intersection Observer ────────────────────────────────────────────────────
 
 const _intersectionObservers = new Map(); // Map of observer → Set of targets
 const _intersectionHandlers = new WeakMap(); // target → Map of handler → options
@@ -716,7 +711,6 @@ export function createVisibilityObserver(fn, options = {}) {
     };
 }
 
-// ─── Resize Observer ──────────────────────────────────────────────────────────
 
 const _resizeObservers = new Map(); // element → Set of handlers
 const _resizeRaf = new Map(); // element → raf id
@@ -785,7 +779,6 @@ export function onResize(target, fn, options = {}) {
     };
 }
 
-// ─── Mutation Observer ────────────────────────────────────────────────────────
 
 const _mutationObservers = new Map(); // element → observer
 
@@ -838,7 +831,6 @@ export function onMutation(target, fn, options = {}) {
     };
 }
 
-// ─── Timing utilities ─────────────────────────────────────────────────────────
 
 /**
  * Debounce — delays execution until `ms` milliseconds after the last call.
@@ -1032,7 +1024,6 @@ export function onlyOnce(fn) {
         return result;
     };
 }
-// ─── F-17: onClickOutside ─────────────────────────────────────────────────────
 /**
  * Fire fn when a click occurs outside the given element.
  * Deduplicates what clickmenu.js, modal.js, and popover.js all implement manually.
@@ -1059,7 +1050,6 @@ export function onClickOutside(target, fn, options = {}) {
     return () => document.removeEventListener('click', handler, { capture });
 }
 
-// ─── F-18: onHover ────────────────────────────────────────────────────────────
 /**
  * Listen for mouseenter/mouseleave on a target with a single cleanup function.
  * Returns an unsubscribe function.
@@ -1084,7 +1074,6 @@ export function onHover(target, enterFn, leaveFn, options = {}) {
     return unsub;
 }
 
-// ─── F-19: onLongPress ────────────────────────────────────────────────────────
 /**
  * Fire fn after the pointer has been held down for `duration` ms.
  * Cancels cleanly on pointerup, pointercancel, or pointermove beyond threshold.

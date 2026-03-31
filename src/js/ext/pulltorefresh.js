@@ -40,7 +40,6 @@
 
 import { Out } from '../core/out.js';
 
-// ─── State ────────────────────────────────────────────────────────────────────
 
 const _instances = new WeakMap(); // container -> instance data
 
@@ -69,7 +68,6 @@ const DEFAULT_SPINNER = Out.svg(`
     </svg>
 `);
 
-// ─── Core ─────────────────────────────────────────────────────────────────────
 
 /**
  * Initialize pull-to-refresh on a container or the whole page

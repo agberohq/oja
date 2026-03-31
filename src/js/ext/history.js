@@ -72,9 +72,7 @@
  *   });
  */
 
-// ─── History stack ────────────────────────────────────────────────────────────
 
-// ─── Deep clone ──────────────────────────────────────────────────────────────
 //
 // JSON.parse(JSON.stringify(x)) is lossy:
 //   - Date objects become strings
@@ -385,7 +383,6 @@ export class OjaHistory {
     }
 }
 
-// ─── Global history instance ──────────────────────────────────────────────────
 
 const _histories = new Map();
 

@@ -50,7 +50,6 @@
  *   worker.close();
  */
 
-// ─── Worker bootstrap code ────────────────────────────────────────────────────
 // Runs inside the Worker thread. Serialised to a blob so no separate file
 // is needed — same pattern used by channel.js.
 
@@ -112,7 +111,6 @@ onmessage = async (e) => {
 // User-provided worker function is injected below
 `;
 
-// ─── Runner ───────────────────────────────────────────────────────────────────
 
 export class Runner {
     #worker   = null;

@@ -70,7 +70,6 @@ import { Runner } from './runner.js';
 import { state }  from '../core/reactive.js';
 import { Out }    from '../core/out.js';
 
-// ─── MIME helpers (main thread) ────────────────────────────────────────────────
 
 const MIME = {
     '.html' : 'text/html',
@@ -93,7 +92,6 @@ function mimeFor(path) {
     return MIME[ext] || 'application/octet-stream';
 }
 
-// ─── Worker code ──────────────────────────────────────────────────────────────
 // All IndexedDB and fetch logic runs here — never on the main thread.
 
 const WORKER_FN = function(self) {
@@ -460,7 +458,6 @@ const WORKER_FN = function(self) {
     });
 };
 
-// ─── VFS ──────────────────────────────────────────────────────────────────────
 
 export class VFS {
     #runner         = null;

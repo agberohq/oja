@@ -303,7 +303,6 @@ function _resolveTarget(target) {
     return null;
 }
 
-// ─── Base class ───────────────────────────────────────────────────────────────
 
 class _Out {
     constructor(type, payload, options = {}) {
@@ -343,7 +342,6 @@ class _Out {
     }
 }
 
-// ─── Primitive types ──────────────────────────────────────────────────────────
 
 class _HtmlOut extends _Out {
     constructor(html, options = {}) {
@@ -661,7 +659,6 @@ class _EmptyOut extends _Out {
     getText() { return ''; }
 }
 
-// ─── Composition types ────────────────────────────────────────────────────────
 
 class _IfOut extends _Out {
     constructor(conditionFn, thenOut, elseOut, options = {}) {
@@ -776,7 +773,6 @@ class _ListOut extends _Out {
     }
 }
 
-// ─── Skeleton generation helper ───────────────────────────────────────────────
 
 function _buildSkeletonHtml(type, opts) {
     const lines = opts.lines || 3;
@@ -806,7 +802,6 @@ function _buildSkeletonHtml(type, opts) {
     return `<div class="oja-skeleton-wrapper" aria-busy="true">${html}</div>`;
 }
 
-// ─── Fluent API: Out.to() ─────────────────────────────────────────────────────
 
 class OutTarget {
     constructor(target, options = {}) {
@@ -1278,7 +1273,6 @@ function createTagHandler(target) {
     };
 }
 
-// ─── Segment type ─────────────────────────────────────────────────────────────
 
 class _SegmentOut extends _Out {
     constructor(name, data = {}) {
@@ -1291,7 +1285,6 @@ class _SegmentOut extends _Out {
     }
 }
 
-// ─── Out public API ───────────────────────────────────────────────────────────
 
 export const Out = {
 

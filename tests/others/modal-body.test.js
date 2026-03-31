@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { modal } from '../../src/js/ui/modal.js';
 import { Out }   from '../../src/js/core/out.js';
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
 
 function makeModal(id = 'test-modal') {
     const overlay = document.createElement('div');
@@ -33,7 +32,6 @@ function makeModal(id = 'test-modal') {
 beforeEach(() => { document.body.innerHTML = ''; });
 afterEach(()  => { document.body.innerHTML = ''; modal.closeAll(); });
 
-// ─── String body auto-wrap ────────────────────────────────────────────────────
 
 describe('modal.open() — string body auto-wrap', () => {
     it('renders an HTML string passed as body into [data-modal-body]', async () => {

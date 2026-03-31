@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Trie, Search } from '../../src/js/utils/search.js';
 
-// ─── Trie ─────────────────────────────────────────────────────────────────────
 
 describe('Trie — insert / get / has', () => {
     it('inserts a key and retrieves its data',            () => { const t = new Trie(); t.insert('apple', { id: 1 }); expect(t.get('apple')).toEqual({ id: 1 }); });
@@ -81,7 +80,6 @@ describe('Trie — export / import', () => {
     it('import resets prior state', () => { const t = new Trie(); t.insert('old', 99); const fresh = new Trie(); fresh.insert('new', 1); t.import(fresh.export()); expect(t.has('old')).toBe(false); expect(t.has('new')).toBe(true); });
 });
 
-// ─── Search — existing behaviour ─────────────────────────────────────────────
 
 const DOCS = [
     { id: 'n1', title: 'Dancing in the rain',    content: 'A note about dance moves and rhythm.' },
@@ -132,7 +130,6 @@ describe('Search — clear / export / import', () => {
     it('export is JSON-serialisable', () => { expect(() => JSON.stringify(new Search(DOCS, { fields: ['title'] }).export())).not.toThrow(); });
 });
 
-// ─── Search.searchWithContext() (new) ────────────────────────────────────────
 
 describe('Search.searchWithContext()', () => {
     let s;
@@ -225,7 +222,6 @@ describe('Search.searchWithContext()', () => {
     });
 });
 
-// ─── Search.highlightSnippet() (new, static) ──────────────────────────────────
 
 describe('Search.highlightSnippet()', () => {
     it('is a static method on Search', () => {

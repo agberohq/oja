@@ -14,7 +14,6 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-// ─── notify.show backwards compat ──────────────────────────────────────
 
 describe('notify.show("msg", "type") backwards compat', () => {
     it('renders as success when second arg is "success"', () => {
@@ -42,7 +41,6 @@ describe('notify.show("msg", "type") backwards compat', () => {
     });
 });
 
-// ─── notify.update() ───────────────────────────────────────────────────
 
 describe('notify.update(id, message)', () => {
     it('updates message text of an existing toast', () => {
@@ -70,7 +68,6 @@ describe('notify.update(id, message)', () => {
     });
 });
 
-// ─── notify.promise() ──────────────────────────────────────────────────
 
 describe('notify.promise(promise, messages)', () => {
     it('shows pending toast while promise is pending', async () => {
@@ -105,7 +102,6 @@ describe('notify.promise(promise, messages)', () => {
     });
 });
 
-// ─── notify.progress() ─────────────────────────────────────────────────
 
 describe('notify.progress(message)', () => {
     it('returns a handle with update/done/fail/dismiss', () => {
@@ -131,7 +127,6 @@ describe('notify.progress(message)', () => {
     });
 });
 
-// ─── notify.config() max ───────────────────────────────────────────────
 
 describe('notify.config({ max })', () => {
     it('limits visible toasts to max', () => {
