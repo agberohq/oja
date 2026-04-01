@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ui } from '../../src/js/core/ui.js';
+import { ui, find, query } from '../../src/js/core/ui.js';
 
 function makeBtn(text = 'Save') {
     const btn = document.createElement('button');
@@ -303,5 +303,56 @@ describe('rapid consecutive calls — original content stability', () => {
         ui(btn).reset();
         expect(btn.textContent).toBe('Submit');
         vi.useRealTimers();
+    });
+});
+
+describe('find() and query() null behaviour', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    it('find() returns null when element is not found', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(find('#does-not-exist')).toBeNull();
+        warnSpy.mockRestore();
+    });
+
+    it('query() returns null when element is not found', () => {
+        expect(query('#absolutely-does-not-exist')).toBeNull();
+    });
+
+    it('find() warns in console with selector when element is not found', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        find('#missing-el');
+        expect(warnSpy).toHaveBeenCalled();
+        expect(warnSpy.mock.calls[0][0]).toContain('[oja/ui]');
+        expect(warnSpy.mock.calls[0][0]).toContain('#missing-el');
+        warnSpy.mockRestore();
+    });
+
+    it('find() does NOT warn when element is found', () => {
+        const div = document.createElement('div');
+        div.id = 'real-el';
+        document.body.appendChild(div);
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        find('#real-el');
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('find() returns the element when it exists', () => {
+        const div = document.createElement('div');
+        div.id = 'existing';
+        document.body.appendChild(div);
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const el = find('#existing');
+        expect(el).not.toBeNull();
+        expect(el.tagName).toBe('DIV');
+        warnSpy.mockRestore();
+    });
+
+    it('query() does not warn on miss (query is silent by design)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        query('#not-here');
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
     });
 });

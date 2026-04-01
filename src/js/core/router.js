@@ -417,7 +417,7 @@ export class Router {
      * Race-safe: only the most recent navigate() call is allowed to complete.
      */
     async navigate(path, options = {}) {
-        // F-31: if path is a known route name, resolve it
+        // if path is a known route name, resolve it
         if (this._namedRoutes.has(path)) {
             path = this.path(path, options.params || {});
         }

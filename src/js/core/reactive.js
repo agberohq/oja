@@ -555,7 +555,7 @@ class ReactiveSystem {
 
 const _sys = new ReactiveSystem();
 
-// D-03: DevTools connection is now opt-in via window.__OJA_DEVTOOLS__ = true.
+// DevTools connection is now opt-in via window.__OJA_DEVTOOLS__ = true.
 // Previously auto-connected on localhost which caused issues in staging/intranet
 // environments served locally. Set the flag before importing reactive.js:
 //   window.__OJA_DEVTOOLS__ = true;

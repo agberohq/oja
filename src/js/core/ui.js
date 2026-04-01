@@ -132,6 +132,8 @@ export function find(selector, options = {}) {
 
     const el = scope.querySelector(selector);
 
+    if (!el) _warnMiss(selector);
+
     if (required && !el) {
         console.warn(`[oja/ui] Required element not found: ${selector}`);
     }
@@ -737,8 +739,32 @@ function _esc(str) {
  * Attaches Oja's .render method to a standard DOM element.
  * Bridges the gap between ui.js helpers and Oja Responders.
  */
+// When find/query returns null, we cannot intercept the caller's use of it.
+// The best we can do is warn at the source so the selector and call site are
+// visible in the stack trace — far more useful than a cryptic TypeError later.
+//
+// Production: zero cost — the typeof check is branch-predicted away.
+// Dev:        one console.warn per miss, with selector and stack.
+//
+// Usage: callers should guard with optional chaining:  find('#el')?.innerHTML = ...
+// Or:    const el = find('#el'); if (!el) return;
+
+const _isDev = typeof process === 'undefined'
+    || (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production');
+
+function _warnMiss(selector) {
+    if (_isDev && selector) {
+        console.warn(
+            `[oja/ui] Element not found: ${JSON.stringify(selector)}.\n` +
+            `  Guard with optional chaining: find(sel)?.innerHTML = ...\n` +
+            `  Or check before use: const el = find(sel); if (!el) return;`
+        );
+    }
+}
+
 function _renderable(el) {
-    if (!el || el.__oja_enhanced__) return el;
+    if (!el) return null;
+    if (el.__oja_enhanced__) return el;
     el.__oja_enhanced__ = true;
 
     // Helper — safely define a property only if it is not a read-only native.

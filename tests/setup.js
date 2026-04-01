@@ -187,9 +187,9 @@ Object.defineProperty(globalThis, 'sessionStorage', {
 // This shim intercepts document.createElement('script'), and when .src is
 // set to a blob:shim-* URL (created by our URL.createObjectURL shim above),
 // it:
-//   1. Retrieves the source text from _blobSources
-//   2. Evaluates it via new Function so __oja_ready__ and window vars work
-//   3. Dispatches the load event on the next microtask
+// Retrieves the source text from _blobSources
+// Evaluates it via new Function so __oja_ready__ and window vars work
+// Dispatches the load event on the next microtask
 //
 // This faithfully reproduces the _exec.js execution model:
 //   - preamble runs synchronously (destructures + deletes window[scopeKey])
