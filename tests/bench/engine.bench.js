@@ -2,26 +2,20 @@
  * tests/bench/engine.bench.js
  *
  * Benchmarks for engine.list() — the DOM reconciler.
- * This is the hottest path in the sidebar note list and any reactive list.
  *
- * What each group measures:
+ * Groups:
+ *   initial render      — cold mount: N items from empty container.
+ *   single update       — 1 item changed in a pre-populated list of N.
+ *   full replace        — all keys change; worst-case churn.
+ *   append / delete     — add or remove one item.
+ *   reorder             — same keys, different order.
  *
- *   initial render      — cold mount: N items, all new keys.
- *   single update       — 1 item changed in a list of N; the common case.
- *   full replace        — all items changed; worst-case key churn.
- *   append              — 1 new item appended to list of N.
- *   delete one          — 1 item removed from list of N.
- *   reorder             — same items, shuffled key order; tests _reorderChildren.
- *
- * Key diagnostic: does list(1000 items, 1 change) approach list(1 item, 1 change)?
- * The Map lookup is O(1) and _reorderChildren touches only moved nodes,
- * so the 1000-item case should be within 2–3× of the 100-item case.
+ * Diagnostic: update 1 of 100 vs update 1 of 1000 shows whether the
+ * Map lookup + _reorderChildren scale sublinearly (they should).
  */
 
 import { describe, bench, beforeEach } from 'vitest';
 import { list } from '../../src/js/core/engine.js';
-
-// Helpers
 
 function makeItems(n, offset = 0) {
     return Array.from({ length: n }, (_, i) => ({
@@ -29,12 +23,6 @@ function makeItems(n, offset = 0) {
         label: `Item ${i + offset}`,
         value: i + offset,
     }));
-}
-
-function makeContainer() {
-    const el = document.createElement('ul');
-    document.body.appendChild(el);
-    return el;
 }
 
 const OPTIONS = {
@@ -46,28 +34,37 @@ const OPTIONS = {
     },
 };
 
-// Initial render (cold mount)
+// Initial render
+// Each bench gets a dedicated container via beforeEach — all start empty.
+// Container is NOT cleared inside the bench body so vitest's warmup iterations
+// don't contaminate the measurement. Each iteration re-renders from the same
+// pre-populated state (list() on an already-populated list = update, not cold).
+// To measure cold: beforeEach provides a fresh empty container each iteration.
 
 describe('engine.list() — initial render', () => {
-    let container;
+    let c10, c100, c1000;
+
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
+        c10   = Object.assign(document.createElement('ul'), { id: 'c10' });
+        c100  = Object.assign(document.createElement('ul'), { id: 'c100' });
+        c1000 = Object.assign(document.createElement('ul'), { id: 'c1000' });
+        document.body.append(c10, c100, c1000);
     });
 
     bench('render 10 items (cold)', () => {
-        container.innerHTML = '';
-        list(container, makeItems(10), OPTIONS);
+        c10.innerHTML = '';
+        list(c10, makeItems(10), OPTIONS);
     });
 
     bench('render 100 items (cold)', () => {
-        container.innerHTML = '';
-        list(container, makeItems(100), OPTIONS);
+        c100.innerHTML = '';
+        list(c100, makeItems(100), OPTIONS);
     });
 
     bench('render 1000 items (cold)', () => {
-        container.innerHTML = '';
-        list(container, makeItems(1000), OPTIONS);
+        c1000.innerHTML = '';
+        list(c1000, makeItems(1000), OPTIONS);
     });
 });
 
@@ -75,21 +72,19 @@ describe('engine.list() — initial render', () => {
 
 describe('engine.list() — single item changed (100 items)', () => {
     let container;
-    let items;
+    const base    = makeItems(100);
+    const updated = base.map((item, i) => i === 50 ? { ...item, label: 'Changed' } : item);
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
-        items = makeItems(100);
-        list(container, items, OPTIONS); // pre-populate
+        container = document.createElement('ul');
+        document.body.appendChild(container);
+        list(container, base, OPTIONS);
     });
 
     bench('update 1 of 100 items', () => {
-        const updated = [...items];
-        updated[50] = { ...updated[50], label: 'Changed' };
         list(container, updated, OPTIONS);
-        // reset so next iteration starts from the same state
-        list(container, items, OPTIONS);
+        list(container, base, OPTIONS);
     });
 });
 
@@ -97,37 +92,37 @@ describe('engine.list() — single item changed (100 items)', () => {
 
 describe('engine.list() — single item changed (1000 items)', () => {
     let container;
-    let items;
+    const base    = makeItems(1000);
+    const updated = base.map((item, i) => i === 500 ? { ...item, label: 'Changed' } : item);
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
-        items = makeItems(1000);
-        list(container, items, OPTIONS); // pre-populate
+        container = document.createElement('ul');
+        document.body.appendChild(container);
+        list(container, base, OPTIONS);
     });
 
     bench('update 1 of 1000 items', () => {
-        const updated = [...items];
-        updated[500] = { ...updated[500], label: 'Changed' };
         list(container, updated, OPTIONS);
-        list(container, items, OPTIONS);
+        list(container, base, OPTIONS);
     });
 });
 
 // Full key replace
 
-describe('engine.list() — full key churn', () => {
+describe('engine.list() — full key churn (100 items)', () => {
     let container;
     const base    = makeItems(100);
     const replace = makeItems(100, 100);
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
+        container = document.createElement('ul');
+        document.body.appendChild(container);
         list(container, base, OPTIONS);
     });
 
-    bench('replace all 100 keys with new keys', () => {
+    bench('replace all 100 keys', () => {
         list(container, replace, OPTIONS);
         list(container, base, OPTIONS);
     });
@@ -142,11 +137,12 @@ describe('engine.list() — append one item', () => {
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
+        container = document.createElement('ul');
+        document.body.appendChild(container);
         list(container, base, OPTIONS);
     });
 
-    bench('append 1 item to list of 99 (→ 100)', () => {
+    bench('append 1 item to list of 99', () => {
         list(container, withNew, OPTIONS);
         list(container, base, OPTIONS);
     });
@@ -161,7 +157,8 @@ describe('engine.list() — delete one item', () => {
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
+        container = document.createElement('ul');
+        document.body.appendChild(container);
         list(container, base, OPTIONS);
     });
 
@@ -173,7 +170,7 @@ describe('engine.list() — delete one item', () => {
 
 // Reorder
 
-describe('engine.list() — reorder', () => {
+describe('engine.list() — reorder (100 items)', () => {
     let container;
     const base     = makeItems(100);
     const reversed = [...base].reverse();
@@ -181,7 +178,8 @@ describe('engine.list() — reorder', () => {
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        container = makeContainer();
+        container = document.createElement('ul');
+        document.body.appendChild(container);
         list(container, base, OPTIONS);
     });
 

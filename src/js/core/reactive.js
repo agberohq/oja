@@ -387,10 +387,14 @@ class ReactiveSystem {
                 persistent: !!persistent
             });
 
-            for (const effect of subscribers) {
-                this._dirtyFlags.set(effect, true);
+            if (subscribers.size > 0) {
+                for (const effect of subscribers) {
+                    this._dirtyFlags.set(effect, true);
+                }
+                // Pass Set directly — avoids [...subscribers] array allocation on every write.
+                // _scheduleEffects only iterates, it does not need an Array.
+                this._scheduleEffects(subscribers);
             }
-            this._scheduleEffects([...subscribers]);
         };
 
         read.__isOjaSignal = true;
@@ -486,6 +490,7 @@ class ReactiveSystem {
     }
 
     _scheduleEffects(effects) {
+        // effects is any iterable (Set or Array) — no spread needed
         for (const effect of effects) {
             this._effectQueue.add(effect);
         }
