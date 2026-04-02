@@ -25,15 +25,15 @@ then use the bare `@agberohq/oja` specifier. You do not repeat it anywhere else.
 
 ```html
 <head>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
 
-    <script type="importmap">
+  <script type="importmap">
     {
         "imports": {
             "@agberohq/oja": "https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.full.esm.js"
         }
     }
-    </script>
+  </script>
 </head>
 ```
 
@@ -50,15 +50,11 @@ Browsers block ES module imports from `file://`. Serve the project from a
 local HTTP server — any of these work:
 
 ```bash
-agbero serve . --port 3000
-# or
-agbero serve . --port 3000 --https  # (requires installation)
-# or
 npx serve .
 # or
 python3 -m http.server 3000
 # or
-npx vite --open   # if you prefer Vite's dev server
+npx vite --open
 ```
 
 Then open `http://localhost:3000`.
@@ -192,7 +188,7 @@ const [b, setB] = state(0);
 
 effect(() => console.log(a() + b())); // runs once on creation
 
-nextFrame(() => {
+batch(() => {
     setA(1);
     setB(2);
 }); // effect runs once here, not twice
@@ -267,7 +263,7 @@ make.a({ attrs: { href: '#/hosts' }, class: 'nav-link' }, 'Hosts')
 ### Options
 
 | Key | Type | What it does |
-|-----|------|--------------|
+|-----|------|--------------| 
 | `class` | `string \| string[]` | Sets className — string or array of names |
 | `id` | `string` | Sets the element's id |
 | `style` | `object` | Inline styles — `{ color: 'red', fontSize: '14px' }` |
@@ -384,7 +380,8 @@ for all routes.
 router.Get('/task/{id}', Out.component('pages/task-detail.html'));
 
 // Inside task-detail.html script:
-const taskId = props.params.id;
+import { props } from '@agberohq/oja';
+const taskId = props().params.id;
 ```
 
 ### Passing props to a route
@@ -528,58 +525,69 @@ current route's link automatically.
 A component is any `.html` file. Mount it with `component.mount()` or
 `Out.component()`.
 
-### What your component script gets for free
+### What your component script imports
 
-When Oja mounts a component, it runs the inline `<script type="module">` and
-injects three variables automatically. You don't import them. You don't declare
-them. They're just there.
+When Oja mounts a component, it runs the inline `<script type="module">`.
+Your script imports what it needs — explicitly, like any other ES module.
+There are no magic globals, no injected variables. Your IDE can see every
+dependency, autocomplete it, and type-check it.
 
-**`container`** is the DOM element the component was mounted into — the actual
-`<div>` or `<section>` on the page. Not a wrapper Oja invented. Not a shadow
-root. The real element that your router or `component.mount()` call pointed at.
+The four imports every component script uses:
 
-**`find`** is `querySelector` scoped to that element. **`findAll`** is
-`querySelectorAll` scoped to that element.
+```js
+import { find, container, props, ready } from '@agberohq/oja';
+```
 
-Here's why this matters. Suppose you have the same component mounted twice on
-the same page:
+**`find(selector)`** searches within this component's container automatically.
+Multiple instances of the same component on the same page never interfere with
+each other because `find` knows which instance it belongs to.
+
+**`container()`** returns the actual DOM element this script was mounted into —
+the `<div>` or `<section>` your router or `component.mount()` call pointed at.
+
+**`props()`** returns the data passed at mount time as a read-only object.
+Signals in props are unwrapped automatically — access `props().tasks` and it
+calls `tasks()` for you.
+
+**`ready()`** signals that async setup is complete. Calling it is optional — if
+you don't, Oja resolves the mount automatically when the script finishes
+executing. Call it explicitly when you have async setup work that must complete
+before the parent considers this slot ready.
+
+Here is why `find` scoping matters. Suppose you have the same component mounted
+twice on the same page:
 
 ```html
 <!-- components/status-badge.html -->
 <span class="badge">Loading…</span>
 
 <script type="module">
-  // ✗ WRONG — grabs the first .badge on the entire page
-  //   If two instances are mounted, they'll both update the same node
-  const badge = document.querySelector('.badge');
-  badge.textContent = props.status;
+import { find, props } from '@agberohq/oja';
 
-  // ✓ RIGHT — scoped to THIS instance's element
-  const badge = find('.badge');
-  badge.textContent = props.status;
+// ✗ WRONG — grabs the first .badge on the entire page
+//   If two instances are mounted, they'll both update the same node
+const badge = document.querySelector('.badge');
+badge.textContent = props().status;
+
+// ✓ RIGHT — scoped to THIS instance automatically
+const badge = find('.badge');
+badge.textContent = props().status;
 </script>
 ```
 
-`find` and `findAll` make isolation automatic. Multiple instances of the same
-component never interfere with each other.
-
-| Variable    | What it is                                        |
-|-------------|---------------------------------------------------|
-| `container` | The DOM element this component was mounted into   |
-| `find`      | `querySelector` scoped to `container`             |
-| `findAll`   | `querySelectorAll` scoped to `container`          |
-| `props`     | Read-only proxy of the props passed at mount time |
-
-> **Never redeclare these names.** If you write `const find = ...` or
-> `const container = ...` in a component script, the browser throws
-> `SyntaxError: Identifier 'find' has already been declared`. They're already
-> in scope — just use them.
+| Import | What it returns |
+|--------|----------------|
+| `find(sel)` | Enhanced element scoped to this component |
+| `findAll(sel)` | NodeList scoped to this component |
+| `container()` | The DOM element this script is mounted into |
+| `props()` | Read-only object of the data passed at mount time |
+| `ready()` | Call to signal that async setup is complete |
 
 ### Mounting a component from a page
 
 ```js
 // pages/tasks.html script:
-import { component } from '@agberohq/oja';
+import { find, component } from '@agberohq/oja';
 
 const listEl = find('#task-list');
 
@@ -593,19 +601,20 @@ tasks().forEach(task => {
 ### Passing props
 
 Props are passed as the third argument. Signals are automatically unwrapped
-by the `props` proxy — access `props.tasks` and it calls `tasks()` for you:
+by the `props()` return value — access `props().tasks` and it calls `tasks()` for you:
 
 ```js
 // Mounting:
 component.mount(el, 'components/task-item.html', {
     task,       // plain object
-    tasks,      // reactive signal — proxy unwraps it
+    tasks,      // reactive signal — unwrapped automatically
     onComplete, // callback function
 });
 
 // Inside task-item.html:
-const task  = props.task;      // plain value
-const all   = props.tasks;     // signal unwrapped automatically
+import { props } from '@agberohq/oja';
+const task  = props().task;      // plain value
+const all   = props().tasks;     // signal unwrapped automatically
 ```
 
 ### Template interpolation
@@ -628,6 +637,8 @@ cover everything you need to change an element after it is mounted.
 **`.render(out)`** — replace the element's contents with any `Out`:
 
 ```js
+import { find, Out } from '@agberohq/oja';
+
 const panelEl = find('#details-panel');
 
 panelEl.render(Out.component('components/detail.html', { item }));
@@ -690,6 +701,7 @@ automatically whenever the signal changes.
 `form.on()` handles the full lifecycle in one call:
 
 ```js
+import { find, component } from '@agberohq/oja';
 import { form, notify } from '@agberohq/oja';
 
 const formEl = find('#task-form');
@@ -882,7 +894,6 @@ const off = modal.beforeClose('editModal', async () => {
 });
 
 // Remove the guard when the component unmounts
-// (guards on closed modals do nothing, but it is good practice to clean up)
 component.onUnmount(() => off());
 ```
 
@@ -910,6 +921,7 @@ Channels are Go-style pipes for coordinating async work without callbacks.
 They shine when you have a producer and a consumer that should run independently.
 
 ```js
+import { find, component } from '@agberohq/oja';
 import { Channel, go } from '@agberohq/oja';
 
 const uploads = new Channel(5); // buffered, holds up to 5 items
@@ -956,10 +968,9 @@ a reactive variable that any component can read or write, with the last value
 always available.
 
 ```js
-import { signal } from '@agberohq/oja';
+import { find, signal, on } from '@agberohq/oja';
 
 // In hosts.html — the list page
-// signal() takes a name, optionally an initial value
 const selected = signal('host:selected');
 
 // When the user clicks a row, write to the signal
@@ -972,9 +983,9 @@ on(find('#host-list'), 'click', '[data-host-id]', (e, el) => {
 ```
 
 ```js
-// In sidebar.html — the detail panel
-import { signal } from '@agberohq/oja';
+import { find, signal, component, Out } from '@agberohq/oja';
 
+// In sidebar.html — the detail panel
 const selected = signal('host:selected');
 
 // subscribe() calls the handler immediately with the current value
@@ -1091,9 +1102,6 @@ auth.session.OnExpiry(() => {
 });
 
 // ── 3. Page load progress ────────────────────────────────────────────────────
-// Wire the top-of-page progress bar to the router automatically.
-// It starts when navigation begins, ticks on each component mount, and
-// completes when the router finishes rendering the new page.
 progress('page').track(runtime, {
     start: 'oja:navigate:start',
     tick:  'component:mounted',
@@ -1154,7 +1162,6 @@ router.start('/');
 
 | Mistake | What breaks | Fix |
 |---|---|---|
-| `const find = ...` in a component | `SyntaxError: Identifier 'find' has already been declared` | `find` is injected — never redeclare it. Same for `container`, `findAll`, `props` |
 | `router.start()` before `await layout.apply()` | Router can't find `#main-outlet`, nothing renders | Always `await layout.apply()` first |
 | Passing `tasks()` as a prop instead of `tasks` | Component gets a frozen snapshot, never updates | Pass the signal: `{ tasks }` not `{ tasks: tasks() }` |
 | `document.getElementById` inside a component | May grab an element from another component instance | Use `find('#id')` — it is scoped to the current component |
@@ -1165,6 +1172,7 @@ router.start('/');
 | Calling `signal.destroy()` from a subscriber | Destroys the signal for every other subscriber too | Only the page that owns the signal calls `destroy()` — subscribers just call the `off()` function they received from `subscribe()` |
 | `make.input(...).list(...)` | `TypeError: Cannot set property list` | `<input>` has a native read-only `list` property — `.list()` is skipped silently on void elements. Use a wrapper `make.div()` for list rendering |
 | `make.div({ class: ['card', 'elevated'] })` vs `make.div({ class: 'card elevated' })` | Both work — different intent | String sets `className` directly. Array calls `classList.add()`. Use string when the class expression is a single compound value, array when building it programmatically |
+| Calling `props()` in `app.js` or layout scripts | `props()` returns `null` outside a component script | `props()` is only meaningful inside a component — use `context()` for app-level state |
 
 ---
 
@@ -1350,6 +1358,16 @@ await vfs.rm('old.html');
 const files = await vfs.ls('/');           // [{ path, size, dirty, updatedAt }]
 ```
 
+### Storage quota
+
+VFS exposes how much IndexedDB space it is using:
+
+```js
+const { usage, quota, percent } = await vfs.quota();
+// usage: bytes used, quota: total available, percent: 0–100
+console.log(`Using ${(usage / 1024).toFixed(0)} KB (${percent}%)`);
+```
+
 ### Per-route VFS
 
 When you have multiple VFS instances or want explicit control without touching the global registration:
@@ -1524,6 +1542,7 @@ Here is the notes list before:
 
 ```js
 // pages/tasks.html — before
+import { find } from '@agberohq/oja';
 const listEl = find('#task-list');
 
 effect(() => {
@@ -1540,6 +1559,8 @@ the same thing with `find().list()`:
 
 ```js
 // pages/tasks.html — after
+import { find, Out } from '@agberohq/oja';
+
 find('#task-list').list(() => tasks(), {
     key:    t => t.id,
     render: t => Out.c('components/task-item.html', t),
@@ -1577,11 +1598,12 @@ inputs. With `engine.morph()`:
 
 ```js
 // pages/profile.html
-import { engine, component } from '@agberohq/oja';
+import { find, component } from '@agberohq/oja';
+import { engine } from '@agberohq/oja';
 
 async function refreshStats() {
     const stats = await api.get('/me/stats');
-    const html  = buildStatsHtml(stats); // expensive string builder
+    const html  = buildStatsHtml(stats);
     await engine.morph(find('#stats-panel'), html);
 }
 
@@ -1680,7 +1702,7 @@ and removing tasks all flow through the same path.
 
 ```js
 // pages/tasks.html
-import { on }         from '@agberohq/oja';
+import { find, on, Out } from '@agberohq/oja';
 import { taskSearch } from '../../app.js';
 
 const searchEl = find('#task-search');
@@ -1714,7 +1736,8 @@ and attach autocomplete to it:
 
 ```js
 // components/task-form.html
-import { Trie, form, autocomplete, component } from '@agberohq/oja';
+import { find, component } from '@agberohq/oja';
+import { Trie, form, autocomplete } from '@agberohq/oja';
 import { tasks } from '../../app.js';
 
 // Build a trie of every tag already in use
@@ -1725,15 +1748,7 @@ for (const t of tasks()) {
 
 const tagInput = find('#task-tag');
 
-// Path A — standalone
 const handle = autocomplete.attach(tagInput, {
-  source:   tagTrie,
-  limit:    6,
-  onSelect: (tag) => { tagInput.value = tag; },
-});
-
-// Path B — via form API (identical result)
-const handle = form.input(tagInput, {
   source:   tagTrie,
   limit:    6,
   onSelect: (tag) => { tagInput.value = tag; },
@@ -1742,11 +1757,6 @@ const handle = form.input(tagInput, {
 // Clean up when the component unmounts
 component.onUnmount(() => handle.destroy());
 ```
-
-Both paths attach the same suggestion list. Use `autocomplete.attach()` when
-the input is not part of a form handled by `form.on()`. Use `form.input()`
-when it is — it reads the resolved element the same way all other `form.*`
-methods do.
 
 ### Fuzzy search
 
@@ -1779,6 +1789,7 @@ adds all of this in one call without replacing the data flow you already have.
 
 ```js
 // pages/tasks.html
+import { find } from '@agberohq/oja';
 import { table } from '@agberohq/oja';
 
 const headers = [

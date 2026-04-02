@@ -47,7 +47,7 @@ A component is a plain `.html` file a UI developer can open in a browser, edit, 
 
 **[→ Learn Oja by building a real app — TUTORIAL.md](TUTORIAL.md)**
 
-The tutorial builds a complete task board from scratch. Every concept is introduced exactly when it is needed — state, routing, components, layouts, forms, modals, search, tables, offline support, and more. No abstractions in advance.
+The tutorial builds a complete task board from scratch. Every concept is introduced exactly when it is needed — state, routing, components, layouts, forms, modals, keyboard shortcuts, auth guards, the engine, search, tables, offline support, and more. No abstractions in advance.
 
 ---
 
@@ -165,12 +165,15 @@ Out.sparkline([12, 45, 23, 67], { color: '#00c770', fill: true })
 
 ---
 
-### 3. `find()` — DOM queries that do more than find
+### 3. `find()` — DOM queries scoped to the current component
 
-`find()` returns an enhanced element. Every element you get back from `find()`, `query()`, `findAll()`, or `queryAll()` has `.update()`, `.list()`, `.render()`, and placement methods built in.
+`find()` returns an enhanced element. Inside a component script, it automatically searches within that component's container — multiple instances on the same page never interfere. Outside a component script, it falls back to `document`.
 
 ```js
-import { find, findAll, query } from '@agberohq/oja';
+import { find, findAll } from '@agberohq/oja';
+
+// Inside a component script — scoped to this instance automatically
+const btn = find('#save-btn');
 
 // Declarative patch — describe what the element should look like
 find('#badge').update({
@@ -197,6 +200,8 @@ findAll('.host-row').forEach(el =>
     el.update({ class: { toggle: 'selected' } })
 );
 ```
+
+`find()` works correctly in every context — component scripts, page scripts, `app.js`. Import it explicitly from `@agberohq/oja`. No magic.
 
 ---
 
@@ -227,6 +232,41 @@ All placement methods: `.appendTo()` `.prependTo()` `.after()` `.before()` `.rep
 
 ---
 
+## Component scripts — explicit imports, no magic
+
+Every import in a component script is visible, IDE-friendly, and statically analysable. Nothing is injected automatically.
+
+```html
+<!-- components/status-badge.html -->
+<span class="badge">Loading…</span>
+
+<script type="module">
+import { find, container, props, ready } from '@agberohq/oja';
+
+// find() is automatically scoped to this component instance
+const badge = find('.badge');
+badge.textContent = props().status;
+
+// container() gives you the raw DOM element this script is mounted into
+console.log(container().tagName); // → 'DIV'
+
+// ready() signals that async setup is complete (optional — fallback is automatic)
+ready();
+</script>
+```
+
+| Import | What it returns |
+|--------|----------------|
+| `find(sel)` | Enhanced element scoped to this component, or `document` if called outside |
+| `findAll(sel)` | NodeList scoped to this component |
+| `container()` | The DOM element this script is mounted into |
+| `props()` | Read-only object of the data passed at mount time |
+| `ready()` | Signals setup is complete — resolves the mount promise |
+
+Signals in props are unwrapped automatically — access `props().tasks` and it calls `tasks()` for you.
+
+---
+
 ## What's in the box
 
 | Feature | Export | Build |
@@ -236,6 +276,7 @@ All placement methods: `.appendTo()` `.prependTo()` `.after()` `.before()` `.rep
 | Reactive component communication (`signal`) | named | core + full |
 | DOM builder (`make`, `make.div`, `make.span` …) | named | core + full |
 | Enhanced queries (`find`, `query`, `findAll`, `queryAll`) | named | core + full |
+| Component context (`container`, `props`, `ready`) | named | core + full |
 | Router (hash + history, groups, middleware, named routes) | `Router` | core + full |
 | Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
 | Component lifecycle (`onMount`, `onUnmount`, `interval`) | `component` | core + full |
@@ -275,7 +316,8 @@ All placement methods: `.appendTo()` `.prependTo()` `.after()` `.before()` `.rep
 | Build step | None | Drop-in simplicity, no node_modules |
 | Virtual DOM | No | Direct DOM + targeted `effect()` |
 | Display primitive | `Out` everywhere | One type for all visible output — composable, typed, no raw strings |
-| DOM queries | `find()` returns enhanced elements | Scoped, chainable, reactive-aware — not raw DOM |
+| DOM queries | `find()` reads execution context | Scoped automatically in component scripts, falls back to document outside — explicit import, no magic injection |
+| Component context | `container()`, `props()`, `ready()` | Named imports — IDE-visible, testable, statically analysable |
 | DOM creation | `make()` with placement chain | Build, place, and update in one expression |
 | URL strategy | Hash default, path opt-in | Hash works everywhere without server config |
 | CSS ownership | App owns all styles | Oja only owns lifecycle animation and UI component classes |
