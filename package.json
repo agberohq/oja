@@ -43,7 +43,9 @@
         "clean": "make clean",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:coverage": "vitest run --coverage"
+        "test:coverage": "vitest run --coverage",
+        "bench": "vitest bench --config vitest.bench.config.js",
+        "bench:run": "vitest bench --run --config vitest.bench.config.js"
     },
     "devDependencies": {
         "@vitest/coverage-v8": "latest",
