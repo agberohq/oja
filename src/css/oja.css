@@ -12,7 +12,7 @@
      * Animation durations here must match CSS_TRANSITION_MS in component.js (250ms).
      */
 
-/* ─── Page transitions ──────────────────────────────────────────────────────── */
+/* Page transitions */
 
 .oja-entering {
     animation: oja-fade-in 0.2s ease forwards;
@@ -23,7 +23,7 @@
     pointer-events: none;
 }
 
-/* ─── Component lifecycle ───────────────────────────────────────────────────── */
+/* Component lifecycle */
 
 /* A new item added to a list */
 [data-each-item].oja-entering {
@@ -41,7 +41,7 @@
     animation: oja-flash 0.5s ease forwards;
 }
 
-/* ─── Form states ────────────────────────────────────────────────────────────── */
+/* Form states */
 
 .oja-field-error {
     display: block;
@@ -55,7 +55,7 @@
     outline-offset: 1px;
 }
 
-/* ─── Toast container — fixed position, stacks toasts vertically ────────────── */
+/* Toast container — fixed position, stacks toasts vertically */
 
 .oja-toast-container {
     position: fixed;
@@ -76,7 +76,7 @@
 .oja-toast-bottom-left  { bottom: 16px; left:  16px;  flex-direction: column-reverse; }
 .oja-toast-bottom-center{ bottom: 16px; left: 50%;    transform: translateX(-50%); flex-direction: column-reverse; }
 
-/* ─── Individual toast ───────────────────────────────────────────────────────── */
+/* Individual toast */
 
 .oja-toast {
     display: flex;
@@ -145,7 +145,7 @@
     opacity: 1;
 }
 
-/* ─── Banner — persistent top-of-page message ───────────────────────────────── */
+/* Banner — persistent top-of-page message */
 
 .oja-banner {
     display: flex;
@@ -178,7 +178,7 @@
     animation: oja-fade-out 0.2s ease forwards;
 }
 
-/* ─── Keyframes ──────────────────────────────────────────────────────────────── */
+/* Keyframes */
 
 @keyframes oja-fade-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -211,7 +211,7 @@
     100% { background-position:  200% 0; }
 }
 
-/* ─── Skeleton Loaders ───────────────────────────────────────────────────────── */
+/* Skeleton Loaders */
 
 .oja-skeleton-wrapper {
     width: 100%;
@@ -231,7 +231,7 @@
 .oja-skel-avatar { height: 48px; width: 48px; border-radius: 50%; flex-shrink: 0; }
 .oja-skel-row { display: flex; gap: 16px; margin-bottom: 12px; align-items: center; }
 
-/* ─── Popover & Tooltip ──────────────────────────────────────────────────────── */
+/* Popover & Tooltip */
 
 .oja-popover {
     background: var(--bg, #ffffff);
@@ -251,7 +251,7 @@
     white-space: nowrap;
 }
 
-/* ─── Respect reduced motion ─────────────────────────────────────────────────── */
+/* Respect reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
     .oja-entering,
@@ -295,7 +295,7 @@ TABLE
     width: 100%;
 }
 
-/* ─── Table element ───────────────────────────────────────────────────────── */
+/* Table element */
 
 .oja-table {
     width: 100%;
@@ -311,7 +311,7 @@ TABLE
     vertical-align: middle;
 }
 
-/* ─── Header ──────────────────────────────────────────────────────────────── */
+/* Header */
 
 .oja-table thead th {
     background: var(--oja-table-header-bg, var(--panel-bg, #f9fafb));
@@ -345,7 +345,7 @@ TABLE
 .oja-table .oja-th-asc::after  { content: ' ▲'; opacity: 1; color: var(--oja-table-accent, var(--accent, #0066ff)); }
 .oja-table .oja-th-desc::after { content: ' ▼'; opacity: 1; color: var(--oja-table-accent, var(--accent, #0066ff)); }
 
-/* ─── Body rows ───────────────────────────────────────────────────────────── */
+/* Body rows */
 
 .oja-table tbody tr:last-child td {
     border-bottom: none;
@@ -363,7 +363,7 @@ TABLE
     background-color: var(--oja-table-row-selected, var(--hover-bg, #f3f4f6));
 }
 
-/* ─── Cell content ────────────────────────────────────────────────────────── */
+/* Cell content */
 
 .oja-table .oja-cell-content {
     display: inline-flex;
@@ -475,7 +475,7 @@ TABLE
     cursor: pointer;
 }
 
-/* ─── Group rows ──────────────────────────────────────────────────────────── */
+/* Group rows */
 
 .oja-group-header {
     cursor: pointer;
@@ -505,7 +505,7 @@ TABLE
 }
 .oja-group-toggle { float: right; color: var(--text-mute, #6b7280); font-size: 10px; }
 
-/* ─── States ──────────────────────────────────────────────────────────────── */
+/* States */
 
 .oja-state-cell {
     text-align: center;
@@ -537,7 +537,7 @@ TABLE
     to { transform: rotate(360deg); }
 }
 
-/* ─── Footer ──────────────────────────────────────────────────────────────── */
+/* Footer */
 
 .oja-table-footer {
     display: flex;
@@ -617,7 +617,7 @@ TABLE
     background: var(--hover-bg, #f3f4f6);
 }
 
-/* ─── Mobile cards ────────────────────────────────────────────────────────── */
+/* Mobile cards */
 
 .oja-mobile-cards {
     display: none;
@@ -744,7 +744,7 @@ TABLE
 
 .oja-tabs::-webkit-scrollbar { display: none; }
 
-/* ─── Line variant (default) ──────────────────────────────────────────────── */
+/* Line variant (default) */
 
 .oja-tabs-line {
     border-bottom: 2px solid var(--oja-tab-border, var(--border, #e5e7eb));
@@ -778,7 +778,7 @@ TABLE
     cursor: not-allowed;
 }
 
-/* ─── Pill variant ────────────────────────────────────────────────────────── */
+/* Pill variant */
 
 .oja-tabs-pill {
     gap: 4px;
@@ -817,7 +817,7 @@ TABLE
     cursor: not-allowed;
 }
 
-/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+/* Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
     .oja-spinner                { animation: none; opacity: 0.6; }

@@ -50,7 +50,10 @@ export { segment }                                        from './js/core/segmen
 export { animate }                                        from './js/core/animate.js';
 
 export { Router }                                         from './js/core/router.js';
-export { component }                                      from './js/core/component.js';
+export { component,
+    container, props, ready,
+}                                                         from './js/core/component.js';
+export { currentContainer }                               from './js/core/_context.js';
 export { layout, allSlotsReady }           from './js/core/layout.js';
 
 export {
