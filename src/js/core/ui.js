@@ -95,9 +95,12 @@
 
 import { listen, emit, on as _on, once as _once } from './events.js';
 import { effect }                                    from './reactive.js';
+import { currentContainer }                          from './_context.js';
 
 export function find(selector, options = {}) {
-    const { required = false, scope = document, timeout = 0 } = options;
+    const scope   = options.scope ?? currentContainer() ?? document;
+    const required = options.required ?? false;
+    const timeout  = options.timeout  ?? 0;
 
     if (timeout > 0) {
         return new Promise((resolve) => {
@@ -141,8 +144,9 @@ export function find(selector, options = {}) {
     return _renderable(el);
 }
 
-export function findAll(selector, scope = document) {
-    return Array.from(scope.querySelectorAll(selector)).map(_renderable);
+export function findAll(selector, scope) {
+    const _scope = scope ?? currentContainer() ?? document;
+    return Array.from(_scope.querySelectorAll(selector)).map(_renderable);
 }
 
 /**

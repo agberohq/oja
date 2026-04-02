@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { component, _activeElement } from '../../src/js/core/component.js';
+import { component, _setActiveForTest } from '../../src/js/core/component.js';
+import { currentContainer } from '../../src/js/core/_context.js';
 
 
 function makeContainer(html = '<div></div>') {
@@ -26,17 +27,17 @@ describe('component.onReady()', () => {
         const el = makeContainer();
         const calls = [];
 
-        // Simulate being inside a component script: set _activeElement
+        // Simulate being inside a component script: set currentContainer()
         // by running through _runMount/_runReady directly.
         // We call the public hooks API through the scope created by _getScope.
-        const origActive = component._activeElement;
+        const origActive = currentContainer();
 
         // Drive the internal pipeline directly
         const order = [];
         await component._runMount(el);   // no-op — no scope yet
         await component._runReady(el);   // no-op
 
-        // Register hooks by temporarily wiring _activeElement via mount()
+        // Register hooks by temporarily wiring currentContainer() via mount()
         // using a mock fetch so we don't hit the network.
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
@@ -70,7 +71,7 @@ describe('component.onReady()', () => {
         // We can test _runReady with a pre-populated scope by monkey-patching
         // through mount's side-effects on a real element.
         const readySpy = vi.fn();
-        // onReady only works when _activeElement is set (inside mount())
+        // onReady only works when currentContainer() is set (inside mount())
         // — test that it is a no-op when called outside that context
         component.onReady(readySpy);
         await component._runReady(el2); // scope was never primed → no-op

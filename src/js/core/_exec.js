@@ -1,4 +1,4 @@
-import { find as _find, findAll as _findAll } from './ui.js';
+import { pushContainer, popContainer, _setReadyFn } from './_context.js';
 
 /**
  * oja/_exec.js
@@ -25,46 +25,35 @@ import { find as _find, findAll as _findAll } from './ui.js';
  *   <meta http-equiv="Content-Security-Policy"
  *         content="script-src 'self' blob: ...">
  *
- * ─── Scope injection ──────────────────────────────────────────────────────────
+ * ─── No magic injection ───────────────────────────────────────────────────────
  *
- * Every component script automatically receives:
+ * _exec.js no longer injects container, find, findAll, or props as magic
+ * globals. Component scripts import what they need explicitly:
  *
- *   container     — the DOM element the component was mounted into.
- *   find          — querySelector scoped to container.
- *   findAll       — querySelectorAll scoped to container.
- *   props         — read-only proxy of the props passed at mount time.
- *   __oja_ready__ — call once when synchronous setup is complete.
+ *   import { find, container, props } from '../js/oja.js';
  *
- * Variables are only injected when the script does not already declare them,
- * preventing SyntaxError: Identifier already declared.
+ * find() reads the active container from the stack automatically.
+ * container() returns the DOM element this script is mounted into.
+ * props() returns the data passed at mount time.
  *
- * ─── Global key hygiene ───────────────────────────────────────────────────────
+ * This makes dependencies IDE-visible, testable, and statically analysable.
  *
- * One window key per execution holds all scope values. It is deleted on the
- * second line of the preamble, immediately after destructuring. A monotonic
- * counter combined with Date.now() makes collisions impossible even when
- * multiple scripts execute in the same millisecond.
+ * ─── __oja_ready__ ───────────────────────────────────────────────────────────
+ *
+ * The one remaining special value. Scripts signal completion by calling
+ * ready() (imported from oja.js) or the injected __oja_ready__(). Both
+ * resolve the same Promise. If neither is called, the load-event fallback
+ * resolves automatically.
+ *
+ *   import { ready } from '../js/oja.js';
+ *   // ... async setup ...
+ *   ready();
  *
  * ─── Resolution paths ────────────────────────────────────────────────────────
  *
  * A `settled` boolean (closed over in the Promise) tracks resolution state.
- * This is the core fix for the layout.apply() hang bug:
- *
- * OLD (broken): fallback checked window[scopeKey]?.__oja_ready__ after the
- *   preamble had already deleted window[scopeKey]. Check was always undefined.
- *   Fallback never fired. layout.apply() hung forever for any script that
- *   forgot to call __oja_ready__().
- *
- * NEW (fixed): closed-over `settled` boolean is immune to the deletion.
- *   Both __oja_ready__() and the load-event fallback call the same _done()
- *   function. _done() is idempotent — settled guards against double resolution.
- *
- * ─── __oja_ready__() contract ────────────────────────────────────────────────
- *
- * Scripts SHOULD call __oja_ready__() once their synchronous setup is done.
- * If they forget, the load-event fallback resolves them automatically.
- * Long-running shells (like shell.html) call it once at the end of their
- * synchronous wiring block — not at the end of any async work.
+ * This is immune to the window[scopeKey] deletion that caused the original
+ * layout.apply() hang bug.
  *
  * ─── Return value ─────────────────────────────────────────────────────────────
  *
@@ -89,13 +78,29 @@ let _scopeCounter = 0;
 // Strips strings and comments first to avoid false positives.
 //
 // Patterns covered:
-//   const/let/var x = ...                   variable declaration
-//   const/let/var { x } = ...              destructuring
+//   const/let/var x = ...                   simple declaration
+//   const/let/var { x } = ...              object destructuring
+//   const/let/var [x] = ...               array destructuring
 //   for (const x of ...) / for (const x in ...)   loop variables
 //   function x() {}                         function declaration
 //   class x {}                              class declaration
 //   function f(x, ...) {}                   function parameter
 //   (x) => {}  /  x => {}                  arrow parameter
+//
+// Critical correctness rule — the binding name must appear on the LEFT side
+// of the declaration, not in the initialiser expression. The original pattern:
+//
+//   \b(?:const|let|var)\b[^;{]*?\bname\b
+//
+// was too broad: it matched  `const wsSwitcher = await find('#id')`  because
+// `find` appears anywhere after `const` on the same line — including in the
+// VALUE expression. This caused the preamble to skip injecting the scoped
+// `find` helper, so scripts fell back to `window.find()` (the browser's
+// native text-search API which returns boolean false).
+//
+// The fix: each const/let/var pattern now anchors the name to the BINDING
+// position — directly after the keyword (simple), or inside { } / [ ]
+// (destructuring) — never after the `=` sign.
 
 function _declares(source, name) {
     if (!source.includes(name)) return false;
@@ -111,17 +116,22 @@ function _declares(source, name) {
     const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     return [
-        // const/let/var declarations — covers simple, destructured, array
-        new RegExp(`\\b(?:const|let|var)\\b[^;{]*?\\b${n}\\b`),
+        // Simple: const find = ...  /  let find;  /  var find,
+        // Name is the first (and only) identifier directly after the keyword.
+        new RegExp(`\\b(?:const|let|var)\\s+${n}\\b`),
+        // Object destructuring: const { find } = ...  or  const { a, find } = ...
+        new RegExp(`\\b(?:const|let|var)\\s*\\{[^}]*\\b${n}\\b[^}]*\\}`),
+        // Array destructuring: const [find] = ...  or  const [a, find] = ...
+        new RegExp(`\\b(?:const|let|var)\\s*\\[[^\\]]*\\b${n}\\b[^\\]]*\\]`),
         // for-of / for-in loop variables
         new RegExp(`\\bfor\\s*\\(\\s*(?:const|let|var)\\s+${n}\\b`),
         // function declarations
         new RegExp(`\\bfunction\\s+${n}\\b`),
         // class declarations
         new RegExp(`\\bclass\\s+${n}\\b`),
-        // function parameters: function(x) or function(a, x, b)
+        // function parameters: function(find) or function(a, find, b)
         new RegExp(`\\bfunction\\s*\\([^)]*\\b${n}\\b[^)]*\\)`),
-        // arrow function parameters: (x) => or x =>
+        // arrow function parameters: (find) => or find =>
         new RegExp(`(?:^|[^\\w])${n}\\s*=>`),
         new RegExp(`\\([^)]*\\b${n}\\b[^)]*\\)\\s*=>`),
     ].some(re => re.test(clean));
@@ -209,48 +219,6 @@ function _abs(spec, base) {
     catch { return spec; }
 }
 
-//
-// Read-only Proxy over propsData. Signals (.__isOjaSignal) are unwrapped on
-// read. All traps are implemented so Object.keys(), 'key' in props, and
-// delete props.x all behave correctly.
-
-function _makeProps(propsData) {
-    // Do NOT freeze the target. Object.freeze() makes properties non-configurable
-    // and non-writable, which forces the Proxy to return the exact stored value
-    // from get(). But we need get() to unwrap signals (call signal() instead of
-    // returning the function). Returning a different value than what
-    // getOwnPropertyDescriptor reports is a Proxy invariant violation — TypeError.
-    // The set/deleteProperty traps already enforce read-only semantics.
-    const target = { ...propsData };
-
-    return new Proxy(target, {
-        get(target, prop) {
-            if (prop === Symbol.toStringTag) return 'OjaProps';
-            const val = target[prop];
-            if (typeof val === 'function' && val.__isOjaSignal) {
-                try { return val(); } catch { return undefined; }
-            }
-            return val;
-        },
-        set(target, prop) {
-            console.error(`[Oja] Props are read-only. Cannot set props.${String(prop)}.`);
-            return false;
-        },
-        deleteProperty(target, prop) {
-            console.error(`[Oja] Props are read-only. Cannot delete props.${String(prop)}.`);
-            return false;
-        },
-        has(target, prop)   { return prop in target; },
-        ownKeys(target)     { return Object.keys(target); },
-        getOwnPropertyDescriptor(target, prop) {
-            if (!(prop in target)) return undefined;
-            // Return the raw stored value (signal function or plain value) —
-            // this must match what the engine sees in the target object.
-            return { value: target[prop], writable: true, enumerable: true, configurable: true };
-        },
-    });
-}
-
 
 export function execScripts(container, sourceUrl, propsData = {}) {
     if (!container || !(container instanceof Element)) {
@@ -266,6 +234,10 @@ export function execScripts(container, sourceUrl, propsData = {}) {
         ? new URL(sourceUrl, document.baseURI).href
         : document.baseURI;
 
+    // Push this container onto the stack so find(), container(), props()
+    // and ready() all resolve to the right element during script execution.
+    pushContainer(container, propsData);
+
     const promises = [];
 
     for (const oldScript of scripts) {
@@ -280,31 +252,20 @@ export function execScripts(container, sourceUrl, propsData = {}) {
             // Unique key: counter makes collision impossible even at same ms
             const scopeKey = `${SCOPE_PREFIX}${Date.now()}_${++_scopeCounter}_${Math.random().toString(36).slice(2, 8)}`;
 
-            const body  = oldScript.textContent || '';
-            const props = _makeProps(propsData);
+            const body = oldScript.textContent || '';
 
-            // Place scope on window — preamble destructures then deletes it
+            // Only __oja_ready__ is injected — everything else (container,
+            // find, findAll, props) is imported explicitly by the script.
             window[scopeKey] = {
-                container,
-                find:         (sel, opts = {}) => _find(sel, { ...opts, scope: container }),
-                findAll:      (sel)            => _findAll(sel, container),
-                props,
                 __oja_ready__: null, // filled in below inside the Promise
             };
 
-            // Only inject vars the script doesn't already declare —
-            // prevents SyntaxError: Identifier already declared
-            const picks = ['props', '__oja_ready__'];
-            if (!_declares(body, 'container')) picks.push('container');
-            if (!_declares(body, 'find'))      picks.push('find');
-            if (!_declares(body, 'findAll'))   picks.push('findAll');
-
             const preamble = [
-                `const { ${picks.join(', ')} } = window[${JSON.stringify(scopeKey)}];`,
+                `const { __oja_ready__ } = window[${JSON.stringify(scopeKey)}];`,
                 `delete window[${JSON.stringify(scopeKey)}];`,
             ].join('\n');
 
-            const src     = `${preamble}\n${_rewriteImports(body, base)}`;
+            const src = `${preamble}\n${_rewriteImports(body, base)}`;
             const blob    = new Blob([src], { type: 'text/javascript' });
             const blobUrl = URL.createObjectURL(blob);
 
@@ -342,8 +303,10 @@ export function execScripts(container, sourceUrl, propsData = {}) {
                     _done();
                 }, EXEC_TIMEOUT);
 
-                // Primary resolution: script calls __oja_ready__()
+                // Primary resolution: script calls __oja_ready__() (injected)
+                // or import { ready } from '../js/oja.js' (explicit import path)
                 window[scopeKey].__oja_ready__ = _done;
+                _setReadyFn(container, _done);
 
                 // Fallback: load event fires after script executes.
                 // Covers scripts that forget __oja_ready__(), legacy components,
@@ -366,8 +329,8 @@ export function execScripts(container, sourceUrl, propsData = {}) {
     }
 
     return promises.length > 0
-        ? Promise.all(promises).then(() => {})
-        : Promise.resolve();
+        ? Promise.all(promises).then(() => {}).finally(() => popContainer())
+        : Promise.resolve().finally(() => popContainer());
 }
 
 /**

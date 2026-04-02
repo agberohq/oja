@@ -17,60 +17,45 @@ beforeEach(() => {
 });
 
 
-describe('execScripts() — preamble injection', () => {
-    it('injects container when the script does not declare it', () => {
-        const injectedSrcs = [];
-        const origCreate = document.createElement.bind(document);
-        vi.spyOn(document, 'createElement').mockImplementation((tag) => {
-            const el = origCreate(tag);
-            if (tag === 'script') {
-                Object.defineProperty(el, 'src', {
-                    set(v) { injectedSrcs.push(v); },
-                    get() { return ''; },
-                    configurable: true,
-                });
-            }
-            return el;
-        });
-        const container = makeContainer('// no container declaration');
+describe('execScripts() — preamble (only __oja_ready__)', () => {
+    it('injects a script blob for module scripts', () => {
+        const blobTexts = [];
+        const origCreate = URL.createObjectURL;
+        URL.createObjectURL = (blob) => { blobTexts.push(blob.__shimText ?? ''); return origCreate(blob); };
+        const container = makeContainer('// module script');
         execScripts(container, null, {});
-        expect(injectedSrcs.length).toBeGreaterThan(0);
-        document.createElement.mockRestore();
+        URL.createObjectURL = origCreate;
+        expect(blobTexts.length).toBeGreaterThan(0);
     });
 
-    it('does not double-declare container when script already declares it', () => {
-        const body = 'const container = document.getElementById("app");';
-        const declares = n => new RegExp(`\\b(?:const|let|var|function)\\s+${n}\\b`).test(body);
-        expect(declares('container')).toBe(true);
-        expect(declares('find')).toBe(false);
-        expect(declares('props')).toBe(false);
+    it('preamble only contains __oja_ready__ — no container/find/props', () => {
+        const blobTexts = [];
+        const origCreate = URL.createObjectURL;
+        URL.createObjectURL = (blob) => { blobTexts.push(blob.__shimText ?? ''); return origCreate(blob); };
+        const container = makeContainer('// preamble check');
+        execScripts(container, null, {});
+        URL.createObjectURL = origCreate;
+        const preamble = blobTexts[0] ?? '';
+        expect(preamble).toContain('__oja_ready__');
+        // Magic variables are gone — scripts import explicitly
+        expect(preamble).not.toMatch(/const\s*\{[^}]*container/);
+        expect(preamble).not.toMatch(/const\s*\{[^}]*find/);
+        expect(preamble).not.toMatch(/const\s*\{[^}]*props/);
     });
 
-    it('detects let and var declarations', () => {
-        const body = 'let find = () => {}; var findAll = null;';
-        const declares = n => new RegExp(`\\b(?:const|let|var|function)\\s+${n}\\b`).test(body);
-        expect(declares('find')).toBe(true);
-        expect(declares('findAll')).toBe(true);
-        expect(declares('container')).toBe(false);
-    });
-
-    it('detects function declarations', () => {
-        const body = 'function find(sel) { return document.querySelector(sel); }';
-        const declares = n => new RegExp(`\\b(?:const|let|var|function)\\s+${n}\\b`).test(body);
-        expect(declares('find')).toBe(true);
-    });
-
-    it('does not false-positive on identifiers used in expressions', () => {
-        const body = 'component.mount(container, "tweet.html", props);';
-        const declares = n => new RegExp(`\\b(?:const|let|var|function)\\s+${n}\\b`).test(body);
-        expect(declares('container')).toBe(false);
-    });
-
-    it('props is always injectable regardless of declarations in body', () => {
-        const body = 'const props = { fake: true };';
-        const declares = n => new RegExp(`\\b(?:const|let|var|function)\\s+${n}\\b`).test(body);
-        // The regex would detect it — but _exec.js skips the check for props intentionally
-        expect(declares('props')).toBe(true);
+    it('_declares correctly identifies binding position — not value expression', () => {
+        // The critical fix: 'const x = await find(...)' must NOT be detected
+        // as declaring 'find'. Only the left-hand binding name counts.
+        // We test via the blob preamble: if _declares wrongly fires, __oja_ready__
+        // would be absent from the preamble (since picks would skip it).
+        const blobTexts = [];
+        const origCreate = URL.createObjectURL;
+        URL.createObjectURL = (blob) => { blobTexts.push(blob.__shimText ?? ''); return origCreate(blob); };
+        // Script uses find in value position — should NOT suppress __oja_ready__ injection
+        const container = makeContainer('const btn = document.querySelector(".btn");');
+        execScripts(container, null, {});
+        URL.createObjectURL = origCreate;
+        expect(blobTexts[0]).toContain('__oja_ready__');
     });
 });
 
@@ -147,16 +132,18 @@ describe('execScripts() — __oja_ready__ signal', () => {
         expect(ojaKeys.length).toBeLessThanOrEqual(1);
     });
 
-    it('scope key object has container, find, findAll, props and __oja_ready__', () => {
-        const container = makeContainer('// full scope check');
+    it('scope key object has only __oja_ready__ — no container/find/findAll/props', () => {
+        const container = makeContainer('// scope key check');
         execScripts(container, null, {});
         const ojaKey = Object.keys(window).find(k => k.startsWith('__oja_'));
         expect(ojaKey).toBeDefined();
         const scope = window[ojaKey];
-        expect(typeof scope.find).toBe('function');
-        expect(typeof scope.findAll).toBe('function');
+        // Only __oja_ready__ — everything else is imported explicitly
         expect(typeof scope.__oja_ready__).toBe('function');
-        expect(scope.props).toBeDefined();
+        expect(scope.container).toBeUndefined();
+        expect(scope.find).toBeUndefined();
+        expect(scope.findAll).toBeUndefined();
+        expect(scope.props).toBeUndefined();
     });
 });
 

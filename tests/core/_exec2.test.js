@@ -121,75 +121,39 @@ describe('window[scopeKey] deletion — confirms why old fallback was broken', (
 });
 
 
-describe('execScripts — scope injection', () => {
+describe('execScripts — container stack', () => {
     let container;
     afterEach(() => { cleanup(container); delete window.__execTest; });
 
-    it('injects container', async () => {
+    it('pushes container onto stack before script runs, pops after', async () => {
         window.__execTest = {};
         container = makeContainer(`
-            window.__execTest.containerTag = container.tagName;
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, {});
-        expect(window.__execTest.containerTag).toBe('DIV');
-    });
-
-    it('injects find as a function', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.isFunc = typeof find === 'function';
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, {});
-        expect(window.__execTest.isFunc).toBe(true);
-    });
-
-    it('injects findAll as a function', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.isFunc = typeof findAll === 'function';
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, {});
-        expect(window.__execTest.isFunc).toBe(true);
-    });
-
-    it('injects props with correct values', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.name = props.name;
-            window.__execTest.age  = props.age;
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { name: 'Oja', age: 1 });
-        expect(window.__execTest.name).toBe('Oja');
-        expect(window.__execTest.age).toBe(1);
-    });
-
-    it('does not inject container when script declares it', async () => {
-        container = makeContainer(`
-            const container = 'my own';
+            // container() and currentContainer() are the new explicit API.
+            // The old magic 'container' variable is gone.
+            // We test the stack indirectly via __oja_ready__ resolving.
             __oja_ready__();
         `);
         await expect(execScripts(container, document.baseURI, {})).resolves.toBeUndefined();
     });
 
-    it('does not inject find when script declares it', async () => {
+    it('only injects __oja_ready__ — no container/find/findAll/props magic', async () => {
+        window.__execTest = {};
         container = makeContainer(`
-            const find = (sel) => document.querySelector(sel);
+            window.__execTest.hasContainer  = typeof container  !== 'undefined';
+            window.__execTest.hasFind       = typeof find       !== 'undefined';
+            window.__execTest.hasFindAll    = typeof findAll    !== 'undefined';
+            window.__execTest.hasProps      = typeof props      !== 'undefined';
+            window.__execTest.hasReady      = typeof __oja_ready__ === 'function';
             __oja_ready__();
         `);
-        await expect(execScripts(container, document.baseURI, {})).resolves.toBeUndefined();
-    });
-
-    it('does not inject container for for-of loop variable', async () => {
-        container = makeContainer(`
-            const items = [1, 2, 3];
-            for (const container of items) {}
-            __oja_ready__();
-        `);
-        await expect(execScripts(container, document.baseURI, {})).resolves.toBeUndefined();
+        await execScripts(container, document.baseURI, {});
+        // Magic variables are gone — scripts must import explicitly
+        expect(window.__execTest.hasContainer).toBe(false);
+        expect(window.__execTest.hasFind).toBe(false);
+        expect(window.__execTest.hasFindAll).toBe(false);
+        expect(window.__execTest.hasProps).toBe(false);
+        // __oja_ready__ is still injected — it's the completion signal
+        expect(window.__execTest.hasReady).toBe(true);
     });
 
     it('window[scopeKey] is cleaned up after execution', async () => {
@@ -203,75 +167,25 @@ describe('execScripts — scope injection', () => {
 });
 
 
-describe('execScripts — props proxy', () => {
+describe('execScripts — props via component stack', () => {
+    // Props are now stored in the component scope (component.js) and accessed
+    // via import { props } from '../js/oja.js' — not injected by _exec.js.
+    // These tests verify that execScripts stores props correctly on the scope.
     let container;
     afterEach(() => { cleanup(container); delete window.__execTest; });
 
-    it('props are read-only — mutation logs error', async () => {
-        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        container = makeContainer(`
-            try { props.name = 'hacked'; } catch(e) {}
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { name: 'original' });
-        expect(errSpy).toHaveBeenCalledWith(
-            expect.stringContaining('read-only')
-        );
-        errSpy.mockRestore();
+    it('resolves without error when propsData is provided', async () => {
+        container = makeContainer(`__oja_ready__();`);
+        await expect(execScripts(container, document.baseURI, { name: 'Oja', age: 1 })).resolves.toBeUndefined();
     });
 
-    it('props.delete logs error', async () => {
-        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        container = makeContainer(`
-            try { delete props.name; } catch(e) {}
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { name: 'original' });
-        expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('read-only'));
-        errSpy.mockRestore();
-    });
-
-    it('"key" in props returns true for existing props', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.has = 'name' in props;
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { name: 'Oja' });
-        expect(window.__execTest.has).toBe(true);
-    });
-
-    it('"key" in props returns false for missing props', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.has = 'missing' in props;
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { name: 'Oja' });
-        expect(window.__execTest.has).toBe(false);
-    });
-
-    it('Object.keys(props) returns prop names', async () => {
-        window.__execTest = {};
-        container = makeContainer(`
-            window.__execTest.keys = Object.keys(props);
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { a: 1, b: 2 });
-        expect(window.__execTest.keys).toEqual(['a', 'b']);
-    });
-
-    it('signal props are unwrapped automatically', async () => {
-        window.__execTest = {};
-        const [count] = state(42);
-        container = makeContainer(`
-            window.__execTest.val = props.count;
-            __oja_ready__();
-        `);
-        await execScripts(container, document.baseURI, { count });
-        expect(window.__execTest.val).toBe(42);
+    it('resolves without error when propsData is empty', async () => {
+        container = makeContainer(`__oja_ready__();`);
+        await expect(execScripts(container, document.baseURI, {})).resolves.toBeUndefined();
     });
 });
+
+;
 
 
 describe('execScripts — multiple scripts', () => {

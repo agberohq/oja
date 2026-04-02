@@ -77,6 +77,7 @@
  */
 
 import { render, each, fill }          from './template.js';
+import { pushContainer, popContainer, currentContainer, _setReadyFn, _getReadyFn, _getProps } from './_context.js';
 import { execScripts }                 from './_exec.js';
 import { emit, _setComponentScopeHook } from './events.js';
 import { _setComponentChannelHook }      from './reactive.js';
@@ -190,17 +191,42 @@ function _trackRender(url, ms) {
 }
 
 const _scopes = new WeakMap();
-export let _activeElement = null;
+
+// Container stack
+// Stack lives in _context.js (dependency-free). component.js re-exports the
+// public API: container(), props(), ready(). The internal push/pop/current
+// are imported from _context.js and used directly below.
+
+/** Named export — use inside component scripts: import { container } from '../js/oja.js' */
+export function container() {
+    return currentContainer();
+}
+
+/** Named export — use inside component scripts: import { props } from '../js/oja.js' */
+export function props() {
+    const el = currentContainer();
+    return el ? _getProps(el) : null;
+}
+
+/** Named export — signals execScripts that async setup is complete.
+ *  Equivalent to calling the injected __oja_ready__() but IDE-visible.
+ *
+ *   import { ready } from '../js/oja.js';
+ *   // ... async setup ...
+ *   ready();
+ */
+export function ready() {
+    const el = currentContainer();
+    if (!el) return;
+    const fn = _getReadyFn(el);
+    if (fn) fn();
+}
 
 // Exported only for use in tests — allow tests to set the active component
 // context and inspect scope state without going through the full mount pipeline.
-//
-// Named with a leading underscore and a _ForTest suffix to make it obvious
-// these are not part of the public API.
-
 export function _setActiveForTest(el) {
-    _activeElement = el;
-    if (el) _getScope(el); // ensure scope is created
+    if (el) { _getScope(el); pushContainer(el); }
+    else     { while (currentContainer()) popContainer(); }
 }
 
 export function _getScopeForTest(el) {
@@ -219,7 +245,7 @@ function _getScope(el) {
 // with the currently active component. Using a hook avoids a circular import
 // (events.js would otherwise need to import component.js).
 _setComponentScopeHook((unsub) => {
-    const scope = _getScope(_activeElement);
+    const scope = _getScope(currentContainer());
     if (scope) scope.ons.push(unsub);
 });
 
@@ -229,7 +255,7 @@ _setComponentScopeHook((unsub) => {
 // Only the component that CREATES the channel destroys it — subscribers
 // receive the channel reference and call their own unsubscribe function.
 _setComponentChannelHook((ch) => {
-    const scope = _getScope(_activeElement);
+    const scope = _getScope(currentContainer());
     if (scope) scope.channels.push(ch);
 });
 
@@ -346,12 +372,11 @@ export const component = {
 
             fill(container, data);
 
-            const prev = _activeElement;
-            _activeElement = container;
+            pushContainer(container, data);
             try {
                 await execScripts(container, url, data);
             } finally {
-                _activeElement = prev;
+                popContainer();
             }
 
             await this._runMount(container);
@@ -408,9 +433,7 @@ export const component = {
         fill(wrapper, data);
 
         const roots = Array.from(wrapper.children);
-        const prev = _activeElement;
-        _activeElement = container;
-
+        pushContainer(container, data);
         try {
             if (roots.length === 1) {
                 container.appendChild(roots[0]);
@@ -428,7 +451,7 @@ export const component = {
                 await Promise.all(roots.map(el => _enter(el)));
             }
         } finally {
-            _activeElement = prev;
+            popContainer();
         }
 
         const ms = performance.now() - start;
@@ -463,7 +486,7 @@ export const component = {
     },
 
     onMount(fn) {
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.mount.push(fn);
         return this;
     },
@@ -471,13 +494,13 @@ export const component = {
     // Called after the component's module script has executed and onMount hooks
     // have run. Use for logic that depends on the component being fully wired.
     onReady(fn) {
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.ready.push(fn);
         return this;
     },
 
     onUnmount(fn) {
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.unmount.push(fn);
         return this;
     },
@@ -485,21 +508,21 @@ export const component = {
     // Called after the component has been fully torn down and removed from the DOM.
     // Use for analytics, cleanup confirmation, or chaining dependent teardowns.
     onDead(fn) {
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.dead.push(fn);
         return this;
     },
 
     interval(fn, ms) {
         const id    = setInterval(fn, ms);
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.intervals.push(id);
         return id;
     },
 
     timeout(fn, ms) {
         const id    = setTimeout(fn, ms);
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         if (scope) scope.timeouts.push(id);
         return id;
     },
@@ -517,7 +540,7 @@ export const component = {
      * Returns null when called outside a mount context.
      */
     get signal() {
-        const scope = _getScope(_activeElement);
+        const scope = _getScope(currentContainer());
         return scope?.controller?.signal ?? null;
     },
 
