@@ -374,7 +374,10 @@ class ReactiveSystem {
                 this._savePersistent(persistent.key, persistent.storage, value, persistent.onQuotaExceeded ?? null);
             }
 
-            this._trackState(id, name, value, initialValue, persistent);
+            // NOTE: _trackState is intentionally NOT called here — it belongs at
+            // creation time only. Calling it on every write caused a redundant
+            // Map.set + object allocation per write, showing as 5× overhead in
+            // batch(100) benchmarks despite correct deduplication in the flush queue.
             this._sendDevToolsUpdate('state:changed', {
                 id,
                 name,

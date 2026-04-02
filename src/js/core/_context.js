@@ -22,31 +22,34 @@
  *   import { find, container, props, ready } from '../js/oja.js';
  */
 
-// Each entry: { el, props }
-const _stack = [];
+// Stack of active containers — each entry is the DOM element only.
+// Props are stored separately in a WeakMap for O(1) lookup regardless of stack depth.
+const _stack     = [];
+const _propsMap  = new WeakMap(); // Element → propsData
 
 /** @internal */
 export function pushContainer(el, propsData = {}) {
-    _stack.push({ el, props: propsData });
+    _stack.push(el);
+    _propsMap.set(el, propsData);
 }
 
 /** @internal */
 export function popContainer() {
-    _stack.pop();
+    const el = _stack.pop();
+    // Do not delete from _propsMap — WeakMap releases automatically when el is GC'd.
+    // Keeping it alive is harmless; the element reference in the stack was the only
+    // strong reference preventing GC, and we just removed it.
+    return el;
 }
 
 /** Returns the DOM element currently being executed, or null */
 export function currentContainer() {
-    return _stack.at(-1)?.el ?? null;
+    return _stack.at(-1) ?? null;
 }
 
-/** @internal — returns the props for a given element */
+/** @internal — O(1) props lookup via WeakMap (was O(N) linear scan) */
 export function _getProps(el) {
-    // Search from top of stack for matching element
-    for (let i = _stack.length - 1; i >= 0; i--) {
-        if (_stack[i].el === el) return _stack[i].props;
-    }
-    return null;
+    return _propsMap.get(el) ?? null;
 }
 
 // ready() bridge
