@@ -71,8 +71,7 @@ export { Channel, go, pipeline, fanOut, fanIn,
 export { config }                                         from './js/ext/config.js';
 export { Runner }                                         from './js/ext/runner.js';
 export { VFS }                                            from './js/ext/vfs.js';
-export { sw,
-    send, post, syncVFS, clearVFS }                       from './js/ext/sw.js';
+export { sw, send, post, syncVFS, clearVFS }                       from './js/ext/sw.js';
 export { OjaSSE, OjaSocket }                              from './js/ext/socket.js';
 export { OjaWorker }                                      from './js/ext/worker.js';
 export { OjaWasm }                                        from './js/ext/wasm.js';
