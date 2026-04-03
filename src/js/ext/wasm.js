@@ -113,7 +113,7 @@ export class OjaWasm {
         debug.log('wasm', 'created', { name: this._name, worker: this._useWorker });
     }
 
-    // ─── Loading ──────────────────────────────────────────────────────────────
+    // Loading
 
     /**
      * Load and instantiate the WASM module.
@@ -255,7 +255,7 @@ export class OjaWasm {
         return this;
     }
 
-    // ─── Calling exports ──────────────────────────────────────────────────────
+    // Calling exports
 
     /**
      * Call a WASM exported function by name.
@@ -294,7 +294,7 @@ export class OjaWasm {
         return Promise.resolve(this._exports[fn](...args));
     }
 
-    // ─── Memory helpers ───────────────────────────────────────────────────────
+    // Memory helpers
 
     /**
      * Read a UTF-8 string from WASM linear memory.
@@ -352,7 +352,7 @@ export class OjaWasm {
         return ptr;
     }
 
-    // ─── State + cleanup ──────────────────────────────────────────────────────
+    // State + cleanup
 
     /** Direct access to all WASM exports */
     get exports() {

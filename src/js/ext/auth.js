@@ -75,9 +75,7 @@ import { emit, listen } from '../core/events.js';
 const _tokenStore = new Store('oja:auth',      { encrypt: true, prefer: 'session' });
 const _metaStore  = new Store('oja:auth:meta');  // non-sensitive: exp, payload, intendedPath
 
-
 const _levels = new Map(); // name → () => bool
-
 
 const _hooks = new Map([
     ['start', []],
@@ -97,7 +95,6 @@ let _refreshSubscribers = [];
 
 const REFRESH_THRESHOLD = 5 * 60 * 1000;
 const REFRESH_BUFFER = 30 * 1000;
-
 
 export const auth = {
 
@@ -197,7 +194,7 @@ export const auth = {
         return value !== undefined ? user[claim] === value : claim in user;
     },
 
-    // ─── Session ──────────────────────────────────────────────────────────────
+    // Session
 
     session: {
 
@@ -306,13 +303,13 @@ export const auth = {
          * Checks that a session was started (exp exists in meta) and has not expired.
          */
         // isActive() now handles three cases:
-        //   1. JWT with exp claim    → check timestamp
-        //   2. 'no-expiry' sentinel  → true while token is stored
-        //   3. No exp at all         → false (original behaviour)
+        // JWT with exp claim    → check timestamp
+        // 'no-expiry' sentinel  → true while token is stored
+        // No exp at all         → false (original behaviour)
         isActive() {
             const exp = _metaStore.get('exp');
             if (!exp) return false;
-            if (exp === 'no-expiry') return true; // A-05: explicit no-expiry
+            if (exp === 'no-expiry') return true; // explicit no-expiry
             if (Date.now() >= exp) return false;
             return true;
         },
@@ -355,7 +352,7 @@ export const auth = {
             _metaStore.clear('intendedParams');
         },
 
-        // ── Lifecycle hooks ────────────────────────────────────────────────────
+        // Lifecycle hooks
         /**
          * Called after session.start() — use to set api token, navigate.
          *
@@ -472,7 +469,6 @@ export const auth = {
     }
 };
 
-
 function _addHook(type, fn) {
     if (!_hooks.has(type)) return;
     _hooks.get(type).push(fn);
@@ -488,7 +484,6 @@ function _runHooks(type, ...args) {
         }
     }
 }
-
 
 function _setTimer(type, fn, delay) {
     _clearTimer(type);
@@ -512,7 +507,6 @@ function _stopAllTimers() {
         _clearTimer(type);
     }
 }
-
 
 function _startExpiryWatch(expMs) {
     const now = Date.now();
@@ -575,7 +569,6 @@ async function _handleRefresh() {
     }
 }
 
-
 function _decodeJWT(token) {
     if (!token || typeof token !== 'string') return null;
     try {
@@ -594,7 +587,6 @@ function _decodeJWT(token) {
         return null;
     }
 }
-
 
 listen('api:unauthorized', async () => {
     if (!auth.session.isActive()) return;

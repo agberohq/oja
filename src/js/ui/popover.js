@@ -146,7 +146,7 @@ export const popover = {
         }, true); // capture phase so closest() works correctly
     },
 
-    // ─── Math ─────────────────────────────────────────────────────────────
+    // Math
 
     _updatePosition(trigger, floater, requestedPos) {
         const tRect = trigger.getBoundingClientRect();

@@ -303,7 +303,6 @@ function _resolveTarget(target) {
     return null;
 }
 
-
 class _Out {
     constructor(type, payload, options = {}) {
         this.type     = type;
@@ -341,7 +340,6 @@ class _Out {
         return value instanceof _Out;
     }
 }
-
 
 class _HtmlOut extends _Out {
     constructor(html, options = {}) {
@@ -659,7 +657,6 @@ class _EmptyOut extends _Out {
     getText() { return ''; }
 }
 
-
 class _IfOut extends _Out {
     constructor(conditionFn, thenOut, elseOut, options = {}) {
         super('if', conditionFn, options);
@@ -773,7 +770,6 @@ class _ListOut extends _Out {
     }
 }
 
-
 function _buildSkeletonHtml(type, opts) {
     const lines = opts.lines || 3;
     let html = '';
@@ -801,7 +797,6 @@ function _buildSkeletonHtml(type, opts) {
 
     return `<div class="oja-skeleton-wrapper" aria-busy="true">${html}</div>`;
 }
-
 
 class OutTarget {
     constructor(target, options = {}) {
@@ -1051,7 +1046,7 @@ class OutTarget {
         return this;
     }
 
-    // DOM helpers ───────────────────────────────────────────────────────
+    // DOM helpers
     // Pure element manipulation — no rendering involved. All return this.
 
     /** Show the element (restore display). */
@@ -1143,15 +1138,15 @@ class OutTarget {
 
         const doRender = async () => {
             try {
-                // 1. Animate old content out (only if we aren't replacing it with a skeleton right now)
+                // Animate old content out (only if we aren't replacing it with a skeleton right now)
                 if (this._animation && el.firstChild && !this._skeleton) await this._applyAnimation(el, 'out');
 
-                // 2. Inject skeleton synchronously BEFORE awaiting the Out render
+                // Inject skeleton synchronously BEFORE awaiting the Out render
                 if (this._skeleton) {
                     el.innerHTML = _buildSkeletonHtml(this._skeleton.type, this._skeleton.options);
                 }
 
-                // 3. Render new content (e.g. fetches happen inside here)
+                // Render new content (e.g. fetches happen inside here)
                 // honour render mode
                 if (this._renderMode === 'append' || this._renderMode === 'prepend') {
                     const tmp = document.createElement('div');
@@ -1165,7 +1160,7 @@ class OutTarget {
                     await out.render(el, this._context);
                 }
 
-                // 4. Animate new content in
+                // Animate new content in
                 if (this._animation) await this._applyAnimation(el, 'in');
             } catch (err) {
                 if (this._errorHandler) {
@@ -1273,7 +1268,6 @@ function createTagHandler(target) {
     };
 }
 
-
 class _SegmentOut extends _Out {
     constructor(name, data = {}) {
         super('segment', name);
@@ -1284,7 +1278,6 @@ class _SegmentOut extends _Out {
         await _segmentRender(container, this._payload, this._data, context);
     }
 }
-
 
 export const Out = {
 

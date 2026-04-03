@@ -43,14 +43,12 @@
  *   App code can call it too — useful for tracing page logic.
  */
 
-
 let _enabled    = new Set();   // active namespace patterns
 let _all        = false;       // '*' wildcard
 let _timeline   = [];          // { ts, ns, action, data, ms, warn }
 const MAX_ENTRIES = 1000;
 
 const SLOW_THRESHOLD_MS = 200;
-
 
 export const debug = {
 
@@ -80,7 +78,7 @@ export const debug = {
         return _all || _enabled.has(ns);
     },
 
-    // ─── Logging ──────────────────────────────────────────────────────────────
+    // Logging
 
     /**
      * Log a framework action.
@@ -109,7 +107,7 @@ export const debug = {
         };
     },
 
-    // ─── Timeline ─────────────────────────────────────────────────────────────
+    // Timeline
 
     /**
      * Print the full timeline to the console in a readable format.
@@ -166,7 +164,6 @@ export const debug = {
         return [..._timeline];
     }
 };
-
 
 function _record(ns, action, data, warn) {
     const now = new Date();

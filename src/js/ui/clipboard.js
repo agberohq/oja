@@ -97,14 +97,12 @@
  *   });
  */
 
-
 // Check if Clipboard API is supported
 const HAS_CLIPBOARD = !!(navigator.clipboard?.write);
 const HAS_PICKER = !!(navigator.clipboard?.read);
 
 // Fallback for older browsers
 let _fallbackTextarea    = null;
-
 
 export const clipboard = {
     /**
@@ -473,7 +471,7 @@ export const clipboard = {
         return () => el.removeEventListener('cut', cutHandler);
     },
 
-    // ─── Fallback methods ────────────────────────────────────────────────────
+    // Fallback methods
 
     _fallbackWrite(text) {
         try {
@@ -519,7 +517,7 @@ export const clipboard = {
         return div.textContent || div.innerText || '';
     },
 
-    // ─── Component copy / paste ───────────────────────────────────────────────
+    // Component copy / paste
     //
     // Copy a mounted Oja component (its HTML snapshot + data snapshot) to an
     // internal clipboard. Paste creates a new instance by calling onPaste with

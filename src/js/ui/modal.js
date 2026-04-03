@@ -65,7 +65,6 @@
 import { emit, listen, on } from '../core/events.js';
 import { Out }              from '../core/out.js';
 
-
 const FOCUSABLE_SELECTORS = [
     'button:not([disabled])',
     '[href]:not([disabled])',
@@ -149,12 +148,10 @@ function _getAllFocusable(container) {
         .filter(el => el.offsetParent !== null);
 }
 
-
 const _stack = [];
 const _hooks = new Map();
 const _closeGuards = new Map();
 let   _backdrop = null;
-
 
 // Hidden sibling tracking for aria isolation
 const _hiddenSiblings = [];
@@ -195,11 +192,9 @@ function _announce(message) {
     announcer.textContent = message;
 }
 
-
 // Tracks any in-flight confirm promise resolver keyed by modal ID.
 // A second call before the first resolves dismisses the previous one gracefully.
 const _pendingConfirms = new Map();
-
 
 // Used by modal.open() to render a body Out and return its completion promise.
 class _ModalOutTarget {
@@ -357,14 +352,14 @@ export const modal = {
         return this;
     },
 
-    // ─── State ────────────────────────────────────────────────────────────────
+    // State
 
     current() { return _stack.length > 0 ? _stack[_stack.length - 1].id : null; },
     stack()   { return _stack.map(({ id, data }) => ({ id, data })); },
     isOpen(id){ return _stack.some(entry => entry.id === id); },
     depth()   { return _stack.length; },
 
-    // ─── Lifecycle hooks ──────────────────────────────────────────────────────
+    // Lifecycle hooks
 
     /**
      * Register a handler called when a modal opens.
@@ -390,7 +385,7 @@ export const modal = {
         return () => _hooks.get(id)?.close.delete(handler);
     },
 
-    // ─── Backdrop ─────────────────────────────────────────────────────────────
+    // Backdrop
 
     /**
      * Register an element as the backdrop.
@@ -407,7 +402,7 @@ export const modal = {
         }
     },
 
-    // ─── Confirm helper ───────────────────────────────────────────────────────
+    // Confirm helper
 
     /**
      * Programmatic confirm dialog.
@@ -470,7 +465,7 @@ export const modal = {
         });
     },
 
-    // ─── Prompt helper ───────────────────────────────────────────────────────
+    // Prompt helper
 
     /**
      * Programmatic input prompt dialog.
@@ -561,7 +556,7 @@ export const modal = {
         });
     },
 
-    // ─── Before-close guard ───────────────────────────────────────────────────
+    // Before-close guard
 
     /**
      * Register a guard function called before a modal closes.
@@ -583,7 +578,7 @@ export const modal = {
         return () => _closeGuards.get(id)?.delete(guardFn);
     },
 
-    // ─── Accessibility utilities ──────────────────────────────────────────────
+    // Accessibility utilities
 
     getFocusable(id) {
         const el = document.getElementById(id);
@@ -598,7 +593,6 @@ export const modal = {
     },
 };
 
-
 function _esc(str) {
     return String(str)
         .replace(/&/g, '&amp;')
@@ -606,7 +600,6 @@ function _esc(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 }
-
 
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || _stack.length === 0) return;
@@ -630,7 +623,6 @@ document.addEventListener('DOMContentLoaded', () => {
         || document.getElementById('modalBackdrop');
     if (backdrop && !_backdrop) modal.setBackdrop(backdrop);
 });
-
 
 function _showBackdrop() {
     if (!_backdrop) {

@@ -81,7 +81,6 @@
 
 import { debug } from '../utils/debug.js';
 
-
 export class Channel {
     #buffer    = [];
     #closed    = false;
@@ -150,7 +149,7 @@ export class Channel {
         });
     }
 
-    // ─── Core API ─────────────────────────────────────────────────────────────
+    // Core API
 
     /**
      * Send a value — like ch <- value in Go.
@@ -269,14 +268,14 @@ export class Channel {
         }
     }
 
-    // ─── State ────────────────────────────────────────────────────────────────
+    // State
 
     get closed()  { return this.#closed; }
     get length()  { return this.#buffer.length; }
     get mode()    { return this.#mode; }
     get waiting() { return this.#receivers.length; }
 
-    // ─── Worker pool ──────────────────────────────────────────────────────────
+    // Worker pool
 
     #supportsWorkers() {
         return typeof Worker !== 'undefined';
@@ -417,7 +416,6 @@ export class Channel {
         }
     }
 }
-
 
 /**
  * go — run an async function as a concurrent microtask.

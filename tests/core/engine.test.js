@@ -10,7 +10,6 @@ import {
 } from '../../src/js/core/engine.js';
 import { Store } from '../../src/js/core/store.js';
 
-
 function makeEl(html = '') {
     const div = document.createElement('div');
     div.innerHTML = html;
@@ -21,7 +20,6 @@ function makeEl(html = '') {
 function cleanup(...els) {
     for (const el of els) el?.remove();
 }
-
 
 describe('morph()', () => {
     let el;
@@ -97,7 +95,6 @@ describe('morph()', () => {
     });
 });
 
-
 describe('list()', () => {
     let el;
     afterEach(() => cleanup(el));
@@ -172,7 +169,7 @@ describe('list()', () => {
         warnSpy.mockRestore();
     });
 
-    // ── Lifecycle callbacks ──────────────────────────────────────────────────
+    // Lifecycle callbacks
 
     it('onMount fires once on first render', () => {
         el = makeEl();
@@ -328,7 +325,6 @@ describe('list()', () => {
     });
 });
 
-
 describe('listAsync()', () => {
     let el;
     afterEach(() => cleanup(el));
@@ -396,7 +392,6 @@ describe('listAsync()', () => {
     });
 });
 
-
 describe('useStore()', () => {
     afterEach(() => useStore(null));   // reset to lazy fallback
 
@@ -411,7 +406,6 @@ describe('useStore()', () => {
         appStore.clearAll();
     });
 });
-
 
 describe('bindText()', () => {
     let el;
@@ -437,7 +431,6 @@ describe('bindText()', () => {
         useStore(null);
     });
 });
-
 
 describe('bindToggle()', () => {
     let el;

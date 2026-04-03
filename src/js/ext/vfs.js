@@ -70,7 +70,6 @@ import { Runner } from './runner.js';
 import { state }  from '../core/reactive.js';
 import { Out }    from '../core/out.js';
 
-
 const MIME = {
     '.html' : 'text/html',
     '.js'   : 'text/javascript',
@@ -102,7 +101,7 @@ const WORKER_FN = function(self) {
     const pollTimers      = new Map();     // base → timer id
     const conflictWaiters = new Map();     // path → resolve fn — awaited during sync
 
-    // ── IndexedDB helpers ──────────────────────────────────────────────────
+    // IndexedDB helpers
 
     function openDB(name) {
         return new Promise((resolve, reject) => {
@@ -149,7 +148,7 @@ const WORKER_FN = function(self) {
         return tx('readwrite', store => store.clear());
     }
 
-    // ── MIME (worker copy) ─────────────────────────────────────────────────
+    // MIME (worker copy)
 
     const MIME_MAP = {
         '.html':'.html','.js':'.js','.css':'.css','.json':'.json',
@@ -163,7 +162,7 @@ const WORKER_FN = function(self) {
         return ['.png','.jpg','.jpeg','.gif','.webp','.wasm','.ico','.pdf'].includes(ext);
     }
 
-    // ── Fetch helpers ──────────────────────────────────────────────────────
+    // Fetch helpers
 
     async function fetchFile(url) {
         const res = await fetch(url);
@@ -209,7 +208,7 @@ const WORKER_FN = function(self) {
         throw new Error(`No manifest found at ${base} (tried: ${candidates.join(', ')})`);
     }
 
-    // ── Mount ──────────────────────────────────────────────────────────────
+    // Mount
 
     async function doMount(base, opts) {
         const manifestName = opts.manifest || null;
@@ -246,7 +245,7 @@ const WORKER_FN = function(self) {
         return { base, files: files.length, fetched, failed };
     }
 
-    // ── Sync (poll) ────────────────────────────────────────────────────────
+    // Sync (poll)
 
     async function doSync(base, opts) {
         const manifestName = opts.manifest || null;
@@ -303,7 +302,7 @@ const WORKER_FN = function(self) {
         return { base, updated, conflicts };
     }
 
-    // ── Message handlers ───────────────────────────────────────────────────
+    // Message handlers
 
     self.on('init', async ({ name }) => {
         ns = name;
@@ -458,7 +457,6 @@ const WORKER_FN = function(self) {
     });
 };
 
-
 export class VFS {
     #runner         = null;
     #changeWatchers = [];   // [{ prefix, fn }]
@@ -552,7 +550,7 @@ export class VFS {
         this.#readyPromise.catch(() => {});
     }
 
-    // ─── Core operations ──────────────────────────────────────────────────────
+    // Core operations
 
     /**
      * Write a file. Fire and forget — returns immediately.
@@ -668,7 +666,7 @@ export class VFS {
         this.#setFileCount(0);
     }
 
-    // ─── Remote mounting ──────────────────────────────────────────────────────
+    // Remote mounting
 
     /**
      * Mount files from a remote URL into the VFS.
@@ -731,7 +729,7 @@ export class VFS {
         });
     }
 
-    // ─── Out integration ──────────────────────────────────────────────────────
+    // Out integration
 
     /**
      * Produce an Out scoped to this VFS instance.
@@ -769,7 +767,7 @@ export class VFS {
         return this.component(path, data, lists, options);
     }
 
-    // ─── Blob URL map — for iframe rendering ─────────────────────────────────
+    // Blob URL map — for iframe rendering
 
     /**
      * Build a { path: blobUrl } map for all files.
@@ -798,7 +796,7 @@ export class VFS {
         Object.values(map).forEach(url => URL.revokeObjectURL(url));
     }
 
-    // ─── Change watchers ──────────────────────────────────────────────────────
+    // Change watchers
 
     /**
      * Watch for file changes under a path prefix.
@@ -829,7 +827,7 @@ export class VFS {
         return this.#runner.on(event, fn);
     }
 
-    // ─── Reactive file count ──────────────────────────────────────────────────
+    // Reactive file count
 
     /**
      * Reactive signal — current number of files in the VFS.
@@ -841,7 +839,7 @@ export class VFS {
      */
     get count() { return this.#fileCount; }
 
-    // ─── Utilities ────────────────────────────────────────────────────────────
+    // Utilities
 
     /**
      * Resolves when the VFS worker is initialised and ready.
@@ -910,7 +908,7 @@ export class VFS {
         this.#changeWatchers = [];
     }
 
-    // ─── Internal ─────────────────────────────────────────────────────────────
+    // Internal
 
     #onChanged({ path, content, deleted }) {
         if (!path) return;
@@ -971,6 +969,6 @@ export class VFS {
         return path.startsWith('/') ? path.slice(1) : path;
     }
 
-    // ─── Storage management ────────────────────────────────────────────
+    // Storage management
 
 }

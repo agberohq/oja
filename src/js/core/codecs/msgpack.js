@@ -67,7 +67,7 @@ export class MsgPackCodec {
     get binaryType()  { return 'binary'; }
     get name()        { return 'msgpack'; }
 
-    // ─── Lazy load ────────────────────────────────────────────────────────────
+    // Lazy load
 
     async _ensure() {
         if (this._lib) return this._lib;
@@ -80,7 +80,7 @@ export class MsgPackCodec {
         return this._ready;
     }
 
-    // ─── Codec interface ──────────────────────────────────────────────────────
+    // Codec interface
 
     /**
      * Encode data to a Uint8Array.

@@ -10,7 +10,6 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-
 describe('B-01: store.clearAll() — namespace isolation', () => {
     it('clears only keys belonging to its own namespace', () => {
         const a = new Store('ns-a', { prefer: 'local' });
@@ -20,7 +19,7 @@ describe('B-01: store.clearAll() — namespace isolation', () => {
         a.clearAll();
         expect(a.get('x')).toBeNull();
         expect(a.get('y')).toBeNull();
-        expect(b.get('z')).toBe(99); // B-01: must survive
+        expect(b.get('z')).toBe(99); // must survive
     });
 
     it('does NOT wipe third-party localStorage keys', () => {
@@ -39,7 +38,6 @@ describe('B-01: store.clearAll() — namespace isolation', () => {
         expect(store.get('b')).toBeNull();
     });
 });
-
 
 describe('F-21: store.getOrSet()', () => {
     it('returns existing value without calling factory', () => {
@@ -63,7 +61,6 @@ describe('F-21: store.getOrSet()', () => {
         expect(store.get('x')).toBe('static');
     });
 });
-
 
 describe('F-22: store.onChange("*") wildcard', () => {
     it('fires for any key change with (key, newVal, oldVal)', () => {
@@ -91,7 +88,6 @@ describe('F-22: store.onChange("*") wildcard', () => {
         expect(fn).not.toHaveBeenCalled();
     });
 });
-
 
 describe('store.size', () => {
     it('returns 0 for an empty store', () => {
@@ -121,7 +117,6 @@ describe('store.size', () => {
     });
 });
 
-
 describe('store.ttl()', () => {
     it('removes the key after the timeout', async () => {
         vi.useFakeTimers();
@@ -147,7 +142,6 @@ describe('store.ttl()', () => {
         expect(fn).toHaveBeenCalledWith(null, 'hi');
     });
 });
-
 
 describe('store.onChange() unsub', () => {
     it('returns a function that removes the specific listener', () => {

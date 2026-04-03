@@ -73,8 +73,8 @@ export {
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
     onResize, onMutation,
-    onlyOnce,                    // F-20: was exported from events.js but missing from barrel
-    onClickOutside, onHover, onLongPress,  // F-17/18/19
+    onlyOnce,                    // was exported from events.js but missing from barrel
+    onClickOutside, onHover, onLongPress,  //
 }                                                         from './js/core/events.js';
 
 export {

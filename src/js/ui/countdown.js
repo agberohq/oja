@@ -45,7 +45,6 @@
  *   ms ≤ 0       → 'Expired'
  */
 
-
 function _resolve(target) {
     if (!target) return null;
     if (target instanceof Element) return target;
@@ -62,7 +61,6 @@ function _defaultFormat(ms) {
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
 }
-
 
 export const countdown = {
 
@@ -207,7 +205,7 @@ export const countdown = {
         };
     },
 
-    // ─── Day-level helpers ────────────────────────────────────────────────────
+    // Day-level helpers
 
     /**
      * Return the number of whole days until an ISO date or ms timestamp expires.

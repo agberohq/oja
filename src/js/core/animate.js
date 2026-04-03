@@ -99,7 +99,6 @@
  *   });
  */
 
-
 /**
  * @typedef {Object} AnimationOptions
  * @property {number} duration - Duration in ms (default: 400)
@@ -107,7 +106,6 @@
  * @property {number} delay - Delay in ms (default: 0)
  * @property {boolean} fill - Keep final state (default: true)
  */
-
 
 // Keyed by element so animate.stop(el) can cancel all active animations on it.
 const _animations = new Map(); // element -> Set<Animation>
@@ -160,7 +158,6 @@ const EASINGS = {
         return Math.pow(2, -10 * t) * Math.sin((t - s) * (2 * Math.PI) / p) + 1;
     },
 };
-
 
 /**
  * Read current transform-related values from a computed style.
@@ -249,7 +246,6 @@ function _buildTransformString(transformValues) {
 
     return parts.join(' ') || 'none';
 }
-
 
 class Animation {
     constructor(element, properties, options = {}) {
@@ -396,7 +392,7 @@ class Animation {
                 (prop === 'scale' || prop === 'scaleX' || prop === 'scaleY') ? 1 : 0
             );
 
-            // ── CSS custom properties ──────────────────────────────────────
+            // CSS custom properties
             if (prop.startsWith('--')) {
                 if (typeof end === 'number') {
                     const value = start + (end - start) * t;
@@ -405,7 +401,7 @@ class Animation {
                 continue;
             }
 
-            // ── Opacity ────────────────────────────────────────────────────
+            // Opacity
             if (prop === 'opacity') {
                 this.element.style.opacity = start + (end - start) * t;
                 continue;
@@ -425,7 +421,7 @@ class Animation {
                 continue;
             }
 
-            // ── Numeric CSS properties ─────────────────────────────────────
+            // Numeric CSS properties
             if (typeof start === 'number' && typeof end === 'number') {
                 const value = start + (end - start) * t;
                 const unit = _UNITLESS_PROPS.has(prop) ? '' : 'px';
@@ -433,7 +429,7 @@ class Animation {
                 continue;
             }
 
-            // ── Non-interpolatable — snap to end value ─────────────────────
+            // Non-interpolatable — snap to end value
             this.element.style[prop] = end;
         }
 
@@ -491,7 +487,6 @@ class Animation {
     }
 }
 
-
 /**
  * Register an animation in the global map and start it.
  *
@@ -513,7 +508,6 @@ function _createAndPlay(element, properties, options) {
     anim.play();
     return anim;
 }
-
 
 export const animate = {
     /**
@@ -856,8 +850,7 @@ export const animate = {
      */
     easing: EASINGS,
 
-
-    // ─── collapse / expand ──────────────────────────────────────────────
+    // collapse / expand
 
     /**
      * F-38: Animate an element's height to 0 (collapse).
@@ -932,7 +925,7 @@ export const animate = {
         });
     },
 
-    // ─── F-39: countUp ────────────────────────────────────────────────────────
+    // countUp
 
     /**
      * Animate a number from `from` to `to` inside an element.
@@ -977,7 +970,7 @@ export const animate = {
         return { stop: () => cancelAnimationFrame(rafId) };
     },
 
-    // ─── typewriter ─────────────────────────────────────────────────────
+    // typewriter
 
     /**
      * Type text into an element character by character.
@@ -1019,7 +1012,7 @@ export const animate = {
         };
     },
 
-    // ─── F-41: shake ──────────────────────────────────────────────────────────
+    // shake
 
     /**
      * Quick horizontal shake for error feedback.

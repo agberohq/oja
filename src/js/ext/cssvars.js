@@ -100,11 +100,9 @@
  *   cssVars.reset();
  */
 
-
 const _observers = new Map(); // varName -> Set of observers
 const _globalObservers = new Set(); // observers that watch all changes
 const _defaults = new Map(); // varName -> default value
-
 
 export const cssVars = {
     /**
@@ -363,7 +361,7 @@ export const cssVars = {
         return value !== null;
     },
 
-    // ─── Internal ────────────────────────────────────────────────────────────
+    // Internal
 
     _notify(changes) {
         // Notify per-variable observers

@@ -66,7 +66,7 @@ export function pagination(opts = {}) {
         onPageChange          = null,
     } = opts;
 
-    // ── Reactive state (three primitives only) ─────────────────────────────────
+    // Reactive state (three primitives only)
     // totalPages, startIdx, endIdx are pure computed functions — no derived(),
     // no async scheduling, always immediately consistent with state.
 
@@ -79,7 +79,7 @@ export function pagination(opts = {}) {
     const startIdx   = () => (page() - 1) * pageSize();
     const endIdx     = () => Math.min(startIdx() + pageSize(), total());
 
-    // ── Repaint registry — mounts can register for immediate sync repaints ──────
+    // Repaint registry — mounts can register for immediate sync repaints
     const _painters = new Set();
 
     // Safe page setter — clamps to [1, totalPages], triggers immediate repaint
@@ -103,7 +103,7 @@ export function pagination(opts = {}) {
         onPageChange?.(page(), ns);
     }
 
-    // ── Page number list with ellipsis ─────────────────────────────────────────
+    // Page number list with ellipsis
 
     function pageList() {
         const tp      = totalPages();
@@ -124,7 +124,7 @@ export function pagination(opts = {}) {
         return nums;
     }
 
-    // ── Render — returns HTML string, no side-effects ──────────────────────────
+    // Render — returns HTML string, no side-effects
 
     function render() {
         const cur = page();
@@ -173,7 +173,7 @@ export function pagination(opts = {}) {
             </div>`;
     }
 
-    // ── mount — attach to DOM, delegate events once, re-render reactively ──────
+    // mount — attach to DOM, delegate events once, re-render reactively
 
     /**
      * Mount pagination controls into a container element.
@@ -229,7 +229,7 @@ export function pagination(opts = {}) {
         };
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────────
+    // Public API
 
     return {
         // State reads

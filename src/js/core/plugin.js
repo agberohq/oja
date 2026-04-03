@@ -264,7 +264,6 @@ import { adapter }           from '../utils/adapter.js';
 import { auth }              from '../ext/auth.js';
 import { Out }               from './out.js';
 
-
 // Named socket codecs — { name → codec instance }
 const _codecs = new Map();
 
@@ -274,10 +273,9 @@ const _renderers = new Map();
 // The router instance, set via plugin.router()
 let _router = null;
 
-
 export const plugin = {
 
-    // ─── Animation hooks ─────────────────────────────────────────────────────
+    // Animation hooks
 
     /**
      * Override Oja's default CSS class transitions with a custom animation library.
@@ -316,7 +314,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── UI widgets ──────────────────────────────────────────────────────────
+    // UI widgets
 
     /**
      * Register a UI widget initialiser for a data-ui attribute value.
@@ -346,7 +344,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── Third-party library registry ────────────────────────────────────────
+    // Third-party library registry
 
     /**
      * Register a third-party library so any module can access it via
@@ -373,7 +371,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── Router middleware ────────────────────────────────────────────────────
+    // Router middleware
 
     /**
      * Provide a Router instance so plugin.middleware() has somewhere to register.
@@ -441,7 +439,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── API hooks ────────────────────────────────────────────────────────────
+    // API hooks
 
     /**
      * Wire hooks into an Api instance.
@@ -499,7 +497,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── Auth hooks ───────────────────────────────────────────────────────────
+    // Auth hooks
 
     /**
      * Wire into the auth session lifecycle.
@@ -552,7 +550,7 @@ export const plugin = {
         return this;
     },
 
-    // ─── Socket codecs ────────────────────────────────────────────────────────
+    // Socket codecs
 
     /**
      * Register a named socket codec.
@@ -602,7 +600,7 @@ export const plugin = {
         return _codecs.get(name) ?? null;
     },
 
-    // ─── Named renderers ──────────────────────────────────────────────────────
+    // Named renderers
 
     /**
      * Register a named renderer — a reusable Out.fn that can be retrieved by
@@ -668,7 +666,7 @@ export const plugin = {
         return Out.fn(fn);
     },
 
-    // ─── Introspection ────────────────────────────────────────────────────────
+    // Introspection
 
     /**
      * List everything that has been registered through plugin.
@@ -676,7 +674,7 @@ export const plugin = {
      *
      *   console.table(plugin.inspect());
      *   // → { codecs: ['msgpack'], renderers: ['sparkline', 'avatar'],
-     *   //     router: true, libs: ['gsap', 'd3', 'pixi'] }
+     *   // router: true, libs: ['gsap', 'd3', 'pixi'] }
      */
     inspect() {
         return {

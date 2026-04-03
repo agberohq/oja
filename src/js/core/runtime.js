@@ -99,7 +99,7 @@ const VALID_ENVS = new Set(['development', 'production', 'test']);
 
 function _createRuntime() {
 
-    // ── Internal state ──────────────────────────────────────────────────────
+    // Internal state
 
     let _env       = 'development';
     let _sandboxed = false;
@@ -113,7 +113,7 @@ function _createRuntime() {
     const _busUnsubs     = new Map(); // name → Map<fn, unsub> for runtime.off()
     let   _domReady      = false;
 
-    // ── DOM ready bootstrap ─────────────────────────────────────────────────
+    // DOM ready bootstrap
 
     function _bootDOMReady() {
         _domReady = true;
@@ -131,7 +131,7 @@ function _createRuntime() {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // Helpers
 
     function _subscribe(list, fn) {
         if (typeof fn !== 'function') {
@@ -144,11 +144,11 @@ function _createRuntime() {
         };
     }
 
-    // ── Public API ──────────────────────────────────────────────────────────
+    // Public API
 
     const _runtime = {
 
-        // ─── Security ──────────────────────────────────────────────────────
+        // Security
 
         /**
          * Enable or disable sandbox mode.
@@ -206,7 +206,7 @@ function _createRuntime() {
             }
         },
 
-        // ─── Hooks ─────────────────────────────────────────────────────────
+        // Hooks
 
         /**
          * Register a fetch interceptor.
@@ -240,7 +240,7 @@ function _createRuntime() {
             return _subscribe(_navigateHooks, fn);
         },
 
-        // ─── Definitions ───────────────────────────────────────────────────
+        // Definitions
 
         /**
          * Store a named value. Value can be anything, including a function.
@@ -278,7 +278,7 @@ function _createRuntime() {
             return this;
         },
 
-        // ─── Unified event bus ──────────────────────────────────────────────
+        // Unified event bus
 
         /**
          * Subscribe to any Oja event on the unified bus.
@@ -335,7 +335,7 @@ function _createRuntime() {
             return this;
         },
 
-        // ─── Lifecycle ─────────────────────────────────────────────────────
+        // Lifecycle
 
         /**
          * Queue a function to run after DOMContentLoaded.
@@ -403,7 +403,7 @@ function _createRuntime() {
             }
         },
 
-        // ─── Internal — called by other oja modules, not user code ─────────
+        // Internal — called by other oja modules, not user code
 
         /**
          * Run all registered fetch hooks as a pipeline.

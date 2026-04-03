@@ -111,7 +111,6 @@ onmessage = async (e) => {
 // User-provided worker function is injected below
 `;
 
-
 export class Runner {
     #worker   = null;
     #handlers = new Map();   // type → Set of listener functions (main thread)
@@ -145,7 +144,7 @@ export class Runner {
         };
     }
 
-    // ─── Public API ───────────────────────────────────────────────────────────
+    // Public API
 
     /**
      * Fire and forget — send a message to the worker, do not wait.
@@ -218,7 +217,7 @@ export class Runner {
 
     get closed() { return this.#closed; }
 
-    // ─── Internal ─────────────────────────────────────────────────────────────
+    // Internal
 
     #route(msg) {
         const { _type, _id, type, data, error, message } = msg;

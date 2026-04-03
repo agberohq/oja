@@ -105,7 +105,6 @@ import { emit as _emit }  from './events.js';
 
 const _store = new Store('oja:router');
 
-
 const _prefetchQueue = new Set();
 const _prefetchCache = new Map();  // url -> { promise, timestamp, priority }
 const _prefetchLinks = new WeakMap(); // element -> { url, timeout }
@@ -122,7 +121,6 @@ const PREFETCH_DEFAULTS = {
 let _prefetchConfig = { ...PREFETCH_DEFAULTS };
 let _prefetchActive = 0;
 
-
 class _RouteNode {
     constructor(segment = '') {
         this.segment    = segment;
@@ -134,7 +132,6 @@ class _RouteNode {
         this.prefetch   = false;
     }
 }
-
 
 export class Router {
     /**
@@ -161,15 +158,15 @@ export class Router {
         this._beforeEach       = [];
         this._afterEach        = [];
         this._prefetchEnabled  = prefetch;
-        this._namedRoutes      = new Map(); // F-31: name → pattern
-        this._urlHandler       = null;      // L-03: stored for destroy()
+        this._namedRoutes      = new Map(); // name → pattern
+        this._urlHandler       = null;      // stored for destroy()
 
         // Register VFS with Out so all component fetches check local store first.
         // Can also be set independently via Out.vfsUse(vfs) before router.start().
         if (vfs) Out.vfsUse(vfs);
     }
 
-    // ─── Prefetching ──────────────────────────────────────────────────────────
+    // Prefetching
 
     /**
      * Configure prefetching behaviour.
@@ -284,7 +281,7 @@ export class Router {
         return path.replace(/^#/, '').split('?')[0] || '/';
     }
 
-    // ─── Middleware ───────────────────────────────────────────────────────────
+    // Middleware
 
     Use(...middlewares) {
         for (const mw of middlewares.flat()) {
@@ -293,7 +290,7 @@ export class Router {
         return this;
     }
 
-    // ─── Global hooks ─────────────────────────────────────────────────────────
+    // Global hooks
 
     /** Called before every navigation — fn(ctx) */
     beforeEach(fn) { this._beforeEach.push(fn); return this; }
@@ -301,7 +298,7 @@ export class Router {
     /** Called after every navigation — fn(ctx) */
     afterEach(fn)  { this._afterEach.push(fn);  return this; }
 
-    // ─── Route registration ───────────────────────────────────────────────────
+    // Route registration
 
     /**
      * Register a GET route.
@@ -322,7 +319,7 @@ export class Router {
     NotFound(responder) { this._notFound       = responder; return this; }
     Error(responder)    { this._errorResponder = responder; return this; }
 
-    // ─── Grouping ─────────────────────────────────────────────────────────────
+    // Grouping
 
     /**
      * Create a scoped sub-router at a path prefix.
@@ -352,7 +349,7 @@ export class Router {
         return this;
     }
 
-    // ─── Query string ─────────────────────────────────────────────────────────
+    // Query string
 
     /**
      * Update URL query params without triggering a full navigation.
@@ -372,7 +369,7 @@ export class Router {
         return query;
     }
 
-    // ─── Start ────────────────────────────────────────────────────────────────
+    // Start
 
     async start(defaultPath = '/') {
         if (this._started) return;
@@ -410,7 +407,7 @@ export class Router {
         await this.navigate(path || defaultPath, { query });
     }
 
-    // ─── Navigation ───────────────────────────────────────────────────────────
+    // Navigation
 
     /**
      * Navigate to a path — updates URL, runs middleware chain, renders Out.
@@ -674,7 +671,7 @@ export class Router {
     }
     params()  { return { ...this._params }; }
 
-    // ─── URL helpers ──────────────────────────────────────────────────────────
+    // URL helpers
 
     _parseURL() {
         if (this._mode === 'hash') {
@@ -786,9 +783,9 @@ export class Router {
 // A lightweight proxy over a parent Router that scopes route registration to a
 // path prefix. Does NOT create a new Router instance — all navigation, named
 // routes, and lifecycle stay on the parent. This means:
-//   - group.name() registers on the parent → visible to parent.navigate()
-//   - group.Use() adds to the group's own middleware stack, not the parent's
-//   - group.Get('/foo') registers at prefix + '/foo' in the parent's trie
+// group.name() registers on the parent → visible to parent.navigate()
+// group.Use() adds to the group's own middleware stack, not the parent's
+// group.Get('/foo') registers at prefix + '/foo' in the parent's trie
 
 class _GroupProxy {
     constructor(parent, prefix, inheritedMiddleware = []) {
@@ -858,7 +855,6 @@ class _GroupProxy {
     afterEach(fn)       { this._parent.afterEach(fn);       return this; }
 }
 
-
 Router.middleware = {
 
     /**
@@ -916,7 +912,6 @@ Router.middleware = {
         }
     },
 };
-
 
 function _segments(path) {
     return path.split('/').filter(Boolean);

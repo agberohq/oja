@@ -86,7 +86,6 @@
 import { Out } from '../core/out.js';
 import { emit, listen } from '../core/events.js';
 
-
 function _resolve(target) {
     if (!target) return null;
     if (target instanceof Element) return target;
@@ -110,7 +109,6 @@ function _collectFields(container) {
     });
     return data;
 }
-
 
 export const wizard = {
 
@@ -152,13 +150,13 @@ export const wizard = {
             cancel: labels.cancel || 'Cancel',
         };
 
-        // ── State ────────────────────────────────────────────────────────────
+        // State
         let _currentIdx  = 0;
         let _isSubmitting = false;
         const _stepData   = {};  // key → collected data object
         const _unsubs     = [];  // event unsub functions
 
-        // ── DOM skeleton ─────────────────────────────────────────────────────
+        // DOM skeleton
         container.innerHTML = '';
         container.className = `oja-wizard${className ? ' ' + className : ''}`;
         container.setAttribute('role', 'region');
@@ -199,7 +197,7 @@ export const wizard = {
         container.appendChild(errorEl);
         container.appendChild(footerEl);
 
-        // ── Render helpers ───────────────────────────────────────────────────
+        // Render helpers
 
         function _renderProgress() {
             progressEl.innerHTML = steps.map((s, i) => {
@@ -306,7 +304,7 @@ export const wizard = {
             return false;
         }
 
-        // ── Public handle ─────────────────────────────────────────────────────
+        // Public handle
         const handle = {
 
             /** Advance to next step (runs validation first). */
@@ -418,7 +416,6 @@ export const wizard = {
         return handle;
     },
 };
-
 
 function _nullHandle() {
     const noop = () => Promise.resolve(_nullHandle());

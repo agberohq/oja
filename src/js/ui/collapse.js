@@ -42,18 +42,17 @@
  *   });
  *
  *   // With existing HTML (data-accordion-item pattern):
- *   //   <div id="faq">
- *   //     <div data-accordion-item="q1">
- *   //       <button data-accordion-trigger>What is Oja?</button>
- *   //       <div data-accordion-body><p>...</p></div>
- *   //     </div>
- *   //   </div>
+ *   // <div id="faq">
+ *   // <div data-accordion-item="q1">
+ *   // <button data-accordion-trigger>What is Oja?</button>
+ *   // <div data-accordion-body><p>...</p></div>
+ *   // </div>
+ *   // </div>
  *   accordion.wire('#faq', { openFirst: true });
  */
 
 import { animate } from '../core/animate.js';
 import { Out }     from '../core/out.js';
-
 
 function _resolve(target) {
     if (!target) return null;
@@ -64,7 +63,6 @@ function _resolve(target) {
 function _setAriaExpanded(triggerEl, open) {
     if (triggerEl) triggerEl.setAttribute('aria-expanded', String(open));
 }
-
 
 export const collapse = {
 
@@ -289,7 +287,6 @@ export const collapse = {
     },
 };
 
-
 export const accordion = {
 
     /**
@@ -469,7 +466,6 @@ export const accordion = {
         };
     },
 };
-
 
 let _idCounter = 0;
 

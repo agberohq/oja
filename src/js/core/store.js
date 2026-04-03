@@ -51,7 +51,6 @@
 
 import { encrypt } from '../utils/encrypt.js';
 
-
 class _SessionAdapter {
     get name() { return 'session'; }
     available() {
@@ -91,7 +90,6 @@ class _MemoryAdapter {
     clearNamespace(prefix) { for (const k of [...this._map.keys()]) if (k.startsWith(prefix)) this._map.delete(k); }
 }
 
-
 export class Store {
     /**
      * @param {string} namespace   — scopes all keys
@@ -129,7 +127,7 @@ export class Store {
 
     get storageLayer() { return this._layer.name; }
 
-    // ─── API ─────────────────────────────────────────────────────────────────
+    // API
 
     set(key, value) {
         if (this._encrypt) return this._setEncrypted(key, value);
@@ -222,7 +220,7 @@ export class Store {
         return this;
     }
 
-    // ─── Sync internals ───────────────────────────────────────────────────────
+    // Sync internals
 
     _setSync(key, value) {
         const old = this._getSync(key);
@@ -243,7 +241,7 @@ export class Store {
         } catch { return fallback; }
     }
 
-    // ─── Encrypted internals ──────────────────────────────────────────────────
+    // Encrypted internals
 
     async _setEncrypted(key, value) {
         const serialised = JSON.stringify(value);
@@ -312,7 +310,7 @@ export class Store {
         return this;
     }
 
-    // ─── Change listeners ─────────────────────────────────────────────────────
+    // Change listeners
 
     /**
      * Listen for changes on a specific key, or '*' for all keys.
@@ -355,7 +353,7 @@ export class Store {
         if (id !== undefined) { clearTimeout(id); this._ttlTimers.delete(key); }
     }
 
-    // ─── Convenience ─────────────────────────────────────────────────────────
+    // Convenience
 
     increment(key, n = 1) {
         const current = this._getSync(key, 0);

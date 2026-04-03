@@ -17,7 +17,7 @@
  *   // form.collect() automatically detects this and extracts the raw value.
  *
  *   const input = document.querySelector('#phone'); // typed: (555) 123-4567
- *   console.log(input.dataset.ojaRawValue); // -> "5551234567"
+ *   console.log(input.dataset.ojaRawValue); // > "5551234567"
  */
 
 function _applyMask(value, pattern) {

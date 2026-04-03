@@ -80,13 +80,11 @@ import { pushContainer, popContainer, _setReadyFn, clearExecSlot } from './_cont
  * @returns {Promise<void>}
  */
 
-
 const SCOPE_PREFIX = '__oja_scope_';
 const EXEC_TIMEOUT = 30_000; // 30s — catches while(true) and infinite await chains
 
 // Monotonic counter prevents key collision even in the same millisecond
 let _scopeCounter = 0;
-
 
 //
 // Rewrites relative import specifiers to absolute URLs using the component's
@@ -170,7 +168,6 @@ function _abs(spec, base) {
     catch { return spec; }
 }
 
-
 export function execScripts(container, sourceUrl, propsData = {}) {
     if (!container || !(container instanceof Element)) {
         return Promise.reject(
@@ -230,7 +227,7 @@ export function execScripts(container, sourceUrl, propsData = {}) {
             newScript.type = 'module';
 
             promises.push(new Promise((resolve) => {
-                // ── Core fix: closed-over settled flag ────────────────────────
+                // Core fix: closed-over settled flag
                 // window[scopeKey] is deleted by the preamble before any event
                 // handler fires, so we track resolution with a plain boolean
                 // instead. This fixed the layout.apply() hang bug.

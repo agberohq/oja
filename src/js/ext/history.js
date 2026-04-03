@@ -72,13 +72,12 @@
  *   });
  */
 
-
 //
 // JSON.parse(JSON.stringify(x)) is lossy:
-//   - Date objects become strings
-//   - undefined values are dropped or become null
-//   - Functions, Maps, Sets are silently lost
-//   - Circular references throw
+// Date objects become strings
+// undefined values are dropped or become null
+// Functions, Maps, Sets are silently lost
+// Circular references throw
 //
 // structuredClone() handles all of these correctly and is available in all
 // modern browsers (Chrome 98+, Firefox 94+, Safari 15.4+) and Node 17+.
@@ -382,7 +381,6 @@ export class OjaHistory {
         };
     }
 }
-
 
 const _histories = new Map();
 

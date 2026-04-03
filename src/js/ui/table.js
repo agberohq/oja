@@ -52,7 +52,6 @@
  *                   — enables remote mode; called on mount, sort, page change
  */
 
-
 function _resolve(target) {
     if (!target) return null;
     if (target instanceof Element) return target;
@@ -151,7 +150,6 @@ function _buildTd(cell, header, row, opts) {
     return td;
 }
 
-
 export const table = {
 
     /**
@@ -202,7 +200,7 @@ export const table = {
 
         const isRemote = typeof fetchData === 'function';
 
-        // ── Shell ─────────────────────────────────────────────────────────
+        // Shell
 
         container.innerHTML = '';
         container.className = `oja-table-wrap${compact ? ' oja-table-compact' : ''}`;
@@ -222,7 +220,7 @@ export const table = {
         footerDiv.className = 'oja-table-footer';
         container.appendChild(footerDiv);
 
-        // ── All columns including optional extras ─────────────────────────
+        // All columns including optional extras
 
         function _allCols() {
             const cols =[];
@@ -233,7 +231,7 @@ export const table = {
             return cols;
         }
 
-        // ── Header ────────────────────────────────────────────────────────
+        // Header
 
         function _buildHeader() {
             thead.innerHTML = '';
@@ -285,7 +283,7 @@ export const table = {
             }
         }
 
-        // ── Body ──────────────────────────────────────────────────────────
+        // Body
 
         function _getRows() {
             return isRemote ? remoteRows : localRows;
@@ -628,7 +626,7 @@ export const table = {
             });
         }
 
-        // ── Footer (pagination / load-more / export) ──────────────────────────────
+        // Footer (pagination / load-more / export)
 
         function _renderFooter() {
             footerDiv.innerHTML = '';
@@ -716,7 +714,7 @@ export const table = {
             footerDiv.appendChild(nav);
         }
 
-        // ── Remote / async ────────────────────────────────────────────────
+        // Remote / async
 
         async function _fetchOrRender() {
             if (isRemote) {
@@ -766,12 +764,12 @@ export const table = {
             await _fetchOrRender();
         }
 
-        // ── Initial render ────────────────────────────────────────────────
+        // Initial render
 
         _buildHeader();
         _fetchOrRender();
 
-        // ── Public handle ─────────────────────────────────────────────────
+        // Public handle
 
         return {
             // Replace local data and re-render, preserving sort state.

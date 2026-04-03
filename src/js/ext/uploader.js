@@ -251,7 +251,6 @@ const WORKER_FN = function(self) {
     });
 };
 
-
 export class OjaUploader {
     constructor(options = {}) {
         this.options = {
@@ -281,7 +280,7 @@ export class OjaUploader {
         this._runner = new Runner(WORKER_FN);
         this._runner.send('init', this.options);
 
-        // ─── Wire Worker Events ───────────────────────────────────────────────
+        // Wire Worker Events
 
         // 'started' fires as soon as the worker begins uploading a file — before the
         // first progress event (which has a 500ms throttle). This keeps the main-thread

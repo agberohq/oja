@@ -111,7 +111,7 @@ export const autocomplete = {
 
         let _activeIdx = -1;
 
-        // ─── Rendering ────────────────────────────────────────────────────────
+        // Rendering
 
         function _items() {
             return Array.from(listEl.querySelectorAll('li'));
@@ -170,7 +170,7 @@ export const autocomplete = {
             _hide();
         }
 
-        // ─── Query → suggestions ──────────────────────────────────────────────
+        // Query → suggestions
 
         async function _query(value) {
             if (value.length < minChars) { _hide(); return; }
@@ -191,7 +191,7 @@ export const autocomplete = {
             _show(results);
         }
 
-        // ─── Event handlers ───────────────────────────────────────────────────
+        // Event handlers
 
         function _onInput(e) {
             _query(e.target.value);
@@ -227,7 +227,7 @@ export const autocomplete = {
         inputEl.addEventListener('keydown', _onKeydown);
         inputEl.addEventListener('blur',    _onBlur);
 
-        // ─── Public handle ────────────────────────────────────────────────────
+        // Public handle
 
         return {
             destroy() {
@@ -243,7 +243,6 @@ export const autocomplete = {
         };
     },
 };
-
 
 // Resolve a CSS selector string or Element to an Element.
 function _resolveEl(target) {

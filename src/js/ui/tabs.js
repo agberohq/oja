@@ -54,13 +54,11 @@
  *   variant  : 'line' | 'pill' — visual style (default: 'line')
  */
 
-
 function _resolve(target) {
     if (!target) return null;
     if (target instanceof Element) return target;
     return document.querySelector(target);
 }
-
 
 export const tabs = {
 
@@ -86,7 +84,7 @@ export const tabs = {
         const _listeners = [];
         const panelRoot  = panels ? _resolve(panels) : null;
 
-        // ── Build nav ─────────────────────────────────────────────────────
+        // Build nav
 
         container.innerHTML = '';
         container.className = `oja-tabs oja-tabs-${variant}`;
@@ -120,7 +118,7 @@ export const tabs = {
             buttons.set(def.key, btn);
         }
 
-        // ── Panel management ──────────────────────────────────────────────
+        // Panel management
 
         function _syncPanels(key) {
             if (!panelRoot) return;
@@ -148,12 +146,12 @@ export const tabs = {
             onChange?.(key);
         }
 
-        // ── Initial state ─────────────────────────────────────────────────
+        // Initial state
 
         _syncButtons(currentKey);
         _syncPanels(currentKey);
 
-        // ── Public handle ─────────────────────────────────────────────────
+        // Public handle
 
         return {
             // Switch to a tab by key. Fires onChange.

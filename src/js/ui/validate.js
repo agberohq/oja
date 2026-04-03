@@ -126,7 +126,6 @@
  *   const text = validate.stripHtml(html);
  */
 
-
 /**
  * @typedef {Object} ValidationResult
  * @property {boolean} valid
@@ -134,9 +133,8 @@
  * @property {any} [value]
  */
 
-
 export const validate = {
-    // ─── String validators ───────────────────────────────────────────────────
+    // String validators
 
     /**
      * Check if value is present (not empty)
@@ -275,7 +273,7 @@ export const validate = {
             : { valid: false, message };
     },
 
-    // ─── Number validators ───────────────────────────────────────────────────
+    // Number validators
 
     /**
      * Validate number
@@ -388,7 +386,7 @@ export const validate = {
             : { valid: false, message };
     },
 
-    // ─── Date validators ─────────────────────────────────────────────────────
+    // Date validators
 
     /**
      * Validate date
@@ -466,7 +464,7 @@ export const validate = {
             : { valid: false, message };
     },
 
-    // ─── Array validators ────────────────────────────────────────────────────
+    // Array validators
 
     /**
      * Validate array
@@ -526,7 +524,7 @@ export const validate = {
         return { valid: true, value };
     },
 
-    // ─── Object validators ───────────────────────────────────────────────────
+    // Object validators
 
     /**
      * Validate object
@@ -557,7 +555,7 @@ export const validate = {
         return { valid: true, value };
     },
 
-    // ─── File validators ─────────────────────────────────────────────────────
+    // File validators
 
     /**
      * Validate file
@@ -660,7 +658,7 @@ export const validate = {
         });
     },
 
-    // ─── Custom validators ───────────────────────────────────────────────────
+    // Custom validators
 
     /**
      * Custom validation function
@@ -690,7 +688,7 @@ export const validate = {
             : { valid: false, message };
     },
 
-    // ─── Schema validation ───────────────────────────────────────────────────
+    // Schema validation
 
     /**
      * Validate against a schema
@@ -745,7 +743,7 @@ export const validate = {
         return Object.keys(errors).length > 0 ? errors : null;
     },
 
-    // ─── Async validation ────────────────────────────────────────────────────
+    // Async validation
 
     /**
      * Async validation
@@ -765,7 +763,7 @@ export const validate = {
         }
     },
 
-    // ─── Sanitization ────────────────────────────────────────────────────────
+    // Sanitization
 
     /**
      * Sanitize input
@@ -804,7 +802,7 @@ export const validate = {
         return String(html || '').replace(/<[^>]*>/g, '');
     },
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // Helpers
 
     _formatBytes(bytes) {
         if (bytes === 0) return '0 B';

@@ -112,7 +112,6 @@
  *              failed
  */
 
-
 const _channels = new Map();
 
 /**
@@ -145,10 +144,9 @@ progress.destroyAll = function() {
     _channels.clear();
 };
 
-
 function _createChannel(name) {
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // State
 
     let _value       = 0;
     let _state       = 'idle';      // idle | running | reversed | done | failed
@@ -165,7 +163,7 @@ function _createChannel(name) {
     // key is a number (milestone) or string (lifecycle event name)
     const _hooks = new Map();
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     function _resolveColor(val) {
         if (!_colorSlices.length) return null;
@@ -307,7 +305,7 @@ function _createChannel(name) {
         }
     }
 
-    // ── Public API ────────────────────────────────────────────────────────────
+    // Public API
 
     const channel = {
 
@@ -471,7 +469,7 @@ function _createChannel(name) {
             return this;
         },
 
-        // ── Color ─────────────────────────────────────────────────────────────
+        // Color
 
         /**
          * Define color slices for the bar.
@@ -491,7 +489,7 @@ function _createChannel(name) {
             return this;
         },
 
-        // ── Hooks ─────────────────────────────────────────────────────────────
+        // Hooks
 
         /**
          * Register a hook.
@@ -555,7 +553,7 @@ function _createChannel(name) {
             return this;
         },
 
-        // ── Track ─────────────────────────────────────────────────────────────
+        // Track
 
         /**
          * Wire progress automatically to runtime lifecycle events.
@@ -622,7 +620,7 @@ function _createChannel(name) {
             return () => unsubs.forEach(u => u());
         },
 
-        // ── Attach ────────────────────────────────────────────────────────────
+        // Attach
 
         /**
          * Attach the progress bar to a specific element.
@@ -637,7 +635,7 @@ function _createChannel(name) {
             return this;
         },
 
-        // ── Bind ──────────────────────────────────────────────────────────────
+        // Bind
 
         /**
          * Bind to an Api instance or an Uploader instance.
@@ -649,7 +647,7 @@ function _createChannel(name) {
         bind(target) {
             if (!target) return this;
 
-            // ── Api binding ───────────────────────────────────────────────────
+            // Api binding
             if (typeof target.beforeRequest === 'function' &&
                 typeof target._executeRequest === 'function') {
 
@@ -701,7 +699,7 @@ function _createChannel(name) {
                 return this;
             }
 
-            // ── Uploader binding ──────────────────────────────────────────────
+            // Uploader binding
             if (typeof target.add === 'function' &&
                 typeof target.pause === 'function') {
 
@@ -740,7 +738,7 @@ function _createChannel(name) {
             return this;
         },
 
-        // ── Internal ──────────────────────────────────────────────────────────
+        // Internal
 
         _destroy() {
             this.unbind();

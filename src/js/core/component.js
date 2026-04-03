@@ -49,7 +49,7 @@
  *
  *   // Register a repeating timer — cleared automatically on navigate.
  *   // Replaces: const id = setInterval(fn, ms);
- *   //           document.addEventListener('oja:navigate', () => clearInterval(id), { once: true });
+ *   // document.addEventListener('oja:navigate', () => clearInterval(id), { once: true });
  *   component.interval(refresh, 3000);
  *
  *   // Register a one-shot timer — cleared automatically on navigate.

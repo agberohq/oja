@@ -82,7 +82,6 @@
  *   on('#scrollable',  'scroll', throttle(updateNav, 100));
  */
 
-
 const _registry = new Map(); // event → [{ selector, fn, original, options }]
 const _passiveEvents = new Set(['scroll', 'touchstart', 'touchmove', 'wheel']);
 
@@ -110,7 +109,7 @@ function _registerWithActiveComponent(unsub) {
  *   on(myButtonEl,    'click', (e, el) => doSomething());
  */
 export function on(selector, eventName, fn, options = {}) {
-    // ── Scoped delegation: on(scopeEl, cssSelector, eventName, fn, options) ──
+    // Scoped delegation: on(scopeEl, cssSelector, eventName, fn, options)
     // When the first argument is an Element and the second is a CSS selector
     // string (not an event name), delegate within scopeEl only.
     // This lets dynamically-rendered panels wire children without leaking
@@ -216,7 +215,6 @@ export function off(selector, eventName, fn) {
     if (idx !== -1) handlers.splice(idx, 1);
 }
 
-
 const _wildcardListeners = new Set(); // for '*' wildcard
 
 /**
@@ -281,7 +279,6 @@ export function waitFor(name, timeout = 0) {
         }
     });
 }
-
 
 const _shortcutGroups = new Set(); // groups of shortcuts
 const _activeShortcuts = new Map(); // key → Set of handlers
@@ -444,7 +441,6 @@ keys.getAll = () => {
     return result;
 };
 
-
 const _scrollListeners = new Map(); // element → Set of handlers
 const _scrollRaf = new Map(); // element → raf id
 const _scrollPositions = new Map(); // element → { x, y }
@@ -590,7 +586,6 @@ export function getViewportPosition(el) {
     };
 }
 
-
 const _intersectionObservers = new Map(); // Map of observer → Set of targets
 const _intersectionHandlers = new WeakMap(); // target → Map of handler → options
 
@@ -711,7 +706,6 @@ export function createVisibilityObserver(fn, options = {}) {
     };
 }
 
-
 const _resizeObservers = new Map(); // element → Set of handlers
 const _resizeRaf = new Map(); // element → raf id
 const _resizeSizes = new Map(); // element → { width, height }
@@ -779,7 +773,6 @@ export function onResize(target, fn, options = {}) {
     };
 }
 
-
 const _mutationObservers = new Map(); // element → observer
 
 /**
@@ -830,7 +823,6 @@ export function onMutation(target, fn, options = {}) {
         }
     };
 }
-
 
 /**
  * Debounce — delays execution until `ms` milliseconds after the last call.

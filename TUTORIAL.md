@@ -79,12 +79,12 @@ my-app/
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>My App</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
-    <script type="importmap">
+  <meta charset="UTF-8">
+  <title>My App</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.min.css">
+  <script type="importmap">
     { "imports": { "@agberohq/oja": "https://cdn.jsdelivr.net/npm/@agberohq/oja@latest/build/oja.full.esm.js" } }
-    </script>
+  </script>
 </head>
 <body>
 <div id="app"></div>
@@ -102,10 +102,10 @@ const [count, setCount] = state(0);
 
 // make() builds DOM — no HTML strings, no innerHTML
 const btn = make.button({ id: 'btn', class: 'btn' }, 'Clicked: 0')
-    .appendTo('#app');
+        .appendTo('#app');
 
 effect(() => {
-    btn.update({ text: `Clicked: ${count()}` });
+  btn.update({ text: `Clicked: ${count()}` });
 });
 
 on('#btn', 'click', () => setCount(n => n + 1));
@@ -147,8 +147,8 @@ const [x, setX] = state(1);
 const [y, setY] = state(2);
 
 effect(() => {
-    console.log('sum =', x() + y());
-    // This effect depends on both x and y
+  console.log('sum =', x() + y());
+  // This effect depends on both x and y
 });
 
 setX(10); // logs: sum = 12
@@ -189,8 +189,8 @@ const [b, setB] = state(0);
 effect(() => console.log(a() + b())); // runs once on creation
 
 batch(() => {
-    setA(1);
-    setB(2);
+  setA(1);
+  setB(2);
 }); // effect runs once here, not twice
 ```
 
@@ -224,6 +224,29 @@ router.Get('/', Out.component('pages/home.html', { user: currentUser }));
 router.Get('/', Out.component('pages/home.html', { user: currentUser() }));
 ```
 
+### context.set() and context.get() — write and read without destructuring
+
+The destructure pattern `const [, setNotes] = context('notes')` works, but the
+empty comma is noisy when you only need the write side. Use `context.set()`:
+
+```js
+// ✗ Forced to destructure just to get the setter:
+const [, forceUpdate] = context('ui_state');
+forceUpdate(Date.now());
+
+// ✓ Clear intent, no empty comma:
+context.set('ui_state', Date.now());
+```
+
+`context.get()` reads the current value without subscribing — useful when you
+need a snapshot inside a callback rather than a reactive dependency:
+
+```js
+// Read once — not tracked by any effect:
+const currentNotes = context.get('notes');
+```
+
+Both methods warn if the key has not been registered.
 
 ---
 
@@ -579,11 +602,62 @@ badge.textContent = props().status;
 |--------|----------------|
 | `find(sel)` | Enhanced element scoped to this component |
 | `findAll(sel)` | NodeList scoped to this component |
+| `scoped()` | `{ find, findAll, el }` — bound to this container, safe in async callbacks |
+| `ref(sel)` | `{ el }` — captures one element, safe in async callbacks |
 | `container()` | The DOM element this script is mounted into |
 | `props()` | Read-only object of the data passed at mount time |
 | `ready()` | Call to signal that async setup is complete |
 
-### Mounting a component from a page
+### Async-safe DOM access — scoped() and ref()
+
+`find()` resolves its scope from the active component context, which is only set
+during synchronous top-level execution. Inside `setTimeout`, async callbacks, or
+`effect()` handlers, the context is cleared and `find()` falls back to `document`.
+
+```js
+// ✗ WRONG — find() context is gone inside setTimeout
+setTimeout(() => {
+    find('#sync-dot').title = 'Saved'; // searches document, not this component
+}, 600);
+
+// ✓ RIGHT — capture at top-level, use anywhere
+const syncDot = find('#sync-dot');
+setTimeout(() => {
+    syncDot.title = 'Saved'; // reuses the captured reference
+}, 600);
+```
+
+For cases where you need to keep querying (not just reuse one element), use
+`scoped()`. It captures the container at call time and returns `find`/`findAll`
+functions that are permanently bound to it:
+
+```js
+import { find, scoped, ref } from '@agberohq/oja';
+
+// scoped() — bound query functions, safe anywhere:
+const { find: scopedFind, findAll } = scoped();
+
+component.onMount(() => {
+    setTimeout(() => {
+        scopedFind('#status').textContent = 'ok';      // correct container, always
+        findAll('.item').forEach(el => el.classList.add('ready'));
+    }, 1000);
+});
+
+// ref() — capture one specific element:
+const syncDot = ref('#sync-dot');
+
+effect(() => {
+    notesMeta(); // track changes
+    setTimeout(async () => {
+        const quota = await getVfsQuota();
+        if (quota) syncDot.el.title = `Saved · ${quota.usage} used`;
+    }, 600);
+});
+```
+
+`scoped()` and `ref()` are the right tools whenever you need DOM access outside
+the synchronous top-level of a component script.
 
 ```js
 // pages/tasks.html script:
@@ -1165,6 +1239,9 @@ router.start('/');
 | `router.start()` before `await layout.apply()` | Router can't find `#main-outlet`, nothing renders | Always `await layout.apply()` first |
 | Passing `tasks()` as a prop instead of `tasks` | Component gets a frozen snapshot, never updates | Pass the signal: `{ tasks }` not `{ tasks: tasks() }` |
 | `document.getElementById` inside a component | May grab an element from another component instance | Use `find('#id')` — it is scoped to the current component |
+| `find('#el')` inside `setTimeout` or async callback | Falls back to `document`, finds wrong element or null | Capture at top-level: `const el = find('#el')`, then use `el` in the callback. Or use `scoped()` for ongoing queries |
+| `const [, setFoo] = context('foo')` to get write-only | Ugly empty comma, easy to misread | Use `context.set('foo', value)` instead |
+| Initialising `dragdrop.reorder()` inside a reactive render function | Listener leak — dozens of drag handlers accumulate, DOM crashes on drop | Use `engine.list` `onMount` callback — it runs once after first render |
 | Declaring `router` after `auth.session.OnStart` | `ReferenceError: Cannot access 'router' before initialization` | Declare `router` before any auth session callbacks |
 | `go()` return value | `go()` returns `undefined` — it is fire-and-forget | Use a flag or a Channel to observe completion |
 | Missing `<script type="importmap">` in `index.html` | `Failed to resolve module specifier "@agberohq/oja"` in the browser console | Add the import map to `index.html` — it only needs to be there once and covers every script on the page |
@@ -1590,7 +1667,61 @@ find('#task-list').list(() => tasks(), {
 });
 ```
 
-### Morphing the profile panel
+### engine.list() lifecycle callbacks
+
+When you add an imperative plugin to a list — drag-and-drop reordering, tooltips,
+third-party widgets — you need it to initialise exactly once, not on every
+reactive re-render. `engine.list()` provides three callbacks for this:
+
+```js
+import { engine } from '@agberohq/oja';
+import { dragdrop } from '@agberohq/oja';
+
+engine.list('#notes', notes(), {
+    key:    n => n.id,
+    render: (note, existing) => {
+        const el = existing || document.createElement('div');
+        el.dataset.id = note.id;
+        el.textContent = note.title;
+        return el;
+    },
+
+    // onMount — runs ONCE after the first render, however many re-renders follow
+    onMount: (container) => {
+        dragdrop.reorder(container, {
+            handle:    '.drag-handle',
+            onReorder: els => saveOrder(els.map(el => el.dataset.id)),
+        });
+    },
+
+    // onItemMount — runs for each NEWLY INSERTED item only
+    // Items that were already in the list and got updated do NOT trigger this
+    onItemMount: (itemEl, data, index) => {
+        initTooltip(itemEl, data.description);
+    },
+
+    // onItemRemove — runs before an item is removed from the DOM
+    onItemRemove: (itemEl) => {
+        destroyTooltip(itemEl);
+    },
+});
+```
+
+Before this existed, the common workaround was a flag on the element:
+
+```js
+// ✗ OLD — fragile guard, breaks when the list re-renders
+if (!listEl._dragBound) {
+    listEl._dragBound = true;
+    dragdrop.reorder(listEl, { ... });
+}
+```
+
+With `onMount` you delete that flag entirely. The callback fires after the DOM
+is ready and never fires again — regardless of how many times the reactive
+system calls `list()`.
+
+`engine.listAsync()` accepts the same three callbacks.
 
 The profile page rebuilds a panel from server data on an interval. Before,
 it wiped and rebuilt the entire panel, losing any open tooltips or focused
@@ -1602,9 +1733,9 @@ import { find, component } from '@agberohq/oja';
 import { engine } from '@agberohq/oja';
 
 async function refreshStats() {
-    const stats = await api.get('/me/stats');
-    const html  = buildStatsHtml(stats);
-    await engine.morph(find('#stats-panel'), html);
+  const stats = await api.get('/me/stats');
+  const html  = buildStatsHtml(stats);
+  await engine.morph(find('#stats-panel'), html);
 }
 
 component.interval(refreshStats, 5000);
@@ -1619,10 +1750,10 @@ the build when the content hasn't changed:
 
 ```js
 async function refreshStats() {
-    const stats = await api.get('/me/stats');
-    const html  = buildStatsHtml(stats);
-    if (!engine.shouldMorph(find('#stats-panel'), html)) return;
-    await engine.morph(find('#stats-panel'), html);
+  const stats = await api.get('/me/stats');
+  const html  = buildStatsHtml(stats);
+  if (!engine.shouldMorph(find('#stats-panel'), html)) return;
+  await engine.morph(find('#stats-panel'), html);
 }
 ```
 
@@ -1636,7 +1767,7 @@ The task counter in the nav bar was previously wired by an effect:
 
 ```js
 effect(() => {
-    find('#task-count').textContent = tasks().length;
+  find('#task-count').textContent = tasks().length;
 });
 ```
 
@@ -1652,7 +1783,7 @@ With the engine wired to the store, you can express this in HTML instead:
 import { engine } from '@agberohq/oja';
 
 effect(() => {
-    engine.set('task.count', tasks().length);
+  engine.set('task.count', tasks().length);
 });
 ```
 
@@ -1661,7 +1792,7 @@ it picks up `data-oja-bind` attributes without a global MutationObserver:
 
 ```js
 component.onMount(el => {
-    engine.scan(el);
+  engine.scan(el);
 });
 ```
 
@@ -1684,13 +1815,13 @@ adds tag autocomplete on the task form.
 import { Search } from '@agberohq/oja';
 
 export const taskSearch = new Search([], {
-    fields:  ['text', 'tag'],
-    weights: { text: 2, tag: 1 },
+  fields:  ['text', 'tag'],
+  weights: { text: 2, tag: 1 },
 });
 
 effect(() => {
-    taskSearch.clear();
-    for (const t of tasks()) taskSearch.add(t.id, t);
+  taskSearch.clear();
+  for (const t of tasks()) taskSearch.add(t.id, t);
 });
 ```
 
@@ -1708,11 +1839,11 @@ import { taskSearch } from '../../app.js';
 const searchEl = find('#task-search');
 
 function showTasks(items) {
-    find('#task-list').list(items, {
-        key:    t => t.id,
-        render: t => Out.c('components/task-item.html', t),
-        empty:  Out.h(`<p>${searchEl.value ? 'No matches' : 'No tasks yet'}</p>`),
-    });
+  find('#task-list').list(items, {
+    key:    t => t.id,
+    render: t => Out.c('components/task-item.html', t),
+    empty:  Out.h(`<p>${searchEl.value ? 'No matches' : 'No tasks yet'}</p>`),
+  });
 }
 
 // Initial render — show everything
@@ -1720,9 +1851,9 @@ showTasks(tasks());
 
 // Filter on input
 on(searchEl, 'input', (e) => {
-    const q = e.target.value.trim();
-    if (!q) { showTasks(tasks()); return; }
-    showTasks(taskSearch.search(q).map(r => r.doc));
+  const q = e.target.value.trim();
+  if (!q) { showTasks(tasks()); return; }
+  showTasks(taskSearch.search(q).map(r => r.doc));
 });
 ```
 

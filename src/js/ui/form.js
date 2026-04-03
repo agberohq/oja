@@ -152,7 +152,6 @@
  *   });
  */
 
-
 import { Out }          from '../core/out.js';
 import { autocomplete } from './autocomplete.js';
 
@@ -160,7 +159,6 @@ const _dirtyState = new WeakMap(); // form -> Map<fieldName, { original, current
 const _dirtyListeners = new WeakMap(); // form -> Set<function>
 const _fieldWatchers = new WeakMap(); // field -> Set<{ type, fn, debounced }>
 const _editorInstances = new Map(); // field -> editor instance — must be Map, not WeakMap, because collect() iterates it
-
 
 export const form = {
 
@@ -227,8 +225,8 @@ export const form = {
 
         // Handle checkboxes — unchecked ones don't appear in FormData.
         // We need to distinguish two cases:
-        //   1. Single checkbox (name is unique): collect as boolean
-        //   2. Checkbox group (multiple share same name): collect as array of
+        // Single checkbox (name is unique): collect as boolean
+        // Checkbox group (multiple share same name): collect as array of
         //      checked values, e.g. <input type="checkbox" name="roles" value="admin">
         const checkboxGroups = new Map(); // name → [{ el, value }]
         el.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -356,7 +354,7 @@ export const form = {
         return valid;
     },
 
-    // ─── Rich text editor ─────────────────────────────────────────────────────
+    // Rich text editor
 
     /**
      * Initialize a rich text editor on a contenteditable element.
@@ -547,7 +545,7 @@ export const form = {
         el.setAttribute('aria-describedby', toolbarId);
     },
 
-    // ─── Select dropdown ─────────────────────────────────────────────────────
+    // Select dropdown
 
     /**
      * Enhance a select element with options and change handler.
@@ -602,7 +600,7 @@ export const form = {
         return this;
     },
 
-    // ─── Radio group ─────────────────────────────────────────────────────────
+    // Radio group
 
     /**
      * Manage a radio group with change handler.
@@ -634,7 +632,7 @@ export const form = {
         return this;
     },
 
-    // ─── Checkbox ────────────────────────────────────────────────────────────
+    // Checkbox
 
     /**
      * Enhance a checkbox with indeterminate state and change handler.
@@ -665,7 +663,7 @@ export const form = {
         return this;
     },
 
-    // ─── Textarea with counter ───────────────────────────────────────────────
+    // Textarea with counter
 
     /**
      * Enhance a textarea with character count and max length.
@@ -727,7 +725,7 @@ export const form = {
         return this;
     },
 
-    // ─── Watch field ─────────────────────────────────────────────────────────
+    // Watch field
 
     /**
      * Watch a specific field for validation on blur or input.
@@ -823,7 +821,7 @@ export const form = {
         return this;
     },
 
-    // ─── Dirty tracking ──────────────────────────────────────────────────────
+    // Dirty tracking
 
     /**
      * Enable dirty tracking for a form and listen to changes.
@@ -1021,7 +1019,7 @@ export const form = {
         el.dispatchEvent(new Event('input', { bubbles: true }));
     },
 
-    // ─── Error display ───────────────────────────────────────────────────────
+    // Error display
 
     /**
      * Show an error message next to a named field.
@@ -1131,7 +1129,7 @@ export const form = {
         return this;
     },
 
-    // ─── Image upload + preview ──────────────────────────────────────────────
+    // Image upload + preview
 
     /**
      * Wire a file input to an image preview element.
@@ -1268,7 +1266,7 @@ export const form = {
         return this.collect(target);
     },
 
-    // ─── XHR upload with progress ─────────────────────────────────────────────
+    // XHR upload with progress
 
     /**
      * Upload form files with progress tracking.
@@ -1349,7 +1347,7 @@ export const form = {
         return autocomplete.attach(el, options);
     },
 
-    // ─── Slider ───────────────────────────────────────────────────────────────
+    // Slider
     //
     // Reactive range slider with value label. Wraps <input type="range"> with
     // consistent styling and change/input callbacks.
@@ -1419,7 +1417,7 @@ export const form = {
         };
     },
 
-    // ─── Color picker ─────────────────────────────────────────────────────────
+    // Color picker
     //
     // Enhanced color input with swatch palette and optional alpha channel.
     // Falls back gracefully to native <input type="color"> on unsupported browsers.
@@ -1520,7 +1518,6 @@ export const form = {
         };
     },
 };
-
 
 // Unwraps the { state: Map, dispose: fn } entry stored by _setupDirtyTracking.
 // Returns the inner Map, or null if the form has not been tracked yet.

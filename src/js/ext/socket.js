@@ -53,7 +53,6 @@
 
 import { emit as _emit } from '../core/events.js';
 
-
 const JsonCodec = {
     encode: (data)    => JSON.stringify(data),
     decode: (raw)     => {
@@ -63,7 +62,6 @@ const JsonCodec = {
     },
     binaryType: 'text'
 };
-
 
 export class OjaSSE {
     /**
@@ -96,7 +94,7 @@ export class OjaSSE {
         this._connect();
     }
 
-    // ─── Event listeners ──────────────────────────────────────────────────────
+    // Event listeners
 
     /**
      * Listen for a named SSE event.
@@ -123,7 +121,7 @@ export class OjaSSE {
     /** Called when max reconnect attempts exceeded */
     onFailed(fn) { return this.on('__failed__', fn); }
 
-    // ─── Control ──────────────────────────────────────────────────────────────
+    // Control
 
     /** Permanently close the connection — no more reconnects */
     close() {
@@ -138,7 +136,7 @@ export class OjaSSE {
         return this._source?.readyState ?? 2;
     }
 
-    // ─── Internals ────────────────────────────────────────────────────────────
+    // Internals
 
     _connect() {
         if (this._closed) return;
@@ -206,7 +204,6 @@ export class OjaSSE {
     }
 }
 
-
 export class OjaSocket {
     /**
      * @param {string} url            — ws:// or wss://
@@ -246,7 +243,7 @@ export class OjaSocket {
         this._connect();
     }
 
-    // ─── Event listeners ──────────────────────────────────────────────────────
+    // Event listeners
 
     /**
      * Listen for a message type.
@@ -266,7 +263,7 @@ export class OjaSocket {
     onDisconnect(fn) { return this.on('disconnect', fn); }
     onError(fn)      { return this.on('error', fn); }
 
-    // ─── Sending ──────────────────────────────────────────────────────────────
+    // Sending
 
     /**
      * Send a message — queued automatically if not yet connected.
@@ -295,7 +292,7 @@ export class OjaSocket {
         return this;
     }
 
-    // ─── Control ──────────────────────────────────────────────────────────────
+    // Control
 
     close() {
         this._closed = true;
@@ -313,7 +310,7 @@ export class OjaSocket {
         return this._ws?.readyState === WebSocket.OPEN;
     }
 
-    // ─── Internals ────────────────────────────────────────────────────────────
+    // Internals
 
     _connect() {
         if (this._closed) return;

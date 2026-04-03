@@ -366,7 +366,7 @@ export function make(tag, optionsOrChild, ...rest) {
         }
     }
 
-    // ── Apply options ──────────────────────────────────────────────────────
+    // Apply options
 
     if (options.id) el.id = options.id;
 
@@ -407,7 +407,7 @@ export function make(tag, optionsOrChild, ...rest) {
         el.textContent = String(options.text);
     }
 
-    // ── Append children ────────────────────────────────────────────────────
+    // Append children
 
     const _append = (child) => {
         if (child === null || child === undefined) return;
@@ -808,7 +808,7 @@ function _renderable(el) {
         try { el[name] = fn; } catch (_) { /* native read-only — skip */ }
     };
 
-    // ── Placement helpers ─────────────────────────────────────────────────────
+    // Placement helpers
     // All accept a CSS selector string or an Element. All return `this`.
 
     const _resolveTarget = (target) => {
@@ -864,7 +864,7 @@ function _renderable(el) {
         return el;
     });
 
-    // ── el.on(event, fn) / el.on(event, selector, fn) ───────────────────────────
+    // el.on(event, fn) / el.on(event, selector, fn)
     //
     // Attaches an event listener to this element.
     //
@@ -905,7 +905,7 @@ function _renderable(el) {
         return el;
     });
 
-    // ── el.once(event, fn) / el.once(event, selector, fn) ────────────────────
+    // el.once(event, fn) / el.once(event, selector, fn)
     //
     // Same as el.on() but the handler removes itself after the first call.
     //
@@ -928,7 +928,7 @@ function _renderable(el) {
         return el;
     });
 
-    // ── el.render(out) ────────────────────────────────────────────────────────
+    // el.render(out)
     // Original render — accepts any Out and renders it into the element.
     _define('render', function(responder) {
         if (responder && typeof responder.render === 'function') {
@@ -937,7 +937,7 @@ function _renderable(el) {
         return el;
     });
 
-    // ── el.update(descriptor) ─────────────────────────────────────────────────
+    // el.update(descriptor)
     //
     // Declarative patch — describe what the element should look like.
     // Any key whose value is a function that reads signals is automatically
@@ -972,7 +972,7 @@ function _renderable(el) {
     //
     _define('update', function(descriptor = {}) {
         const _applyOnce = async (desc) => {
-            // ── class ─────────────────────────────────────────────────────────
+            // class
             if (desc.class) {
                 const cls = typeof desc.class === 'function' ? desc.class() : desc.class;
                 if (cls.add)    [].concat(cls.add).forEach(c => c && el.classList.add(c));
@@ -980,7 +980,7 @@ function _renderable(el) {
                 if (cls.toggle) [].concat(cls.toggle).forEach(c => c && el.classList.toggle(c));
             }
 
-            // ── attr ──────────────────────────────────────────────────────────
+            // attr
             if (desc.attr) {
                 const attrs = typeof desc.attr === 'function' ? desc.attr() : desc.attr;
                 for (const [k, v] of Object.entries(attrs)) {
@@ -989,13 +989,13 @@ function _renderable(el) {
                 }
             }
 
-            // ── style ─────────────────────────────────────────────────────────
+            // style
             if (desc.style) {
                 const styles = typeof desc.style === 'function' ? desc.style() : desc.style;
                 Object.assign(el.style, styles);
             }
 
-            // ── content — text / html / out / component / fn ──────────────────
+            // content — text / html / out / component / fn
             if (desc.fn !== undefined) {
                 const result = await desc.fn(el);
                 if (result && typeof result.render === 'function') {
@@ -1032,7 +1032,7 @@ function _renderable(el) {
         return el;
     });
 
-    // ── el.list(items, options) ───────────────────────────────────────────────
+    // el.list(items, options)
     //
     // Keyed list reconciliation — shorthand over engine.list().
     // Only changed nodes are patched. Existing nodes are passed back to

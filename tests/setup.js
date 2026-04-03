@@ -155,7 +155,6 @@ globalThis.indexedDB = {
     },
 };
 
-
 const mockStorage = () => {
     let store = new Map();
     return {
@@ -192,9 +191,9 @@ Object.defineProperty(globalThis, 'sessionStorage', {
 // Dispatches the load event on the next microtask
 //
 // This faithfully reproduces the _exec.js execution model:
-//   - preamble runs synchronously (destructures + deletes window[scopeKey])
-//   - script body runs synchronously until first await
-//   - load event fires after execution, just like a real browser
+// preamble runs synchronously (destructures + deletes window[scopeKey])
+// script body runs synchronously until first await
+// load event fires after execution, just like a real browser
 
 const _nativeCreateElement = document.createElement.bind(document);
 

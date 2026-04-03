@@ -95,7 +95,7 @@ export class Api {
         this._setupOnlineDetection();
     }
 
-    // ─── Auth ─────────────────────────────────────────────────────────────────
+    // Auth
 
     setToken(token) {
         this._token = token;
@@ -119,7 +119,7 @@ export class Api {
         return !!(this._token || this._basic);
     }
 
-    // ─── Retry strategies ─────────────────────────────────────────────────────
+    // Retry strategies
 
     /**
      * Configure retry behaviour for specific HTTP status codes.
@@ -188,7 +188,7 @@ export class Api {
         }
     }
 
-    // ─── Hooks ────────────────────────────────────────────────────────────────
+    // Hooks
 
     /**
      * Called before every request.
@@ -208,12 +208,12 @@ export class Api {
         return this;
     }
 
-    // ─── Online / offline ─────────────────────────────────────────────────────
+    // Online / offline
 
     onOffline(fn) { this._offlineFn = fn; return this; }
     onOnline(fn)  { this._onlineFn  = fn; return this; }
 
-    // ─── HTTP verbs ───────────────────────────────────────────────────────────
+    // HTTP verbs
 
     get(path, options = {})         { return this._request(path, 'GET',    null, options); }
     post(path, body, options = {})  { return this._request(path, 'POST',   body, options); }
@@ -229,7 +229,7 @@ export class Api {
         return this._request(path, 'POST', formData, { ...options, raw: true });
     }
 
-    // ─── Core ─────────────────────────────────────────────────────────────────
+    // Core
 
     async _request(path, method, body = null, options = {}) {
         // Queue the request if offline and queueing is enabled.

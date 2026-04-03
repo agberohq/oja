@@ -39,7 +39,6 @@
  *   search2.import(JSON.parse(localStorage.getItem('idx')));
  */
 
-
 class TrieNode {
     constructor() {
         this.children = new Map();
@@ -47,7 +46,6 @@ class TrieNode {
         this.data     = null;
     }
 }
-
 
 // Default: 10_000 visited nodes per fuzzy search. Increase for large indexes:
 //   import { runtime } from './runtime.js';
@@ -285,7 +283,7 @@ export class Trie {
         return this;
     }
 
-    // ─── Internal helpers ─────────────────────────────────────────────────────
+    // Internal helpers
 
     _collect(node, current, results, limit, includeData) {
         if (results.length >= limit) return;
@@ -325,7 +323,6 @@ export class Trie {
     }
 }
 
-
 export class Search {
     /**
      * @param {Array<Object>} items  Initial documents (each must have an id field)
@@ -349,7 +346,7 @@ export class Search {
         this._trie       = new Trie();
         this._docs       = new Map(); // id → document
         this._index      = new Map(); // term → Set<id>
-        this._fieldCache = new Map(); // D-04: id:term → field (built at add() time)
+        this._fieldCache = new Map(); // id:term → field (built at add() time)
 
         for (const item of items) {
             if (item.id != null) this.add(String(item.id), item);
@@ -375,7 +372,7 @@ export class Search {
                     this._trie.insert(term, term);
                 }
                 this._index.get(term).add(id);
-                // D-04: cache field for this id:term pair at index time
+                // cache field for this id:term pair at index time
                 const cacheKey = `${id} ${term}`;
                 if (!this._fieldCache.has(cacheKey)) this._fieldCache.set(cacheKey, field);
             }
@@ -658,7 +655,7 @@ export class Search {
             this._trie.import(data.trie);
             this._docs  = new Map(data.documents);
             this._index = new Map();
-            this._fieldCache = new Map(); // D-04: clear field cache on import
+            this._fieldCache = new Map(); // clear field cache on import
             this._rebuildIndex();
             return this;
         } catch (err) {
@@ -671,7 +668,7 @@ export class Search {
         }
     }
 
-    // ─── Internal helpers ─────────────────────────────────────────────────────
+    // Internal helpers
 
     _rebuildIndex() {
         this._index.clear();
@@ -727,7 +724,6 @@ export class Search {
         return null;
     }
 }
-
 
 // Escape HTML for safe innerHTML injection in highlightSnippet().
 function _escHtml(str) {

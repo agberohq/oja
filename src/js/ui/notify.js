@@ -61,13 +61,11 @@
 import { listen, emit } from '../core/events.js';
 import { Out }          from '../core/out.js';
 
-
 let _container = null;
 let _banner    = null;
 let _position  = 'top-right';
 let _idCounter = 0;
 let _announcer = null;
-
 
 const TYPES = {
     success : { cls: 'oja-toast-success', icon: '✓', role: 'status',  live: 'polite'   },
@@ -86,7 +84,6 @@ const DEFAULTS = {
     pauseOnHover: true,
     announce    : true,
 };
-
 
 export const notify = {
 
@@ -138,7 +135,7 @@ export const notify = {
         return listen(eventName, handler);
     },
 
-    // ─── Banner ───────────────────────────────────────────────────────────────
+    // Banner
 
     /**
      * Show a persistent banner — one at a time, replaces previous.
@@ -226,7 +223,7 @@ export const notify = {
         return this;
     },
 
-    // ─── Position ─────────────────────────────────────────────────────────────
+    // Position
 
     /**
      * Set toast position. Takes effect immediately if container exists.
@@ -249,7 +246,7 @@ export const notify = {
         return this;
     },
 
-    // ─── Dismiss ──────────────────────────────────────────────────────────────
+    // Dismiss
 
     /** Dismiss all visible toasts immediately. */
     dismissAll() {
@@ -380,7 +377,7 @@ export const notify = {
         return _container?.querySelectorAll('.oja-toast:not(.oja-toast-leaving)').length || 0;
     },
 
-    // ─── Accessibility ────────────────────────────────────────────────────────
+    // Accessibility
 
     /**
      * Set the announcer element for screen reader announcements.
@@ -399,7 +396,6 @@ export const notify = {
         return this;
     },
 };
-
 
 function _show(type, message, options = {}) {
     _ensureContainer();
@@ -607,7 +603,6 @@ function _esc(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
-
 
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {

@@ -132,6 +132,21 @@ setCount(5); // counter updates automatically
 
 `state` holds a value. `effect` reacts to it. `derived` computes from it. `context` shares it across the whole app. `signal` connects two components that have no common parent — a late subscriber always gets the current value immediately.
 
+#### Writing context values
+
+`context` returns a `[read, write]` pair. When you only need to write — without subscribing — use `context.set()`:
+
+```js
+// Full pair — for components that both subscribe and write:
+const [notes, setNotes] = context('notes');
+
+// Write-only — no empty comma, clear intent:
+context.set('notes', updatedList);
+
+// Read current value once, no subscription:
+const current = context.get('notes');
+```
+
 ---
 
 ### 2. `Out` — one primitive for all visible output
@@ -201,7 +216,37 @@ findAll('.host-row').forEach(el =>
 );
 ```
 
-`find()` works correctly in every context — component scripts, page scripts, `app.js`. Import it explicitly from `@agberohq/oja`. No magic.
+#### Async-safe DOM access
+
+`find()` resolves its scope from the active component context, which is only set during synchronous top-level execution. Inside `setTimeout`, async callbacks, or `effect()` handlers, the context is gone and `find()` falls back to `document`.
+
+Two patterns to handle this:
+
+```js
+import { find, scoped, ref } from '@agberohq/oja';
+
+// scoped() — capture bound query functions at top-level:
+const { find: scopedFind, findAll: scopedFindAll } = scoped();
+
+component.onMount(() => {
+    setTimeout(() => {
+        scopedFind('#status').textContent = 'ok';   // always correct
+        scopedFindAll('.item').forEach(el => el.classList.add('ready'));
+    }, 1000);
+});
+
+// ref() — capture a single element at top-level:
+const syncDot = ref('#sync-dot');
+
+setTimeout(async () => {
+    const quota = await getVfsQuota();
+    syncDot.el.title = `Saved · ${quota}`;   // always safe
+}, 600);
+```
+
+`scoped()` gives you bound `find`/`findAll` functions for anything inside the container. `ref()` captures one specific element. Both are permanently bound to the container at the moment they are called — they work correctly from any callback, async function, or effect.
+
+`find()` works correctly for synchronous top-level code. Use `scoped()` or `ref()` whenever you need DOM access in an async context.
 
 ---
 
@@ -259,11 +304,80 @@ ready();
 |--------|----------------|
 | `find(sel)` | Enhanced element scoped to this component, or `document` if called outside |
 | `findAll(sel)` | NodeList scoped to this component |
+| `scoped()` | `{ find, findAll, el }` — permanently bound to this container, safe in async callbacks |
+| `ref(sel)` | `{ el }` — captures one element at call time, safe in async callbacks |
 | `container()` | The DOM element this script is mounted into |
 | `props()` | Read-only object of the data passed at mount time |
 | `ready()` | Signals setup is complete — resolves the mount promise |
 
 Signals in props are unwrapped automatically — access `props().tasks` and it calls `tasks()` for you.
+
+---
+
+## Engine: lifecycle callbacks for lists
+
+`engine.list()` and `engine.listAsync()` accept lifecycle callbacks so imperative plugins can be initialized exactly once, without flags:
+
+```js
+engine.list('#notes', notes(), {
+    key:    n => n.id,
+    render: (note, existing) => { /* ... */ return el; },
+
+    // Runs once after the first render — use for plugin setup
+    onMount: (container) => {
+        dragdrop.reorder(container, {
+            handle:    '.drag-handle',
+            onReorder: els => saveOrder(els.map(el => el.dataset.id)),
+        });
+    },
+
+    // Runs for each newly inserted item — NOT for updated existing items
+    onItemMount: (itemEl, data, index) => {
+        initTooltip(itemEl);
+    },
+
+    // Runs before an item is removed from the DOM
+    onItemRemove: (itemEl) => {
+        destroyTooltip(itemEl);
+    },
+});
+```
+
+`onMount` fires exactly once regardless of how many times the reactive system calls `list()`. `onItemMount` only fires for genuinely new items — items that were reused from the previous render do not trigger it. This replaces the `if (!el._dragBound)` guard pattern entirely.
+
+---
+
+## Reactivity — which primitive to use
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    REACTIVE SYSTEM                          │
+│  state() → derived() → effect()             batch()        │
+│      └──────────────────┘                                   │
+│              ↓                                              │
+│          context()   (global named reactive state)          │
+│              ↓                                              │
+│           watch()    (effect for a single value,            │
+│                       gives old + new value)                │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                 IMPERATIVE EVENT BUS                         │
+│  emit() / on()     signal() — named bus with value cache   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| I want to… | Use |
+|---|---|
+| Reactive state shared across components | `context()` |
+| Local reactive state inside one component | `state()` |
+| A computed/derived value | `derived()` |
+| Run code when any signal I read changes | `effect()` |
+| Run code when one specific signal changes | `watch()` |
+| Fire a one-shot event | `emit()` / `on()` |
+| A named bus that remembers its last value | `signal()` |
+
+`signal()` is an imperative pub/sub bus — it is not tracked by `effect()`. Use `context()` for reactive state and `signal()` for "current value + subscribe" communication between distant components.
 
 ---
 
@@ -276,6 +390,7 @@ Signals in props are unwrapped automatically — access `props().tasks` and it c
 | Reactive component communication (`signal`) | named | core + full |
 | DOM builder (`make`, `make.div`, `make.span` …) | named | core + full |
 | Enhanced queries (`find`, `query`, `findAll`, `queryAll`) | named | core + full |
+| Async-safe DOM capture (`scoped`, `ref`) | named | core + full |
 | Component context (`container`, `props`, `ready`) | named | core + full |
 | Router (hash + history, groups, middleware, named routes) | `Router` | core + full |
 | Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
@@ -288,7 +403,7 @@ Signals in props are unwrapped automatically — access `props().tasks` and it c
 | Events (delegated, emit/listen, keyboard shortcuts) | `on`, `emit`, `listen` | core + full |
 | Store (session/local/memory, encrypt, watch, TTL) | `Store` | core + full |
 | Encryption (Web Crypto, seal/open/rotate) | `encrypt` | core + full |
-| Engine (list reconcile, morph, `data-oja-bind`) | `engine` | core + full |
+| Engine (list reconcile, morph, `data-oja-bind`, lifecycle callbacks) | `engine` | core + full |
 | Progress (milestone hooks, reverse, bind, track) | `progress` | core + full |
 | Runtime unified event bus (`runtime.on/off/emit`) | `runtime` | core + full |
 | Animate (fade, slide, collapse, countUp, typewriter, shake) | `animate` | core + full |
@@ -317,13 +432,16 @@ Signals in props are unwrapped automatically — access `props().tasks` and it c
 | Virtual DOM | No | Direct DOM + targeted `effect()` |
 | Display primitive | `Out` everywhere | One type for all visible output — composable, typed, no raw strings |
 | DOM queries | `find()` reads execution context | Scoped automatically in component scripts, falls back to document outside — explicit import, no magic injection |
+| Async DOM access | `scoped()` and `ref()` | Permanently bound at capture time — safe in any callback, async function, or effect |
 | Component context | `container()`, `props()`, `ready()` | Named imports — IDE-visible, testable, statically analysable |
 | DOM creation | `make()` with placement chain | Build, place, and update in one expression |
+| List lifecycle | `onMount`, `onItemMount`, `onItemRemove` | One-time plugin setup without guard flags; new-items-only callbacks |
 | URL strategy | Hash default, path opt-in | Hash works everywhere without server config |
 | CSS ownership | App owns all styles | Oja only owns lifecycle animation and UI component classes |
 | Auth | Declared at route | Never check `isActive()` manually |
 | Event bus | Single unified bus | All modules emit on `events.js`. `runtime.on()` is the public subscription point |
 | Component communication | `signal()` | Reactive, holds current value — unlike fire-and-forget emit/listen |
+| Context write shorthand | `context.set(name, value)` | Write without destructuring when you don't need the read signal |
 | Progress | Direction-aware + hooks | Milestone hooks, reverse animation, runtime binding |
 | Offline | VFS optional | Progressive enhancement — start without it, add it when needed |
 

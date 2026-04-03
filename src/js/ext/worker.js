@@ -67,7 +67,6 @@
 import { debug }   from '../utils/debug.js';
 import { runtime } from '../core/runtime.js';
 
-
 // Classic bootstrap — runs as a top-level classic worker script.
 // Uses bare `onmessage =` so the WorkerShim in tests captures it correctly.
 const BOOTSTRAP_CLASSIC = `
@@ -134,7 +133,6 @@ ${innerSrc}
 `;
 }
 
-
 let _detectionCache = null;
 
 function _detect() {
@@ -191,7 +189,6 @@ export function _resetWorkerDetectionCache() {
     _detectionCache = null;
 }
 
-
 function _buildClassicWorker(workerFn, scripts, name) {
     const importBlock = scripts.length
         ? `importScripts(${scripts.map(s => JSON.stringify(s)).join(', ')});\n`
@@ -230,7 +227,6 @@ _userFn(_api);
     return w;
 }
 
-
 export class OjaWorker {
     /**
      * @param {Function|null} workerFn
@@ -258,14 +254,14 @@ export class OjaWorker {
         const modeOpt  = options.type || 'auto';
         const support  = _detect();
 
-        // ── Security ──────────────────────────────────────────────────────────
+        // Security
         for (const s of scripts) {
             if (!runtime.isOriginAllowed(s)) {
                 throw new Error(`[oja/worker] "${this._name}" blocked origin: ${s}`);
             }
         }
 
-        // ── Mode resolution ───────────────────────────────────────────────────
+        // Mode resolution
         let mode = modeOpt;
 
         if (mode === 'auto') {
@@ -297,7 +293,7 @@ export class OjaWorker {
 
         this._mode = mode;
 
-        // ── Construct ─────────────────────────────────────────────────────────
+        // Construct
         if (mode === 'classic') {
             if (!workerFn) throw new TypeError(`[oja/worker] "${this._name}" classic mode requires a workerFn`);
             this._worker = _buildClassicWorker(workerFn, scripts, this._name);
@@ -327,7 +323,7 @@ export class OjaWorker {
         debug.log('worker', `mode:${this._mode}`, { name: this._name });
     }
 
-    // ─── Public API ───────────────────────────────────────────────────────────
+    // Public API
 
     /** Send a message, get a Promise for the result. */
     call(type, data, transfer = []) {
@@ -373,7 +369,7 @@ export class OjaWorker {
      */
     static detect() { return _detect(); }
 
-    // ─── Internal ─────────────────────────────────────────────────────────────
+    // Internal
 
     _onMessage(msg) {
         const { id, type, result, error, eventType, data } = msg;

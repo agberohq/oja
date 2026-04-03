@@ -84,7 +84,7 @@ describe('OjaUploader', () => {
         vi.unstubAllGlobals();
     });
 
-    // ── Basic ──────────────────────────────────────────────────────────────────
+    // Basic
 
     it('creates an uploader instance', () => {
         const up = uploader.create({ url: '/test' });
@@ -210,7 +210,7 @@ describe('OjaUploader', () => {
         up.destroy();
     });
 
-    // ── Chunk formats ──────────────────────────────────────────────────────────
+    // Chunk formats
 
     it('handles base64 chunkFormat correctly', async () => {
         const up = uploader.create({ url: '/test', chunkSize: 10, chunkFormat: 'base64' });

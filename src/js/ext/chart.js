@@ -316,7 +316,6 @@ export const chart = {
             // Trend line over bar tops — matches the D3 line() pattern
             const linePts = currentValues.map((v, i) => `${(xS(i) + barW / 2).toFixed(1)},${yS(v).toFixed(1)}`).join(' ');
 
-            // opts.colors: string[] — per-bar colors for time-gradient effect.
             // When provided, opts.colors[i] overrides opts.color for that bar.
             // warnAt still overrides both when the value exceeds the threshold.
             const colors = Array.isArray(opts.colors) ? opts.colors : null;

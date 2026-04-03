@@ -95,7 +95,6 @@
  *   });
  */
 
-
 /**
  * @typedef {Object} ExportOptions
  * @property {string[]} [columns] - Columns to include
@@ -104,9 +103,8 @@
  * @property {Object} [transform] - Value transformers
  */
 
-
 export const exporter = {
-    // ─── CSV export ──────────────────────────────────────────────────────────
+    // CSV export
 
     /**
      * Export data as CSV
@@ -268,7 +266,7 @@ export const exporter = {
         }
     },
 
-    // ─── JSON export ─────────────────────────────────────────────────────────
+    // JSON export
 
     /**
      * Export as JSON
@@ -288,7 +286,7 @@ export const exporter = {
         return true;
     },
 
-    // ─── Excel export ────────────────────────────────────────────────────────
+    // Excel export
 
     /**
      * Export as Excel (requires SheetJS)
@@ -334,7 +332,7 @@ export const exporter = {
         return true;
     },
 
-    // ─── Print ───────────────────────────────────────────────────────────────
+    // Print
 
     /**
      * Print element
@@ -396,7 +394,7 @@ export const exporter = {
         return true;
     },
 
-    // ─── PDF export ──────────────────────────────────────────────────────────
+    // PDF export
 
     /**
      * Export as PDF (requires jsPDF)
@@ -432,7 +430,7 @@ export const exporter = {
         return true;
     },
 
-    // ─── Copy to clipboard ───────────────────────────────────────────────────
+    // Copy to clipboard
 
     copy: {
         /**
@@ -467,7 +465,7 @@ export const exporter = {
         },
     },
 
-    // ─── Chunked export ──────────────────────────────────────────────────────
+    // Chunked export
 
     /**
      * Export large data in chunks
@@ -512,7 +510,7 @@ export const exporter = {
         return allResults;
     },
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // Helpers
 
     _escapeCsv(str) {
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
