@@ -11,16 +11,41 @@ describe('oja.js barrel — new exports present', async () => {
     it('exports watch',            () => expect(typeof oja.watch).toBe('function'));
     it('exports untrack',          () => expect(typeof oja.untrack).toBe('function'));
     it('exports readonly',         () => expect(typeof oja.readonly).toBe('function'));
+    it('exports signal',           () => expect(typeof oja.signal).toBe('function'));
     it('exports onlyOnce',         () => expect(typeof oja.onlyOnce).toBe('function'));
     it('exports onClickOutside',   () => expect(typeof oja.onClickOutside).toBe('function'));
     it('exports onHover',          () => expect(typeof oja.onHover).toBe('function'));
     it('exports onLongPress',      () => expect(typeof oja.onLongPress).toBe('function'));
     it('exports allSlotsReady',    () => expect(typeof oja.allSlotsReady).toBe('function'));
+    it('exports scoped',           () => expect(typeof oja.scoped).toBe('function'));
+    it('exports container',        () => expect(typeof oja.container).toBe('function'));
+    it('exports props',            () => expect(typeof oja.props).toBe('function'));
+    it('exports ready',            () => expect(typeof oja.ready).toBe('function'));
+    it('exports ref',              () => expect(typeof oja.ref).toBe('function'));
+    it('exports render',           () => expect(typeof oja.render).toBe('function'));
+    it('exports renderRaw',        () => expect(typeof oja.renderRaw).toBe('function'));
+    it('exports fill',             () => expect(typeof oja.fill).toBe('function'));
+    it('exports each',             () => expect(typeof oja.each).toBe('function'));
+    it('exports template',         () => expect(typeof oja.template).toBe('object'));
+    it('exports VERSION',          () => expect(typeof oja.VERSION).toBe('string'));
+
     it('exports Reactive.watch',   () => expect(typeof oja.Reactive?.watch).toBe('function'));
     it('exports Reactive.untrack', () => expect(typeof oja.Reactive?.untrack).toBe('function'));
+    it('exports Reactive.signal',  () => expect(typeof oja.Reactive?.signal).toBe('function'));
     it('exports Event.onClickOutside', () => expect(typeof oja.Event?.onClickOutside).toBe('function'));
     it('exports Event.onHover',        () => expect(typeof oja.Event?.onHover).toBe('function'));
     it('exports Event.onlyOnce',       () => expect(typeof oja.Event?.onlyOnce).toBe('function'));
+
+    it('Oja namespace is an object',              () => expect(typeof oja.Oja).toBe('object'));
+    it('Oja.signal is a function',                () => expect(typeof oja.Oja?.signal).toBe('function'));
+    it('Oja.scoped is a function',                () => expect(typeof oja.Oja?.scoped).toBe('function'));
+    it('Oja.container is a function',             () => expect(typeof oja.Oja?.container).toBe('function'));
+    it('Oja.onlyOnce is a function',              () => expect(typeof oja.Oja?.onlyOnce).toBe('function'));
+    it('Oja.onClickOutside is a function',        () => expect(typeof oja.Oja?.onClickOutside).toBe('function'));
+    it('Oja.onHover is a function',               () => expect(typeof oja.Oja?.onHover).toBe('function'));
+    it('Oja.onLongPress is a function',           () => expect(typeof oja.Oja?.onLongPress).toBe('function'));
+    it('Oja.Reactive.signal is a function',       () => expect(typeof oja.Oja?.Reactive?.signal).toBe('function'));
+    it('Oja.version is a string',                 () => expect(typeof oja.Oja?.version).toBe('string'));
 });
 
 describe('oja.full.js barrel — collapse/accordion/wizard present', async () => {
@@ -32,6 +57,30 @@ describe('oja.full.js barrel — collapse/accordion/wizard present', async () =>
     it('collapse.attach is a function', () => expect(typeof full.collapse?.attach).toBe('function'));
     it('accordion.render is a function', () => expect(typeof full.accordion?.render).toBe('function'));
     it('wizard.render is a function', () => expect(typeof full.wizard?.render).toBe('function'));
+    it('exports clickmenu', () => expect(typeof full.clickmenu).toBe('object'));
+    it('exports countdown', () => expect(typeof full.countdown).toBe('object'));
+    it('exports mask', () => expect(typeof full.mask).toBe('object'));
+    it('exports exporter', () => expect(typeof full.exporter).toBe('object'));
+
+    // Class exports (for subclassing / instanceof checks)
+    it('exports OjaAnalytics class', () => expect(typeof full.OjaAnalytics).toBe('function'));
+    it('analytics is an OjaAnalytics instance', () => expect(full.analytics).toBeInstanceOf(full.OjaAnalytics));
+    it('exports OjaUploader class', () => expect(typeof full.OjaUploader).toBe('function'));
+
+    // sw shorthands (non-colliding)
+    it('exports sw.send shorthand', () => expect(typeof full.send).toBe('function'));
+    it('exports sw.post shorthand', () => expect(typeof full.post).toBe('function'));
+    it('exports sw.syncVFS shorthand', () => expect(typeof full.syncVFS).toBe('function'));
+    it('exports sw.clearVFS shorthand', () => expect(typeof full.clearVFS).toBe('function'));
+
+    // register.js flat exports (aliased to avoid collision with core emit/listen)
+    it('exports registryEmit', () => expect(typeof full.registryEmit).toBe('function'));
+    it('exports registryListen', () => expect(typeof full.registryListen).toBe('function'));
+    it('exports events object', () => expect(typeof full.events).toBe('object'));
+    it('events.emit is a function', () => expect(typeof full.events?.emit).toBe('function'));
+    it('events.listen is a function', () => expect(typeof full.events?.listen).toBe('function'));
+
+    it('exports progress', () => expect(typeof full.progress).toBe('function'));
 });
 
 describe('Store — new methods present', () => {

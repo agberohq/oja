@@ -51,7 +51,7 @@ export { animate }                                        from './js/core/animat
 
 export { Router }                                         from './js/core/router.js';
 export { component,
-    container, props, ready,
+    container, props, ready, ref, scoped,
 }                                                         from './js/core/component.js';
 export { currentContainer }                               from './js/core/_context.js';
 export { layout, allSlotsReady }           from './js/core/layout.js';
@@ -118,14 +118,14 @@ import { Api }                                           from './js/core/api.js'
 import { JsonCodec, jsonCodec }                          from './js/core/codecs/json.js';
 import { MsgPackCodec }                                  from './js/core/codecs/msgpack.js';
 import { Router }                                        from './js/core/router.js';
-import { component }                                     from './js/core/component.js';
+import { component, container, props, ready, ref, scoped } from './js/core/component.js';
 import { layout, allSlotsReady }                         from './js/core/layout.js';
 import { segment }                                       from './js/core/segment.js';
 import { animate }                                       from './js/core/animate.js';
 import { engine }                                        from './js/core/engine.js';
 import { plugin }                                        from './js/core/plugin.js';
 
-export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly };
+export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly, signal };
 
 export const Event = {
     on, once, off, emit, listen, listenOnce, waitFor,
@@ -150,12 +150,13 @@ export const Oja = {
     // System
     timeout, interval, sleep, defer, withDefer,
     // State
-    Store, state, effect, derived, batch, context,
+    Store, state, effect, derived, batch, context, signal,
     // Rendering
     Out, Responder, render, renderRaw, fill, each, template,
     segment, animate,
     // Routing
     Router, component, layout, allSlotsReady,
+    container, props, ready, ref, scoped,
     // DOM
     DOM, ui,
     find, findAll, findAllIn,
@@ -171,6 +172,7 @@ export const Oja = {
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
     onResize, onMutation,
+    onlyOnce, onClickOutside, onHover, onLongPress,
     // Engine
     engine,
     // Network & Codecs

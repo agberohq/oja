@@ -28,12 +28,14 @@
  *
  *   js/ui/  (UI patterns)
  *     modal, notify, clipboard, form, validate, autocomplete,
- *     table, tabs, canvas, dragdrop, popover, virtualList, mask
+ *     table, tabs, canvas, dragdrop, popover, virtualList, mask,
+ *     clickmenu, collapse, accordion, countdown, wizard
  *
  *   js/ext/ (opt-in features)
  *     auth, pagination, chart, history, channel, config,
- *     runner, vfs, sw, socket, worker, wasm, webrtc,
- *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter, uploader, analytics
+ *     runner, VFS, sw, socket (OjaSSE, OjaSocket), OjaWorker, OjaWasm, webrtc,
+ *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter, OjaUploader, uploader,
+ *     OjaAnalytics, analytics
  *
  *   js/utils/ (pure utilities)
  *     encrypt, logger, debug, adapter, search (Trie, Search),
@@ -69,7 +71,8 @@ export { Channel, go, pipeline, fanOut, fanIn,
 export { config }                                         from './js/ext/config.js';
 export { Runner }                                         from './js/ext/runner.js';
 export { VFS }                                            from './js/ext/vfs.js';
-export { sw }                                             from './js/ext/sw.js';
+export { sw,
+    send, post, syncVFS, clearVFS }                       from './js/ext/sw.js';
 export { OjaSSE, OjaSocket }                              from './js/ext/socket.js';
 export { OjaWorker }                                      from './js/ext/worker.js';
 export { OjaWasm }                                        from './js/ext/wasm.js';
@@ -79,8 +82,8 @@ export { pullToRefresh }                                  from './js/ext/pulltor
 export { cssVars }                                        from './js/ext/cssvars.js';
 export { lazy }                                           from './js/ext/lazy.js';
 export { exporter }                                       from './js/ext/export.js';
-export { uploader }                                       from './js/ext/uploader.js';
-export { analytics }                                      from './js/ext/analytics.js';
+export { OjaUploader, uploader }                          from './js/ext/uploader.js';
+export { OjaAnalytics, analytics }                        from './js/ext/analytics.js';
 
 export { encrypt }                                        from './js/utils/encrypt.js';
 export { logger }                                         from './js/utils/logger.js';
@@ -96,5 +99,6 @@ export {
     truncate, fallback,
     booleanStatus, booleanClass,
 }                                                         from './js/utils/formatter.js';
-export { events, register, strictMode, isRegistered, getRegistered }
+export { events, register, strictMode, isRegistered, getRegistered,
+    emit as registryEmit, listen as registryListen }
     from './js/utils/register.js';
