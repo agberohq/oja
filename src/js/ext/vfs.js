@@ -22,6 +22,14 @@
  *   const tree  = await vfs.tree('/');                  // nested tree
  *   await vfs.clear();                                  // wipe entire namespace
  *
+ * ─── Directory operations ──────────────────────────────────────────────────────
+ *
+ *   await vfs.mkdir('assets/images');                   // create directory
+ *   const items = await vfs.dir('/');                  // list with type awareness
+ *   const isDir = await vfs.isDir('assets');            // check if directory
+ *   const exists = await vfs.exists('file.txt');        // check existence (file or dir)
+ *   const stats = await vfs.stat('file.txt');           // get metadata
+ *
  * ─── Remote mounting ──────────────────────────────────────────────────────────
  *
  *   // Mount from a vfs.json file at the remote root
@@ -326,14 +334,60 @@ const WORKER_FN = function(self) {
     self.on('read', async ({ path }) => {
         const rec = await dbGet(path);
         if (!rec) return { path, content: null, found: false };
-        return { path, content: rec.content, found: true };
+        return { path, content: rec.content, found: true, meta: { updatedAt: rec.updatedAt } };
     });
 
-    self.on('rm', async ({ path }) => {
-        await dbDelete(path);
-        dirty.delete(path);
-        self.reply('changed', { path, content: null, deleted: true });
+    self.on('rm', async ({ path, recursive }) => {
+        const isDir = path.endsWith('/');
+        const dirPath = path ? (isDir ? path : path + '/') : '';
+
+        // Delete exact match
+        if (path) {
+            await dbDelete(path);
+            dirty.delete(path);
+            self.reply('changed', { path, content: null, deleted: true });
+        }
+
+        // Delete directory marker if implied
+        if (path && !isDir) {
+            await dbDelete(dirPath);
+            dirty.delete(dirPath);
+        }
+
+        // Handle recursive deletion for nested items
+        if (recursive) {
+            const all = await dbGetAll();
+            for (const r of all) {
+                if (r.path.startsWith(dirPath)) {
+                    await dbDelete(r.path);
+                    dirty.delete(r.path);
+                    self.reply('changed', { path: r.path, content: null, deleted: true });
+                }
+            }
+        }
+
         return { path };
+    });
+
+    self.on('cp', async ({ src, dst }) => {
+        const rec = await dbGet(src);
+        if (!rec) throw new Error(`Source not found: ${src}`);
+        await dbPut(dst, rec.content, rec.meta);
+        dirty.add(dst);
+        self.reply('changed', { path: dst, content: rec.content });
+        return { src, dst };
+    });
+
+    self.on('mv', async ({ src, dst }) => {
+        const rec = await dbGet(src);
+        if (!rec) throw new Error(`Source not found: ${src}`);
+        await dbPut(dst, rec.content, rec.meta);
+        await dbDelete(src);
+        dirty.add(dst);
+        dirty.delete(src);
+        self.reply('changed', { path: src, content: null, deleted: true });
+        self.reply('changed', { path: dst, content: rec.content });
+        return { src, dst };
     });
 
     self.on('ls', async ({ prefix }) => {
@@ -352,11 +406,175 @@ const WORKER_FN = function(self) {
         return { files };
     });
 
+    // DIRECTORY OPERATIONS (Worker)
+
+    self.on('mkdir', async ({ path }) => {
+        // Automatically create parent directories to be robust
+        let current = '';
+        const parts = path.split('/').filter(Boolean);
+
+        for (let i = 0; i < parts.length; i++) {
+            current += parts[i] + '/';
+            const existing = await dbGet(current);
+            if (!existing) {
+                await dbPut(current, '', { type: 'directory' });
+                dirty.add(current);
+                self.reply('changed', { path: current, content: '' });
+            }
+        }
+        return { path };
+    });
+
+    self.on('isDir', async ({ path }) => {
+        const rec = await dbGet(path);
+        // Explicit directory marker check
+        if (rec) return { isDir: true, path };
+
+        // Implicit check (has nested items)
+        const all = await dbGetAll();
+        const dirPath = path ? (path.endsWith('/') ? path : path + '/') : '';
+        const hasChildren = all.some(r => r.path.startsWith(dirPath) && r.path !== dirPath);
+        return { isDir: hasChildren, path };
+    });
+
+    self.on('exists', async ({ path }) => {
+        const rec = await dbGet(path);
+        return { exists: !!rec, path };
+    });
+
+    self.on('stat', async ({ path }) => {
+        const rec = await dbGet(path);
+        const isDirReq = path.endsWith('/');
+
+        if (!rec) {
+            // Implicit directory check
+            if (isDirReq) {
+                const all = await dbGetAll();
+                const children = new Set();
+                let hasChildren = false;
+
+                for (const r of all) {
+                    if (r.path.startsWith(path) && r.path !== path) {
+                        hasChildren = true;
+                        const relative = r.path.slice(path.length);
+                        const firstPart = relative.split('/')[0];
+                        if (firstPart) children.add(firstPart);
+                    }
+                }
+
+                if (hasChildren) {
+                    return { found: true, path, type: 'directory', size: 0, items: children.size, updatedAt: null };
+                }
+            }
+            return { found: false, path };
+        }
+
+        const isDirMarker = rec.path.endsWith('/') && (rec.content === '' || rec.meta?.type === 'directory');
+        if (isDirMarker) {
+            // Count direct children
+            const all = await dbGetAll();
+            const prefix = rec.path;
+            const children = new Set();
+
+            for (const r of all) {
+                if (r.path === prefix) continue;
+                if (r.path.startsWith(prefix)) {
+                    const relative = r.path.slice(prefix.length);
+                    const firstPart = relative.split('/')[0];
+                    if (firstPart) children.add(firstPart);
+                }
+            }
+
+            return {
+                found: true,
+                path,
+                type: 'directory',
+                size: 0,
+                items: children.size,
+                updatedAt: rec.updatedAt,
+            };
+        }
+
+        return {
+            found: true,
+            path,
+            type: 'file',
+            size: typeof rec.content === 'string'
+                ? rec.content.length
+                : (rec.content?.byteLength || 0),
+            updatedAt: rec.updatedAt,
+        };
+    });
+
+    self.on('dir', async ({ prefix }) => {
+        const all = await dbGetAll();
+        // If prefix is empty (root), dirPrefix is empty so startsWith matches all files.
+        // Otherwise ensure trailing slash for directory boundaries.
+        const dirPrefix = prefix ? (prefix.endsWith('/') ? prefix : prefix + '/') : '';
+
+        const items = new Map();
+
+        for (const r of all) {
+            // Skip if not under this prefix, or if it is the directory marker itself
+            if (!r.path.startsWith(dirPrefix) || r.path === dirPrefix) continue;
+
+            const relative = r.path.slice(dirPrefix.length);
+            const parts = relative.split('/').filter(Boolean);
+            const name = parts[0];
+
+            if (!name || items.has(name)) continue;
+
+            const isDirMarker = r.path.endsWith('/') && parts.length === 1;
+            const isNested = parts.length > 1;
+
+            if (isDirMarker) {
+                items.set(name, {
+                    name,
+                    path: r.path,
+                    type: 'directory',
+                    size: 0,
+                    dirty: dirty.has(r.path),
+                    updatedAt: r.updatedAt,
+                });
+            } else if (isNested) {
+                // Implicit directory from nested file path
+                items.set(name, {
+                    name,
+                    path: dirPrefix + name + '/',
+                    type: 'directory',
+                    size: 0,
+                    dirty: false,
+                    updatedAt: null,
+                });
+            } else {
+                // File in current directory
+                items.set(name, {
+                    name,
+                    path: r.path,
+                    type: 'file',
+                    size: typeof r.content === 'string'
+                        ? r.content.length
+                        : (r.content?.byteLength || 0),
+                    dirty: dirty.has(r.path),
+                    updatedAt: r.updatedAt,
+                });
+            }
+        }
+
+        // Sort: directories first, then alphabetically
+        const sorted = Array.from(items.values()).sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        return { items: sorted };
+    });
+
     self.on('tree', async ({ prefix }) => {
         const all = await dbGetAll();
         const p   = prefix === '/' ? '' : (prefix || '');
 
-        const tree = { name: p || '/', children: [] };
+        const tree = { name: p || '/', type: 'directory', children: [] };
         const dirs = new Map();
         dirs.set(p || '/', tree);
 
@@ -368,21 +586,22 @@ const WORKER_FN = function(self) {
                 let   node  = tree;
 
                 parts.forEach((part, i) => {
-                    const isFile = i === parts.length - 1;
+                    const isFile = i === parts.length - 1 && !r.path.endsWith('/');
                     const dirKey = p + parts.slice(0, i + 1).join('/');
 
                     if (isFile) {
                         node.children.push({
                             name : part,
                             path : r.path,
+                            type : 'file',
                             size : typeof r.content === 'string'
                                 ? r.content.length
-                                : (r.content?.byteLength ?? 0),
+                                : (r.content?.byteLength || 0),
                             dirty: dirty.has(r.path),
                         });
                     } else {
                         if (!dirs.has(dirKey)) {
-                            const dir = { name: part, path: dirKey + '/', children: [] };
+                            const dir = { name: part, path: dirKey + '/', type: 'directory', children: [] };
                             dirs.set(dirKey, dir);
                             node.children.push(dir);
                         }
@@ -562,9 +781,6 @@ export class VFS {
     write(path, content) {
         const normalised = this._normPath(path);
         if (this.options.encrypt?.seal) {
-            // Invoke seal() synchronously so the call is registered immediately.
-            // The resolved value is sent to the worker once the promise settles.
-            // write() still returns undefined (fire and forget contract is preserved).
             const sealPromise = Promise.resolve(this.options.encrypt.seal(content));
             sealPromise.then(sealed => {
                 this.#runner.send('write', { path: normalised, content: sealed });
@@ -599,7 +815,9 @@ export class VFS {
         return content;
     }
 
-    // Read a file as text — convenience wrapper over read()
+    /**
+     * Read a file as text.
+     */
     async readText(path) {
         const raw = await this.read(path);
         if (raw === null) return null;
@@ -609,7 +827,6 @@ export class VFS {
         } else {
             text = raw;
         }
-        // Decrypt if encrypt hook is configured and content is sealed
         if (this.options.encrypt?.open && this.options.encrypt?.isSealed?.(text)) {
             text = await this.options.encrypt.open(text);
         }
@@ -617,20 +834,64 @@ export class VFS {
     }
 
     /**
-     * Delete a file.
-     *
-     *   await vfs.rm('old.html');
+     * Delete a file or directory.
+     * @param {string} path - The path to remove.
+     * @param {boolean} [recursive=false] - If true, removes all contents of the directory.
      */
-    async rm(path) {
-        await this.#runner.request('rm', { path: this._normPath(path) });
+    async rm(path, recursive = false) {
+        await this.#runner.request('rm', {
+            path: this._normPath(path),
+            recursive
+        });
         this.#refreshCount();
     }
 
     /**
-     * List files under a prefix. Returns array of file descriptors.
-     *
-     *   const files = await vfs.ls('/');
-     *   const pages = await vfs.ls('pages/');
+     * Copy a file from source to destination.
+     * @param {string} src - Source path.
+     * @param {string} dst - Destination path.
+     */
+    async cp(src, dst) {
+        await this.#runner.request('cp', {
+            src: this._normPath(src),
+            dst: this._normPath(dst)
+        });
+        this.#refreshCount();
+    }
+
+    /**
+     * Move a file from source to destination.
+     * @param {string} src - Source path.
+     * @param {string} dst - Destination path.
+     */
+    async mv(src, dst) {
+        await this.#runner.request('mv', {
+            src: this._normPath(src),
+            dst: this._normPath(dst)
+        });
+        this.#refreshCount();
+    }
+
+    /**
+     * Trigger a browser download of the file's contents.
+     * @param {string} path - The path of the file to download.
+     */
+    async download(path) {
+        const content = await this.readText(path);
+        if (content === null) return;
+        const filename = path.split('/').pop() || 'download';
+        const blob = new Blob([content], { type: this.mime(path) || 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * List files under a prefix. Returns flat array of file descriptors.
+     * Legacy API — use dir() for directory-aware listing.
      */
     async ls(prefix = '/') {
         const { files } = await this.#runner.request('ls', { prefix });
@@ -664,6 +925,104 @@ export class VFS {
     async clear() {
         await this.#runner.request('clear');
         this.#setFileCount(0);
+    }
+
+    // DIRECTORY OPERATIONS
+
+    /**
+     * Create a directory. Directories are marked by trailing slash in path.
+     *
+     *   await vfs.mkdir('assets/images');
+     *   await vfs.mkdir('assets/images/');  // equivalent
+     */
+    async mkdir(path) {
+        const normalized = this._normPath(path);
+        const dirPath = normalized.endsWith('/') ? normalized : normalized + '/';
+        await this.#runner.request('mkdir', { path: dirPath });
+        this.#refreshCount();
+    }
+
+    /**
+     * Check if path is a directory.
+     *
+     *   const isDir = await vfs.isDir('assets');  // true if assets/ exists
+     */
+    async isDir(path) {
+        const normalized = this._normPath(path);
+        if (!normalized) return true; // root is always a directory
+
+        const dirPath = normalized.endsWith('/') ? normalized : normalized + '/';
+        const { isDir } = await this.#runner.request('isDir', { path: dirPath });
+        return isDir;
+    }
+
+    /**
+     * Check if path exists (file or directory).
+     *
+     *   const exists = await vfs.exists('file.txt');
+     *   const exists = await vfs.exists('folder');  // true if folder/ exists
+     */
+    async exists(path) {
+        const normalized = this._normPath(path);
+        if (!normalized) return true; // root exists
+
+        // Check as file first
+        const fileCheck = await this.#runner.request('exists', { path: normalized });
+        if (fileCheck.exists) return true;
+
+        // Check as directory via isDir to smoothly cover implicit directories
+        return await this.isDir(path);
+    }
+
+    /**
+     * Get file/directory stats.
+     *
+     *   const stats = await vfs.stat('file.txt');
+     *   // { type: 'file', size: 123, updatedAt: 123456789 }
+     *
+     *   const stats = await vfs.stat('folder');
+     *   // { type: 'directory', items: 5, size: 0, updatedAt: 123456789 }
+     */
+    async stat(path) {
+        const normalized = this._normPath(path);
+
+        // Special case for root directory
+        if (!normalized) {
+            const rootItems = await this.dir('/');
+            return {
+                found: true,
+                path: '/',
+                type: 'directory',
+                size: 0,
+                items: rootItems.length,
+                updatedAt: null
+            };
+        }
+
+        // Try as file first
+        const result = await this.#runner.request('stat', { path: normalized });
+        if (result.found) return result;
+
+        // Try as directory
+        const dirPath = normalized.endsWith('/') ? normalized : normalized + '/';
+        const dirResult = await this.#runner.request('stat', { path: dirPath });
+        if (dirResult.found) return dirResult;
+
+        return null;
+    }
+
+    /**
+     * List directory contents with directory awareness.
+     * Returns array of { name, path, type, size, dirty, updatedAt } objects.
+     *
+     *   const items = await vfs.dir('/');
+     *   // [{ name: 'src', path: 'src/', type: 'directory', size: 0 },
+     *   // { name: 'readme.md', path: 'readme.md', type: 'file', size: 123 }]
+     */
+    async dir(dir = '/') {
+        const normalized = this._normPath(dir);
+        const { items } = await this.#runner.request('dir', { prefix: normalized });
+        return items;
     }
 
     // Remote mounting
@@ -756,9 +1115,6 @@ export class VFS {
      * @param {object} [options] — same options as Out.component() — error, bypassCache
      */
     component(path, data = {}, lists = {}, options = {}) {
-        // Pass this VFS instance directly into _ComponentOut via options.vfs.
-        // _fetchHTML reads options.vfsOverride per-call — no global state touched,
-        // so concurrent Out.list() renders each using their own VFS are safe.
         return Out.component(path, data, lists, { ...options, vfs: this });
     }
 
@@ -855,7 +1211,6 @@ export class VFS {
      */
     async ready() {
         await this.#readyPromise;
-        // Request durable storage once — fire-and-forget, non-fatal if denied.
         this.persist().catch(() => {});
         return this;
     }
@@ -948,7 +1303,6 @@ export class VFS {
     }
 
     #emit(event, data) {
-        // Directly notify change watchers for mount/sync events
         if (event === 'mounted' && data.fetched) {
             data.fetched.forEach(path =>
                 this.#changeWatchers.forEach(({ prefix, fn }) => {
@@ -965,10 +1319,6 @@ export class VFS {
 
     _normPath(path) {
         if (!path) throw new Error('[oja/vfs] path is required');
-        // Strip leading slash — VFS uses relative paths internally
         return path.startsWith('/') ? path.slice(1) : path;
     }
-
-    // Storage management
-
 }
