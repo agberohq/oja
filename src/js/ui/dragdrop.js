@@ -92,7 +92,7 @@ const _dragState = {
 
 let _animationFrame = null;
 let _touchListenersAdded = false;
-
+const _dropZones = new WeakMap();
 
 const _reorderLists = new Map(); // listElement -> { opts, observer }
 
