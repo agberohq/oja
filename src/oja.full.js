@@ -86,6 +86,7 @@ export { encrypt }                                        from './js/utils/encry
 export { logger }                                         from './js/utils/logger.js';
 export { debug }                                          from './js/utils/debug.js';
 export { adapter }                                        from './js/utils/adapter.js';
+export { progress }                                        from './js/utils/progress.js';
 export { Trie, Search }                                   from './js/utils/search.js';
 export {
     uppercase, lowercase, capitalize, titleCase,
