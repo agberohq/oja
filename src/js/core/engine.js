@@ -529,17 +529,50 @@ function _unbind(el, storeKey) {
  *       },
  *   });
  */
+/**
+ * Reconcile a keyed array into a container with minimal DOM operations.
+ * For synchronous render functions (plain HTML builders, template strings).
+ *
+ * Lifecycle callbacks:
+ *   onMount(containerEl)           — fires once after the first render
+ *   onItemMount(itemEl, data, idx) — fires only for newly created items
+ *   onItemRemove(itemEl)           — fires before an item is removed
+ *
+ * The onMount / onItemMount distinction matters: onMount is for one-time
+ * imperative plugin setup (e.g. dragdrop.reorder). onItemMount is for
+ * per-item setup (e.g. attaching a tooltip to each new row).
+ * Neither fires on subsequent re-renders of existing items.
+ *
+ *   engine.list('#notes', notes, {
+ *       key:    n => n.id,
+ *       render: (n, existing) => { ... return el; },
+ *       onMount:      (container) => dragdrop.reorder(container, { ... }),
+ *       onItemMount:  (el, data, i) => initTooltip(el),
+ *       onItemRemove: (el) => cleanupTooltip(el),
+ *   });
+ */
 export function list(container, items, options = {}) {
     const parent = _resolve(container);
     if (!parent) { console.warn('[oja/engine] list: container not found'); return; }
 
-    const { key, render, empty, keyAttr = 'data-oja-key' } = options;
+    const {
+        key, render, empty, keyAttr = 'data-oja-key',
+        onMount, onItemMount, onItemRemove,
+    } = options;
     if (!render) { console.warn('[oja/engine] list: options.render is required'); return; }
     if (!key)    { console.warn('[oja/engine] list: options.key is required');    return; }
+
+    // data-oja-list-mounted is a durable DOM marker — survives reactive re-renders
+    // without requiring an internal WeakMap or module-level state.
+    const isFirstRender = !parent.hasAttribute('data-oja-list-mounted');
 
     if (!items || items.length === 0) {
         parent.innerHTML = '';
         if (empty) parent.appendChild(typeof empty === 'function' ? empty() : empty);
+        if (isFirstRender) {
+            parent.setAttribute('data-oja-list-mounted', '');
+            onMount?.(parent);
+        }
         emit('engine:list-updated', { container: parent, count: 0 });
         return;
     }
@@ -562,15 +595,26 @@ export function list(container, items, options = {}) {
         if (!el.getAttribute(keyAttr)) el.setAttribute(keyAttr, itemKey);
         // If render returned a new element instead of reusing found, remove the stale one
         if (found && el !== found) found.remove();
+        // onItemMount fires ONLY for genuinely new items (found === null).
+        // It does NOT fire on re-renders of existing items.
+        if (!found && onItemMount) onItemMount(el, item, i);
         order.push(el);
         used.add(itemKey);
     }
 
     for (const [k, el] of existing) {
-        if (!used.has(k)) el.remove();
+        if (!used.has(k)) {
+            onItemRemove?.(el);
+            el.remove();
+        }
     }
 
     _reorderChildren(parent, order);
+
+    if (isFirstRender) {
+        parent.setAttribute('data-oja-list-mounted', '');
+        onMount?.(parent);
+    }
 
     emit('engine:list-updated', { container: parent, count: items.length });
 }
@@ -581,6 +625,11 @@ export function list(container, items, options = {}) {
  * Slots are inserted immediately with existing content preserved; async renders
  * update each slot in place as they resolve.
  *
+ * Supports the same lifecycle callbacks as list():
+ *   onMount(containerEl)           — fires once after the first render
+ *   onItemMount(itemEl, data, idx) — fires only for newly inserted slots
+ *   onItemRemove(itemEl)           — fires before a slot is removed
+ *
  *   await engine.listAsync('#hostsContainer', hosts, {
  *       key:    host => host.id,
  *       render: async (host, existingEl) => {
@@ -588,19 +637,29 @@ export function list(container, items, options = {}) {
  *           await Out.to(el).component('components/host-row.html', host);
  *           return el;
  *       },
+ *       onMount: (container) => dragdrop.reorder(container, { ... }),
  *   });
  */
 export async function listAsync(container, items, options = {}) {
     const parent = _resolve(container);
     if (!parent) { console.warn('[oja/engine] listAsync: container not found'); return; }
 
-    const { key, render, empty, keyAttr = 'data-oja-key' } = options;
+    const {
+        key, render, empty, keyAttr = 'data-oja-key',
+        onMount, onItemMount, onItemRemove,
+    } = options;
     if (!render) { console.warn('[oja/engine] listAsync: options.render is required'); return; }
     if (!key)    { console.warn('[oja/engine] listAsync: options.key is required');    return; }
+
+    const isFirstRender = !parent.hasAttribute('data-oja-list-mounted');
 
     if (!items || items.length === 0) {
         parent.innerHTML = '';
         if (empty) parent.appendChild(typeof empty === 'function' ? empty() : empty);
+        if (isFirstRender) {
+            parent.setAttribute('data-oja-list-mounted', '');
+            onMount?.(parent);
+        }
         emit('engine:list-updated', { container: parent, count: 0 });
         return;
     }
@@ -617,23 +676,36 @@ export async function listAsync(container, items, options = {}) {
         const found   = existing.get(itemKey) || null;
         const slot    = found || document.createElement('div');
         if (!slot.getAttribute(keyAttr)) slot.setAttribute(keyAttr, itemKey);
-        return { item, slot, itemKey, i };
+        return { item, slot, itemKey, i, isNew: !found };
     });
 
     // Insert/reorder before async work so DOM order is correct immediately
     const used = new Set(slots.map(s => s.itemKey));
-    for (const [k, el] of existing) { if (!used.has(k)) el.remove(); }
+    for (const [k, el] of existing) {
+        if (!used.has(k)) {
+            onItemRemove?.(el);
+            el.remove();
+        }
+    }
     _reorderChildren(parent, slots.map(s => s.slot));
 
     // Render all slots concurrently — each updates its slot in place
-    await Promise.all(slots.map(({ item, slot, i }) => render(item, slot, i)));
+    await Promise.all(slots.map(({ item, slot, i, isNew }) =>
+        Promise.resolve(render(item, slot, i)).then(() => {
+            if (isNew && onItemMount) onItemMount(slot, item, i);
+        })
+    ));
+
+    if (isFirstRender) {
+        parent.setAttribute('data-oja-list-mounted', '');
+        onMount?.(parent);
+    }
 
     emit('engine:list-updated', { container: parent, count: items.length });
 }
 
-
 /**
- * Defer a nextFrame of store updates to the next animation frame.
+ * Defer a batch of store updates to the next animation frame.
  * Prevents multiple repaints when updating several keys at once.
  *
  *   await engine.nextFrame(() => {

@@ -1,4 +1,4 @@
-import { pushContainer, popContainer, _setReadyFn } from './_context.js';
+import { pushContainer, popContainer, _setReadyFn, clearExecSlot } from './_context.js';
 
 /**
  * oja/_exec.js
@@ -27,27 +27,41 @@ import { pushContainer, popContainer, _setReadyFn } from './_context.js';
  *
  * ─── No magic injection ───────────────────────────────────────────────────────
  *
- * _exec.js no longer injects container, find, findAll, or props as magic
- * globals. Component scripts import what they need explicitly:
+ * _exec.js does not inject any variables into component scripts.
+ * Scripts import what they need explicitly:
  *
- *   import { find, container, props } from '../js/oja.js';
+ *   import { find, container, props, ready, scoped, ref } from '../js/oja.js';
  *
  * find() reads the active container from the stack automatically.
  * container() returns the DOM element this script is mounted into.
  * props() returns the data passed at mount time.
  *
- * This makes dependencies IDE-visible, testable, and statically analysable.
+ * ─── ready() ─────────────────────────────────────────────────────────────────
  *
- * ─── __oja_ready__ ───────────────────────────────────────────────────────────
- *
- * The one remaining special value. Scripts signal completion by calling
- * ready() (imported from oja.js) or the injected __oja_ready__(). Both
- * resolve the same Promise. If neither is called, the load-event fallback
- * resolves automatically.
+ * Scripts signal async completion by calling ready() (imported from oja.js).
+ * If ready() is never called, the load-event fallback resolves automatically.
  *
  *   import { ready } from '../js/oja.js';
  *   // ... async setup ...
  *   ready();
+ *
+ * ─── Why _declares() was removed ─────────────────────────────────────────────
+ *
+ * _declares() was a regex-based JS parser used to detect whether a component
+ * script already declared a name before injecting it in the preamble. It was
+ * inherently brittle — already fixed once for the `const x = await find(...)`
+ * false-positive. Other valid patterns it would misparse:
+ *   `const obj = { find: fn }`, `function f(find) {}`
+ *
+ * Removing __oja_ready__ injection removes the only reason _declares() existed.
+ * The preamble is now two fixed lines — no code generation, no parsing.
+ *
+ * ─── Preamble ─────────────────────────────────────────────────────────────────
+ *
+ * window[scopeKey] is set to the container element (a bare Element reference,
+ * not a wrapped object). The preamble reads it synchronously — the very first
+ * code the module runs — then deletes it. This is the only channel from the
+ * host page into the isolated blob module context.
  *
  * ─── Resolution paths ────────────────────────────────────────────────────────
  *
@@ -73,69 +87,6 @@ const EXEC_TIMEOUT = 30_000; // 30s — catches while(true) and infinite await c
 // Monotonic counter prevents key collision even in the same millisecond
 let _scopeCounter = 0;
 
-//
-// Returns true if `name` is declared as a binding in `source`.
-// Strips strings and comments first to avoid false positives.
-//
-// Patterns covered:
-//   const/let/var x = ...                   simple declaration
-//   const/let/var { x } = ...              object destructuring
-//   const/let/var [x] = ...               array destructuring
-//   for (const x of ...) / for (const x in ...)   loop variables
-//   function x() {}                         function declaration
-//   class x {}                              class declaration
-//   function f(x, ...) {}                   function parameter
-//   (x) => {}  /  x => {}                  arrow parameter
-//
-// Critical correctness rule — the binding name must appear on the LEFT side
-// of the declaration, not in the initialiser expression. The original pattern:
-//
-//   \b(?:const|let|var)\b[^;{]*?\bname\b
-//
-// was too broad: it matched  `const wsSwitcher = await find('#id')`  because
-// `find` appears anywhere after `const` on the same line — including in the
-// VALUE expression. This caused the preamble to skip injecting the scoped
-// `find` helper, so scripts fell back to `window.find()` (the browser's
-// native text-search API which returns boolean false).
-//
-// The fix: each const/let/var pattern now anchors the name to the BINDING
-// position — directly after the keyword (simple), or inside { } / [ ]
-// (destructuring) — never after the `=` sign.
-
-function _declares(source, name) {
-    if (!source.includes(name)) return false;
-
-    // Strip strings and comments to reduce false positives
-    const clean = source
-        .replace(/`(?:[^`\\]|\\.)*`/g,  '``')   // template literals
-        .replace(/'(?:[^'\\]|\\.)*'/g,  "''")    // single-quoted strings
-        .replace(/"(?:[^"\\]|\\.)*"/g,  '""')    // double-quoted strings
-        .replace(/\/\/[^\n]*/g,         '')       // line comments
-        .replace(/\/\*[\s\S]*?\*\//g,   '');      // block comments
-
-    const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    return [
-        // Simple: const find = ...  /  let find;  /  var find,
-        // Name is the first (and only) identifier directly after the keyword.
-        new RegExp(`\\b(?:const|let|var)\\s+${n}\\b`),
-        // Object destructuring: const { find } = ...  or  const { a, find } = ...
-        new RegExp(`\\b(?:const|let|var)\\s*\\{[^}]*\\b${n}\\b[^}]*\\}`),
-        // Array destructuring: const [find] = ...  or  const [a, find] = ...
-        new RegExp(`\\b(?:const|let|var)\\s*\\[[^\\]]*\\b${n}\\b[^\\]]*\\]`),
-        // for-of / for-in loop variables
-        new RegExp(`\\bfor\\s*\\(\\s*(?:const|let|var)\\s+${n}\\b`),
-        // function declarations
-        new RegExp(`\\bfunction\\s+${n}\\b`),
-        // class declarations
-        new RegExp(`\\bclass\\s+${n}\\b`),
-        // function parameters: function(find) or function(a, find, b)
-        new RegExp(`\\bfunction\\s*\\([^)]*\\b${n}\\b[^)]*\\)`),
-        // arrow function parameters: (find) => or find =>
-        new RegExp(`(?:^|[^\\w])${n}\\s*=>`),
-        new RegExp(`\\([^)]*\\b${n}\\b[^)]*\\)\\s*=>`),
-    ].some(re => re.test(clean));
-}
 
 //
 // Rewrites relative import specifiers to absolute URLs using the component's
@@ -254,18 +205,24 @@ export function execScripts(container, sourceUrl, propsData = {}) {
 
             const body = oldScript.textContent || '';
 
-            // Only __oja_ready__ is injected — everything else (container,
-            // find, findAll, props) is imported explicitly by the script.
-            window[scopeKey] = {
-                __oja_ready__: null, // filled in below inside the Promise
-            };
+            // Pass the container element through the blob boundary via a
+            // temporary window key. The preamble reads it synchronously —
+            // the very first code the module runs — so find() / scoped() /
+            // container() at top-level always see the correct element.
+            //
+            // No __oja_ready__ is injected here. Scripts signal completion via:
+            //   import { ready } from '../js/oja.js'; ready();
+            // The load-event fallback resolves automatically if ready() is
+            // never called (covers synchronous scripts and legacy components).
+            window[scopeKey] = container;
 
+            // Two fixed lines — no code generation, no _declares() parsing.
             const preamble = [
-                `const { __oja_ready__ } = window[${JSON.stringify(scopeKey)}];`,
+                `window.__oja_exec__ = window[${JSON.stringify(scopeKey)}];`,
                 `delete window[${JSON.stringify(scopeKey)}];`,
             ].join('\n');
 
-            const src = `${preamble}\n${_rewriteImports(body, base)}`;
+            const src     = `${preamble}\n${_rewriteImports(body, base)}`;
             const blob    = new Blob([src], { type: 'text/javascript' });
             const blobUrl = URL.createObjectURL(blob);
 
@@ -285,6 +242,8 @@ export function execScripts(container, sourceUrl, propsData = {}) {
                     URL.revokeObjectURL(blobUrl);
                     // Clean up scope key in case script errored before preamble ran
                     if (scopeKey in window) delete window[scopeKey];
+                    // Clear the per-execution slot — top-level code is done
+                    clearExecSlot();
                 };
 
                 const _done = () => {
@@ -294,7 +253,7 @@ export function execScripts(container, sourceUrl, propsData = {}) {
                 };
 
                 // Safety timeout — resolves instead of hanging forever if the
-                // script has an infinite loop or never calls __oja_ready__().
+                // script has an infinite loop or never resolves.
                 const timeoutId = setTimeout(() => {
                     console.warn(
                         `[oja/_exec] script timeout (${EXEC_TIMEOUT}ms) in:`,
@@ -303,16 +262,17 @@ export function execScripts(container, sourceUrl, propsData = {}) {
                     _done();
                 }, EXEC_TIMEOUT);
 
-                // Primary resolution: script calls __oja_ready__() (injected)
-                // or import { ready } from '../js/oja.js' (explicit import path)
-                window[scopeKey].__oja_ready__ = _done;
+                // Primary resolution: script imports ready() from oja.js and calls it.
+                //   import { ready } from '../js/oja.js'; ready();
+                // _setReadyFn wires the container -> _done so component.ready()
+                // resolves this same Promise.
                 _setReadyFn(container, _done);
 
                 // Fallback: load event fires after script executes.
-                // Covers scripts that forget __oja_ready__(), legacy components,
+                // Covers synchronous scripts, scripts that never call ready(),
                 // and scripts that error before reaching it.
                 // Microtask delay gives synchronous post-load code one tick to
-                // call __oja_ready__() before the fallback fires.
+                // call ready() before the fallback fires.
                 newScript.addEventListener('load',  () => { Promise.resolve().then(_done); }, { once: true });
                 newScript.addEventListener('error', (e) => {
                     console.error('[oja/_exec] module script error in:', sourceUrl || 'inline', e);

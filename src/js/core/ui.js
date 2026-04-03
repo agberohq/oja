@@ -102,6 +102,32 @@ export function find(selector, options = {}) {
     const required = options.required ?? false;
     const timeout  = options.timeout  ?? 0;
 
+    // Dev-mode warning: find() called outside a component context with no
+    // explicit scope. This is the async misuse pattern — find() inside a
+    // setTimeout, effect callback, or async function loses the context stack
+    // and falls back to document, returning the wrong element or null.
+    //
+    // __OJA_DEV__ is replaced with `false` by production builds — zero cost.
+    // Set window.__OJA_DEV__ = true in your dev HTML to enable.
+    if (
+        typeof __OJA_DEV__ !== 'undefined' && __OJA_DEV__ &&
+        !options.scope &&
+        !currentContainer() &&
+        scope === document
+    ) {
+        console.warn(
+            `[oja/ui] find('${selector}') called outside a component context.\n` +
+            `Inside setTimeout / async callbacks the context stack is empty.\n` +
+            `Capture the element at top-level instead:\n` +
+            `\n` +
+            `  const el = find('${selector}');           // ✓ at top-level\n` +
+            `  setTimeout(() => el.classList.add('ok')); // ✓ reuses captured ref\n` +
+            `\n` +
+            `Or use component.scoped() for a permanently-bound query function:\n` +
+            `  const { find } = scoped();  // ✓ always safe`
+        );
+    }
+
     if (timeout > 0) {
         return new Promise((resolve) => {
             const el = scope.querySelector(selector);
@@ -785,14 +811,16 @@ function _renderable(el) {
     // ── Placement helpers ─────────────────────────────────────────────────────
     // All accept a CSS selector string or an Element. All return `this`.
 
-    const _resolveTarget = (target) =>
-        typeof target === 'string' ? document.querySelector(target) : target;
+    const _resolveTarget = (target) => {
+        if (target == null || target === '') return null;
+        return typeof target === 'string' ? document.querySelector(target) : target;
+    };
 
     /** Append as last child of target. */
     _define('appendTo', function(target) {
         const t = _resolveTarget(target);
         if (t) t.appendChild(el);
-        else console.warn('[oja/make] appendTo: target not found:', target);
+        else if (target) console.warn('[oja/make] appendTo: target not found:', target);
         return el;
     });
 
@@ -800,7 +828,7 @@ function _renderable(el) {
     _define('prependTo', function(target) {
         const t = _resolveTarget(target);
         if (t) t.prepend(el);
-        else console.warn('[oja/make] prependTo: target not found:', target);
+        else if (target) console.warn('[oja/make] prependTo: target not found:', target);
         return el;
     });
 
@@ -812,7 +840,7 @@ function _renderable(el) {
     _define('insertAfter', function(target) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.insertBefore(el, t.nextSibling);
-        else console.warn('[oja/make] insertAfter: target not found:', target);
+        else if (target) console.warn('[oja/make] insertAfter: target not found:', target);
         return el;
     });
 
@@ -824,7 +852,7 @@ function _renderable(el) {
     _define('insertBefore', function(target) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.insertBefore(el, t);
-        else console.warn('[oja/make] insertBefore: target not found:', target);
+        else if (target) console.warn('[oja/make] insertBefore: target not found:', target);
         return el;
     });
 
@@ -832,7 +860,7 @@ function _renderable(el) {
     _define('replace', function(target) {
         const t = _resolveTarget(target);
         if (t?.parentNode) t.parentNode.replaceChild(el, t);
-        else console.warn('[oja/make] replace: target not found:', target);
+        else if (target) console.warn('[oja/make] replace: target not found:', target);
         return el;
     });
 

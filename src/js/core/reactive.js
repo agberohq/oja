@@ -638,6 +638,24 @@ context.get = (name) => {
     return read();
 };
 
+/**
+ * Write a context value by name without subscribing.
+ * Symmetric counterpart to context.get().
+ *
+ * Before: const [, setNotes] = context('notes');  // forced destructure
+ * After:  context.set('notes', updatedList);       // clear intent
+ *
+ * Warns if the key has not been registered yet.
+ */
+context.set = (name, value) => {
+    if (!_ctx.has(name)) {
+        console.warn(`[oja/context] set: '${name}' is not registered. Call context('${name}', defaultValue) first.`);
+        return;
+    }
+    const [, write] = _ctx.get(name);
+    write(value);
+};
+
 context.keys = () => [..._ctx.keys()];
 
 context.clear = (name) => {

@@ -222,8 +222,64 @@ export function ready() {
     if (fn) fn();
 }
 
-// Exported only for use in tests — allow tests to set the active component
-// context and inspect scope state without going through the full mount pipeline.
+/**
+ * scoped() — returns permanently-bound query functions for the current component.
+ *
+ * Calling find() inside setTimeout, async callbacks, or effects is unsafe —
+ * the synchronous context stack is cleared after top-level execution.
+ * scoped() captures the container NOW (synchronous, context is active) and
+ * returns find/findAll functions that are always bound to that container,
+ * regardless of when they are called.
+ *
+ *   import { scoped } from '../js/oja.js';
+ *
+ *   const { find, findAll, el } = scoped();   // at top-level — safe
+ *
+ *   component.onMount(() => {
+ *       setTimeout(() => {
+ *           find('#status').textContent = 'ok';   // always works
+ *           findAll('.item').forEach(x => x.classList.add('ready'));
+ *       }, 1000);
+ *   });
+ *
+ * Returns { find, findAll, el } where el is the raw container element.
+ * Returns { find: () => null, findAll: () => [], el: null } outside a
+ * component context (no-op, won't throw).
+ */
+export function scoped() {
+    const el = currentContainer();
+    return {
+        find:    (sel) => el?.querySelector(sel)    ?? null,
+        findAll: (sel) => el ? Array.from(el.querySelectorAll(sel)) : [],
+        el,
+    };
+}
+
+/**
+ * ref(selector) — capture a single element at top-level for async-safe access.
+ *
+ * Simpler than scoped() when you only need one specific element.
+ * Calls find() synchronously (context active at top-level) and holds the result.
+ *
+ *   import { ref } from '../js/oja.js';
+ *
+ *   const syncDot = ref('#sync-dot');   // at top-level — safe
+ *
+ *   setTimeout(async () => {
+ *       syncDot.el.title = 'Saved';     // always safe — captured at init time
+ *   }, 1000);
+ *
+ * The `.el` getter returns the captured element (or null if not found at init).
+ */
+export function ref(selector) {
+    // Import find from ui.js at call time — component.js doesn't import it at
+    // module level to avoid circular dependencies. The currentContainer() is
+    // still active when ref() is called at top-level of a component script.
+    const scope = currentContainer();
+    const el    = scope ? scope.querySelector(selector) : document.querySelector(selector);
+    return { get el() { return el; } };
+}
+
 export function _setActiveForTest(el) {
     if (el) { _getScope(el); pushContainer(el); }
     else     { while (currentContainer()) popContainer(); }

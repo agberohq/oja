@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ui, find, query } from '../../src/js/core/ui.js';
+import { ui, find, query, make } from '../../src/js/core/ui.js';
 
 function makeBtn(text = 'Save') {
     const btn = document.createElement('button');
@@ -354,5 +354,55 @@ describe('find() and query() null behaviour', () => {
         query('#not-here');
         expect(warnSpy).not.toHaveBeenCalled();
         warnSpy.mockRestore();
+    });
+});
+
+// make() placement — _resolveTarget guard
+// Regression: passing empty string or null/undefined to placement methods
+// (appendTo, insertBefore, etc.) must NOT call querySelector('') which throws
+// DOMException in browsers and logs spurious "[oja/make] insertBefore: target
+// not found: " warnings.
+
+describe('make() placement — _resolveTarget guard', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    it('appendTo("") does not throw and logs no warn', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(() => make.div().appendTo('')).not.toThrow();
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('insertBefore("") does not throw and logs no warn', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(() => make.div().insertBefore('')).not.toThrow();
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('appendTo(null) does not throw', () => {
+        expect(() => make.div().appendTo(null)).not.toThrow();
+    });
+
+    it('appendTo(undefined) does not throw', () => {
+        expect(() => make.div().appendTo(undefined)).not.toThrow();
+    });
+
+    it('appendTo(validSelector) works correctly', () => {
+        const host = document.createElement('div');
+        host.id = 'host';
+        document.body.appendChild(host);
+        make.span({}, 'hello').appendTo('#host');
+        expect(host.querySelector('span')?.textContent).toBe('hello');
+    });
+
+    it('insertBefore(validSelector) works correctly', () => {
+        const host = document.createElement('div');
+        const ref  = document.createElement('p');
+        ref.id = 'ref';
+        host.appendChild(ref);
+        document.body.appendChild(host);
+        make.span({}, 'before').insertBefore('#ref');
+        expect(host.firstChild?.tagName).toBe('SPAN');
     });
 });

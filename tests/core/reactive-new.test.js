@@ -6,6 +6,8 @@ beforeEach(() => {
     context.delete('__test_watch__');
     context.delete('__test_sub__');
     context.delete('__test_reset__');
+    context.delete('__test_set__');
+    context.delete('__test_set2__');
 });
 
 
@@ -140,14 +142,64 @@ describe('context.reset(name)', () => {
 });
 
 
+describe('context.set(name, value)', () => {
+    it('writes the value without requiring destructuring', async () => {
+        const [read] = context('__test_set__', 'original');
+        context.set('__test_set__', 'updated');
+        await Promise.resolve(); await Promise.resolve();
+        expect(read()).toBe('updated');
+    });
+
+    it('triggers effects that read the context', async () => {
+        const [read] = context('__test_set2__', 0);
+        const effectValues = [];
+        effect(() => effectValues.push(read()));
+
+        expect(effectValues).toEqual([0]); // initial run
+
+        context.set('__test_set2__', 42);
+        await Promise.resolve(); await Promise.resolve();
+        expect(effectValues).toContain(42);
+    });
+
+    it('warns when the key has not been registered', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        context.set('__never_registered__', 'value');
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('__never_registered__')
+        );
+        warn.mockRestore();
+    });
+
+    it('is symmetric with context.get()', async () => {
+        context('__test_set__', 'init'); // ensure registered
+        context.set('__test_set__', 'via-set');
+        await Promise.resolve();
+        expect(context.get('__test_set__')).toBe('via-set');
+    });
+
+    it('is equivalent to using the write function from destructuring', async () => {
+        const [read, write] = context('__test_set__', 0);
+        write(10);
+        await Promise.resolve();
+        const before = read();
+
+        context.set('__test_set__', 20);
+        await Promise.resolve();
+        const after = read();
+
+        expect(before).toBe(10);
+        expect(after).toBe(20);
+    });
+});
+
+
 describe('persistentState storage listener dedup', () => {
     it('wires at most one storage listener per key', () => {
         const addSpy = vi.spyOn(window, 'addEventListener');
-        // Calling context.persist multiple times with the same key
         context.persist('__b02_test__', 'x');
         context.persist('__b02_test__', 'x'); // second call — should not add another listener
         const storageCalls = addSpy.mock.calls.filter(c => c[0] === 'storage');
-        // Should be at most 1 storage listener for this key
         expect(storageCalls.length).toBeLessThanOrEqual(1);
         addSpy.mockRestore();
     });

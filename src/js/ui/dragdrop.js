@@ -130,39 +130,44 @@ export function reorder(target, options = {}) {
 
     const opts = { ...defaults, ...options };
 
-    _reorderLists.set(list, { opts, items:[] });
+    // Idempotent: fully destroy any previous instance on this element before
+    // creating a new one. This handles the case where reorder() is called
+    // again with a new onReorder closure (e.g. after a reactive re-render),
+    // without leaking any listeners from the previous call.
+    if (_reorderLists.has(list)) _destroyReorder(list);
 
-    _initListItems(list, opts);
-
-    // Wire drop handling on the list itself so items dropped anywhere within
-    // it are caught, including drops between items and at the end of the list.
-    _setupListDrop(list, opts);
+    // AbortController lets us kill ALL listeners on this list + its items
+    // in a single abort() call, without needing to store handler references.
+    const controller = new AbortController();
+    const { signal } = controller;
 
     const observer = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
             mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1) {
-                    _makeDraggable(node, opts, list);
-                }
+                if (node.nodeType === 1) _makeDraggable(node, opts, list, signal);
             });
         });
     });
 
+    _reorderLists.set(list, { opts, items: [], observer, controller });
+
+    _initListItems(list, opts, signal);
+    _setupListDrop(list, opts, signal);
+
     observer.observe(list, { childList: true, subtree: false });
-    _reorderLists.get(list).observer = observer;
 
     return {
         destroy: () => _destroyReorder(list),
     };
 }
 
-function _initListItems(list, opts) {
+function _initListItems(list, opts, signal) {
     Array.from(list.children).forEach(child => {
-        _makeDraggable(child, opts, list);
+        _makeDraggable(child, opts, list, signal);
     });
 }
 
-function _makeDraggable(el, opts, list) {
+function _makeDraggable(el, opts, list, signal) {
     if (el.dataset.ojaDraggable) return;
     el.dataset.ojaDraggable = 'true';
 
@@ -205,14 +210,13 @@ function _makeDraggable(el, opts, list) {
         };
 
         if (opts.onDragStart) opts.onDragStart(el, e);
-    });
+    }, { signal });
 
     dragHandle.addEventListener('dragend', (e) => {
         el.classList.remove(opts.dragClass);
         el.classList.remove(opts.chosenClass);
         el.style.opacity = '';
 
-        // Remove any placeholder inserted during the drag
         const placeholder = list.querySelector('.oja-drag-placeholder');
         if (placeholder) placeholder.remove();
 
@@ -220,10 +224,8 @@ function _makeDraggable(el, opts, list) {
         _dragState.source = null;
 
         if (opts.onDragEnd) opts.onDragEnd(el, e);
-    });
+    }, { signal });
 
-    // dragover on the item itself controls the visual insertion point.
-    // We show a placeholder above or below based on cursor position.
     dragHandle.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -236,21 +238,14 @@ function _makeDraggable(el, opts, list) {
         const after = e.clientY > midY;
 
         _movePlaceholder(list, el, after, dragging);
-    });
+    }, { signal });
 }
 
-/**
- * Set up the drop handler on the list container.
- * This is what was entirely missing — without a drop listener on the list,
- * releasing the mouse over a list item does nothing; the browser cancels the
- * drag and the DOM is never updated.
- */
-function _setupListDrop(list, opts) {
+function _setupListDrop(list, opts, signal) {
     list.addEventListener('dragover', (e) => {
-        // Allow drops on the list background (between all items or after the last).
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-    });
+    }, { signal });
 
     list.addEventListener('drop', (e) => {
         e.preventDefault();
@@ -259,14 +254,11 @@ function _setupListDrop(list, opts) {
         const dragging = _dragState.source;
         if (!dragging) return;
 
-        // Remove the visual placeholder
         const placeholder = list.querySelector('.oja-drag-placeholder');
         if (placeholder) {
-            // Insert the real element where the placeholder is sitting
             list.insertBefore(dragging, placeholder);
             placeholder.remove();
         } else {
-            // No placeholder (drop landed on the list background) — append
             list.appendChild(dragging);
         }
 
@@ -275,16 +267,13 @@ function _setupListDrop(list, opts) {
         if (opts.onReorder) {
             opts.onReorder(Array.from(list.children));
         }
-    });
+    }, { signal });
 
-    // Clean up placeholder if the drag leaves the list entirely
     list.addEventListener('dragleave', (e) => {
-        // Only fire if the pointer has genuinely left the list, not just
-        // moved to a child element (relatedTarget is still inside the list).
         if (list.contains(e.relatedTarget)) return;
         const placeholder = list.querySelector('.oja-drag-placeholder');
         if (placeholder) placeholder.remove();
-    });
+    }, { signal });
 }
 
 /**
@@ -305,15 +294,24 @@ function _movePlaceholder(list, referenceEl, insertAfter, dragging) {
         referenceEl.before(placeholder);
     }
 
-    // Dim the source item so the list doesn't look like it has a duplicate
     dragging.style.opacity = '0.4';
 }
 
 function _destroyReorder(list) {
     const data = _reorderLists.get(list);
-    if (data?.observer) data.observer.disconnect();
+    if (!data) return;
+
+    // Disconnect the MutationObserver
+    data.observer?.disconnect();
+
+    // Abort ALL event listeners attached with this controller's signal —
+    // this kills list-level dragover/drop/dragleave AND all item-level
+    // dragstart/dragend/dragover, atomically, without needing stored refs.
+    data.controller?.abort();
+
     _reorderLists.delete(list);
 
+    // Clean up item-level DOM properties
     Array.from(list.children).forEach(child => {
         if (child._dragOptions) {
             const handle = child._dragOptions.handle
@@ -330,18 +328,6 @@ function _destroyReorder(list) {
     });
 }
 
-
-const _dropZones = new Map(); // zoneElement -> options
-
-/**
- * Create a file drop zone.
- *
- *   dragdrop.dropZone('#upload-area', {
- *       onDrop: (files) => uploadFiles(files),
- *       accept: ['.jpg', '.png'],
- *       maxSize: 10 * 1024 * 1024,
- *   });
- */
 export function dropZone(target, options = {}) {
     const zone = typeof target === 'string' ? document.querySelector(target) : target;
     if (!zone) {

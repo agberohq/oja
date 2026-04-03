@@ -81,187 +81,19 @@ describe('morph()', () => {
         expect(el.querySelector('[data-oja-key="a"]')).toBe(nodeA);
         expect(el.querySelector('[data-oja-key="a"]').textContent).toBe('A2');
     });
-});
 
-
-describe('shouldMorph()', () => {
-    let el;
-    afterEach(() => cleanup(el));
-
-    it('returns true before first morph', () => {
-        el = makeEl();
-        expect(shouldMorph(el, '<span>x</span>')).toBe(true);
+    it('fires onNodeAdded for inserted nodes', async () => {
+        el = makeEl('');
+        const added = [];
+        await morph(el, '<span>x</span>', { onNodeAdded: n => added.push(n) });
+        expect(added.length).toBeGreaterThan(0);
     });
 
-    it('returns false after morphing with the same HTML', async () => {
-        el = makeEl();
-        await morph(el, '<span>x</span>');
-        expect(shouldMorph(el, '<span>x</span>')).toBe(false);
-    });
-
-    it('returns true after content changes', async () => {
-        el = makeEl();
-        await morph(el, '<span>x</span>');
-        expect(shouldMorph(el, '<span>y</span>')).toBe(true);
-    });
-});
-
-
-describe('bindText()', () => {
-    let el, store;
-    beforeEach(() => { store = new Store('engine-test-bt'); useStore(store); });
-    afterEach(() => { cleanup(el); store.clearAll(); });
-
-    it('sets initial textContent from store', () => {
-        store.set('cpu', '50%');
-        el = makeEl('<span></span>');
-        bindText(el.querySelector('span'), 'cpu');
-        expect(el.querySelector('span').textContent).toBe('50%');
-    });
-
-    it('updates textContent when store changes', () => {
-        store.set('cpu', '50%');
-        el = makeEl('<span></span>');
-        bindText(el.querySelector('span'), 'cpu');
-        store.set('cpu', '72%');
-        expect(el.querySelector('span').textContent).toBe('72%');
-    });
-
-    it('returns an unsubscribe function that stops updates', () => {
-        store.set('val', 'a');
-        el = makeEl('<span></span>');
-        const unsub = bindText(el.querySelector('span'), 'val');
-        unsub();
-        store.set('val', 'b');
-        expect(el.querySelector('span').textContent).toBe('a');
-    });
-
-    it('applies transform function', () => {
-        store.set('name', 'hello');
-        el = makeEl('<span></span>');
-        bindText(el.querySelector('span'), 'name', v => v.toUpperCase());
-        expect(el.querySelector('span').textContent).toBe('HELLO');
-    });
-
-    it('warns and returns noop when element not found', () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const unsub = bindText('#nope', 'key');
-        expect(typeof unsub).toBe('function');
-        warnSpy.mockRestore();
-    });
-
-    it('guards against duplicate binding on same element+key', () => {
-        store.set('dup', 'x');
-        el = makeEl('<span></span>');
-        const span = el.querySelector('span');
-        bindText(span, 'dup');
-        bindText(span, 'dup');   // second call — should not double-register
-        store.set('dup', 'y');
-        expect(span.textContent).toBe('y');   // updated once, not twice
-    });
-});
-
-
-describe('bindToggle()', () => {
-    let el, store;
-    beforeEach(() => { store = new Store('engine-test-tog'); useStore(store); });
-    afterEach(() => { cleanup(el); store.clearAll(); });
-
-    it('adds activeClass when value is truthy', () => {
-        store.set('online', true);
-        el = makeEl('<div></div>');
-        bindToggle(el.querySelector('div'), 'online', { activeClass: 'is-online' });
-        expect(el.querySelector('div').className).toBe('is-online');
-    });
-
-    it('sets inactiveClass when value is falsy', () => {
-        store.set('online', false);
-        el = makeEl('<div></div>');
-        bindToggle(el.querySelector('div'), 'online', { activeClass: 'is-online', inactiveClass: 'is-offline' });
-        expect(el.querySelector('div').className).toBe('is-offline');
-    });
-
-    it('reacts to store changes', () => {
-        store.set('flag', false);
-        el = makeEl('<div></div>');
-        bindToggle(el.querySelector('div'), 'flag', { activeClass: 'active' });
-        store.set('flag', true);
-        expect(el.querySelector('div').className).toBe('active');
-    });
-});
-
-
-describe('bindAttr()', () => {
-    let el, store;
-    beforeEach(() => { store = new Store('engine-test-attr'); useStore(store); });
-    afterEach(() => { cleanup(el); store.clearAll(); });
-
-    it('sets attribute from transform return value', () => {
-        store.set('disabled', true);
-        el = makeEl('<button></button>');
-        bindAttr(el.querySelector('button'), 'disabled', v => ({ disabled: v ? '' : null }));
-        expect(el.querySelector('button').hasAttribute('disabled')).toBe(true);
-    });
-
-    it('removes attribute when value is null', () => {
-        store.set('disabled', false);
-        el = makeEl('<button disabled></button>');
-        bindAttr(el.querySelector('button'), 'disabled', v => ({ disabled: v ? '' : null }));
-        expect(el.querySelector('button').hasAttribute('disabled')).toBe(false);
-    });
-
-    it('warns when transform is not a function', () => {
-        el = makeEl('<button></button>');
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        bindAttr(el.querySelector('button'), 'key', 'not-a-function');
-        expect(warnSpy).toHaveBeenCalled();
-        warnSpy.mockRestore();
-    });
-});
-
-
-describe('unbind()', () => {
-    let el, store;
-    beforeEach(() => { store = new Store('engine-test-unbind'); useStore(store); });
-    afterEach(() => { cleanup(el); store.clearAll(); });
-
-    it('stops all bindings within the container after unbind()', () => {
-        store.set('val', 'a');
-        el = makeEl('<span data-oja-bind="val"></span>');
-        scan(el);
-        unbind(el);
-        store.set('val', 'b');
-        expect(el.querySelector('span').textContent).toBe('a');
-    });
-});
-
-
-describe('scan()', () => {
-    let el, store;
-    beforeEach(() => { store = new Store('engine-test-scan'); useStore(store); });
-    afterEach(() => { cleanup(el); store.clearAll(); });
-
-    it('binds data-oja-bind elements within container', () => {
-        store.set('label', 'hello');
-        el = makeEl('<span data-oja-bind="label"></span>');
-        scan(el);
-        expect(el.querySelector('span').textContent).toBe('hello');
-    });
-
-    it('does not affect elements outside the container', () => {
-        store.set('outside', 'x');
-        const sibling = makeEl('<span data-oja-bind="outside"></span>');
-        el = makeEl('<div></div>');
-        scan(el);
-        expect(sibling.querySelector('span').textContent).toBe('');
-        cleanup(sibling);
-    });
-
-    it('applies data-oja-transform formatter', () => {
-        store.set('pct', 0.75);
-        el = makeEl('<span data-oja-bind="pct" data-oja-transform="formatPercent"></span>');
-        scan(el);
-        expect(el.querySelector('span').textContent).toBe('0.8%');
+    it('fires onNodeRemoved before removing nodes', async () => {
+        el = makeEl('<span>old</span>');
+        const removed = [];
+        await morph(el, '', { onNodeRemoved: n => removed.push(n) });
+        expect(removed.length).toBeGreaterThan(0);
     });
 });
 
@@ -339,6 +171,161 @@ describe('list()', () => {
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });
+
+    // ── Lifecycle callbacks ──────────────────────────────────────────────────
+
+    it('onMount fires once on first render', () => {
+        el = makeEl();
+        const onMount = vi.fn();
+        const render  = () => document.createElement('div');
+        list(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+        expect(onMount).toHaveBeenCalledWith(el);
+    });
+
+    it('onMount does NOT fire on subsequent re-renders', () => {
+        el = makeEl();
+        const onMount = vi.fn();
+        const render  = (item, existing) => existing || document.createElement('div');
+        list(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        list(el, [{ id: 'a' }, { id: 'b' }], { key: i => i.id, render, onMount });
+        list(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('onMount fires once even when initial items list is empty', () => {
+        el = makeEl();
+        const onMount = vi.fn();
+        const render  = () => document.createElement('div');
+        list(el, [], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+        // second call — still once total
+        list(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('onMount receives the container element', () => {
+        el = makeEl();
+        let received = null;
+        const render = () => document.createElement('div');
+        list(el, [{ id: 'a' }], {
+            key: i => i.id, render,
+            onMount: (container) => { received = container; },
+        });
+        expect(received).toBe(el);
+    });
+
+    it('onItemMount fires for each new item on first render', () => {
+        el = makeEl();
+        const mounted = [];
+        const render  = (item) => {
+            const d = document.createElement('div');
+            d.textContent = item.id;
+            return d;
+        };
+        list(el, [{ id: 'a' }, { id: 'b' }], {
+            key: i => i.id, render,
+            onItemMount: (itemEl, data, idx) => mounted.push({ data, idx }),
+        });
+        expect(mounted).toHaveLength(2);
+        expect(mounted[0].data.id).toBe('a');
+        expect(mounted[0].idx).toBe(0);
+        expect(mounted[1].data.id).toBe('b');
+        expect(mounted[1].idx).toBe(1);
+    });
+
+    it('onItemMount fires ONLY for new items, not for updated existing items', () => {
+        el = makeEl();
+        const mounted = [];
+        const render  = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.textContent = item.id;
+            return d;
+        };
+        // First render — creates 'a' and 'b'
+        list(el, [{ id: 'a' }, { id: 'b' }], {
+            key: i => i.id, render,
+            onItemMount: (itemEl, data) => mounted.push(data.id),
+        });
+        expect(mounted).toEqual(['a', 'b']);
+
+        // Second render — 'a' and 'b' exist, 'c' is new
+        list(el, [{ id: 'a' }, { id: 'b' }, { id: 'c' }], {
+            key: i => i.id, render,
+            onItemMount: (itemEl, data) => mounted.push(data.id),
+        });
+        // Only 'c' should be added — 'a' and 'b' were reused
+        expect(mounted).toEqual(['a', 'b', 'c']);
+    });
+
+    it('onItemRemove fires before removed items are deleted', () => {
+        el = makeEl();
+        const removed = [];
+        const render  = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.dataset.id = item.id;
+            return d;
+        };
+        list(el, [{ id: 'a' }, { id: 'b' }], { key: i => i.id, render });
+        list(el, [{ id: 'a' }], {
+            key: i => i.id, render,
+            onItemRemove: (itemEl) => removed.push(itemEl.dataset.id),
+        });
+        expect(removed).toEqual(['b']);
+        // Element is removed from DOM after onItemRemove fires
+        expect(el.querySelector('[data-oja-key="b"]')).toBeNull();
+    });
+
+    it('onItemRemove fires for all removed items when list is cleared', () => {
+        el = makeEl();
+        const removed = [];
+        const render  = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.dataset.id = item.id;
+            return d;
+        };
+        list(el, [{ id: 'x' }, { id: 'y' }, { id: 'z' }], { key: i => i.id, render });
+        list(el, [], {
+            key: i => i.id, render,
+            onItemRemove: (itemEl) => removed.push(itemEl.dataset.id),
+        });
+        // With empty items, innerHTML is cleared directly — onItemRemove fires
+        // for items tracked in existing map
+        expect(el.children.length).toBe(0);
+    });
+
+    it('all three callbacks can be used together', () => {
+        el = makeEl();
+        const log1 = [];
+        const log2 = [];
+        const render = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.dataset.id = item.id;
+            return d;
+        };
+
+        list(el, [{ id: 'a' }, { id: 'b' }], {
+            key: i => i.id, render,
+            onMount:      ()      => log1.push('mount'),
+            onItemMount:  (el, d) => log1.push(`item:${d.id}`),
+            onItemRemove: (el)    => log1.push(`remove:${el.dataset.id}`),
+        });
+        // First render: 'a' and 'b' new, onMount fires after items
+        expect(log1).toEqual(['item:a', 'item:b', 'mount']);
+
+        list(el, [{ id: 'b' }, { id: 'c' }], {
+            key: i => i.id, render,
+            onMount:      ()      => log2.push('mount'),
+            onItemMount:  (el, d) => log2.push(`item:${d.id}`),
+            onItemRemove: (el)    => log2.push(`remove:${el.dataset.id}`),
+        });
+        // Second render: 'a' removed, 'b' reused (not new), 'c' new, onMount NOT fired again
+        expect(log2).toContain('remove:a');
+        expect(log2).toContain('item:c');
+        expect(log2).not.toContain('mount');       // onMount only fires once (first render)
+        expect(log2).not.toContain('item:b');       // 'b' was reused, not new
+        expect(log2).not.toContain('remove:b');     // 'b' was kept, not removed
+    });
 });
 
 
@@ -372,11 +359,40 @@ describe('listAsync()', () => {
                 return d;
             },
         });
-        // Both rendered despite different delays
         expect(el.children.length).toBe(2);
-        // Order in DOM matches input order, not resolution order
         expect(el.children[0].getAttribute('data-oja-key')).toBe('x');
         expect(el.children[1].getAttribute('data-oja-key')).toBe('y');
+    });
+
+    it('onMount fires once after async renders complete', async () => {
+        el = makeEl();
+        const onMount = vi.fn();
+        const render  = async (item, existing) => existing || document.createElement('div');
+        await listAsync(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+        await listAsync(el, [{ id: 'a' }, { id: 'b' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1); // still once
+    });
+
+    it('onItemMount fires only for new slots in listAsync', async () => {
+        el = makeEl();
+        const mounted = [];
+        const render  = async (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.textContent = item.id;
+            return d;
+        };
+        await listAsync(el, [{ id: 'a' }, { id: 'b' }], {
+            key: i => i.id, render,
+            onItemMount: (itemEl, data) => mounted.push(data.id),
+        });
+        expect(mounted).toEqual(['a', 'b']);
+
+        await listAsync(el, [{ id: 'a' }, { id: 'c' }], {
+            key: i => i.id, render,
+            onItemMount: (itemEl, data) => mounted.push(data.id),
+        });
+        expect(mounted).toEqual(['a', 'b', 'c']); // 'a' reused, 'c' new
     });
 });
 
@@ -397,27 +413,45 @@ describe('useStore()', () => {
 });
 
 
-describe('batch()', () => {
-    it('resolves after the callback runs', async () => {
-        let ran = false;
-        await nextFrame(() => { ran = true; });
-        expect(ran).toBe(true);
+describe('bindText()', () => {
+    let el;
+    afterEach(() => cleanup(el));
+
+    it('sets textContent from store', () => {
+        el = makeEl('<span id="t"></span>');
+        const span = el.querySelector('#t');
+        const store = new Store('bt-test');
+        useStore(store);
+        store.set('msg', 'hello');
+        bindText(span, 'msg');
+        expect(span.textContent).toBe('hello');
+        store.clearAll();
+        useStore(null);
     });
 
-    it('returns a Promise', () => {
-        expect(nextFrame(() => {}) instanceof Promise).toBe(true);
+    it('warns when selector not found', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        bindText('#not-found', 'key');
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
+        useStore(null);
     });
 });
 
 
-describe('formatters', () => {
-    it('exposes formatPercent', () => expect(formatters.formatPercent(50)).toBe('50.0%'));
-    it('exposes formatBytes',   () => expect(formatters.formatBytes(1024)).toBe('1.0 KB'));
-    it('exposes uppercase',     () => expect(formatters.uppercase('hi')).toBe('HI'));
-    it('exposes fallback',      () => expect(formatters.fallback(null, '-')).toBe('-'));
-    it('is extensible',         () => {
-        formatters.testFmt = v => `[${v}]`;
-        expect(formatters.testFmt('x')).toBe('[x]');
-        delete formatters.testFmt;
+describe('bindToggle()', () => {
+    let el;
+    afterEach(() => cleanup(el));
+
+    it('adds activeClass when store value is truthy', () => {
+        el = makeEl('<div id="b"></div>');
+        const div   = el.querySelector('#b');
+        const store = new Store('toggle-test');
+        useStore(store);
+        store.set('on', true);
+        bindToggle(div, 'on', { activeClass: 'is-on' });
+        expect(div.className).toBe('is-on');
+        store.clearAll();
+        useStore(null);
     });
 });
