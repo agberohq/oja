@@ -448,3 +448,83 @@ describe('bindToggle()', () => {
         useStore(null);
     });
 });
+
+describe('engine.list() — _renderable container compatibility', () => {
+    // Regression test: engine.list calls parent.insertBefore(node, cursor) during
+    // _reorderChildren. If the container was enhanced by find()/_renderable, its
+    // .insertBefore was overridden with a selector-based version.
+    // Node.prototype.insertBefore.call() bypasses the override and calls the
+    // native DOM method. This test verifies list() works correctly when the
+    // container has an overridden insertBefore.
+
+    let el;
+    afterEach(() => cleanup(el));
+
+    it('reconciles correctly when container.insertBefore is overridden', () => {
+        el = makeEl();
+
+        // Simulate what _renderable does: override insertBefore with a selector-based fn
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        el.insertBefore = function(target) {
+            // This is the _renderable version — takes a CSS selector, not DOM nodes
+            const t = typeof target === 'string' ? document.querySelector(target) : null;
+            if (t?.parentNode) t.parentNode.insertBefore(el, t);
+            else if (target) console.warn('[oja/make] insertBefore: target not found:', target);
+            return el;
+        };
+
+        const render = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.textContent = item.id;
+            return d;
+        };
+
+        // First render — should not warn
+        list(el, [{ id: 'a' }, { id: 'b' }, { id: 'c' }], { key: i => i.id, render });
+        expect(warnSpy).not.toHaveBeenCalled();
+        expect(el.children.length).toBe(3);
+
+        // Re-render with reordered items — _reorderChildren runs, should not warn
+        list(el, [{ id: 'c' }, { id: 'a' }, { id: 'b' }], { key: i => i.id, render });
+        expect(warnSpy).not.toHaveBeenCalled();
+        expect(el.children.length).toBe(3);
+        // Verify order is correct
+        expect(el.children[0].textContent).toBe('c');
+        expect(el.children[1].textContent).toBe('a');
+        expect(el.children[2].textContent).toBe('b');
+
+        warnSpy.mockRestore();
+    });
+
+    it('morph() works correctly when container.insertBefore is overridden', async () => {
+        el = makeEl('<span id="s">old</span>');
+
+        // Override insertBefore as _renderable would
+        el.insertBefore = function() {
+            console.warn('[oja/make] insertBefore: overridden — should not be called by morph');
+        };
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await morph(el, '<span id="s">new</span><span id="t">added</span>');
+        expect(warnSpy).not.toHaveBeenCalled();
+        expect(el.querySelector('#s').textContent).toBe('new');
+        expect(el.querySelector('#t')).not.toBeNull();
+        warnSpy.mockRestore();
+    });
+
+    it('list() onMount fires after render even with overridden insertBefore', () => {
+        el = makeEl();
+        el.insertBefore = function(target) {
+            if (target instanceof Node) {
+                // simulate the old broken _renderable that ignored DOM nodes
+                return el;
+            }
+        };
+
+        const onMount = vi.fn();
+        const render  = (item, existing) => existing || document.createElement('div');
+        list(el, [{ id: 'a' }], { key: i => i.id, render, onMount });
+        expect(onMount).toHaveBeenCalledTimes(1);
+    });
+});
+

@@ -839,19 +839,44 @@ function _renderable(el) {
      */
     _define('insertAfter', function(target) {
         const t = _resolveTarget(target);
-        if (t?.parentNode) t.parentNode.insertBefore(el, t.nextSibling);
+        if (t?.parentNode) Node.prototype.insertBefore.call(t.parentNode, el, t.nextSibling);
         else if (target) console.warn('[oja/make] insertAfter: target not found:', target);
         return el;
     });
 
     /**
-     * Insert this element immediately before target (as previous sibling).
-     * Named insertBefore (not before) to avoid overwriting the native
-     * Element.prototype.before() which inserts nodes before this element.
+     * Place this element immediately before target (as previous sibling).
+     *
+     * IMPORTANT: This method is named `placeBefore`, NOT `insertBefore`.
+     * `insertBefore` is a core DOM Node method (takes two DOM nodes) used by
+     * engine.list, engine.morph, and other internal Oja code. Overriding it on
+     * any element breaks those internals. `placeBefore` is the Oja selector-based
+     * equivalent — it accepts a CSS selector string or Element reference.
+     *
+     *   make.div({ class: 'new-item' }).placeBefore('#existing-item');
+     */
+    _define('placeBefore', function(target) {
+        const t = _resolveTarget(target);
+        if (t?.parentNode) Node.prototype.insertBefore.call(t.parentNode, el, t);
+        else if (target) console.warn('[oja/make] placeBefore: target not found:', target);
+        return el;
+    });
+
+    /**
+     * @deprecated Use placeBefore() instead.
+     * insertBefore() is kept as an alias for backward compatibility but will be
+     * removed in a future major version. Overriding the native insertBefore was
+     * found to conflict with engine.list and engine.morph.
      */
     _define('insertBefore', function(target) {
+        // Only handle if target is a string or Element — if it's a DOM Node being
+        // passed by internal engine code, fall through to the native method.
+        if (target instanceof Node) {
+            Node.prototype.insertBefore.call(el, target, arguments[1] ?? null);
+            return el;
+        }
         const t = _resolveTarget(target);
-        if (t?.parentNode) t.parentNode.insertBefore(el, t);
+        if (t?.parentNode) Node.prototype.insertBefore.call(t.parentNode, el, t);
         else if (target) console.warn('[oja/make] insertBefore: target not found:', target);
         return el;
     });

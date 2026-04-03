@@ -1,4 +1,4 @@
-// src/js/ui/canvas.js
+
 /**
  * oja/canvas.js
  * Canvas utilities — drawing, image processing, and visualization helpers.
@@ -90,7 +90,6 @@
  *   const url = canvas.toDataURL('#myCanvas');
  */
 
-
 /**
  * @typedef {Object} CanvasSize
  * @property {number} width
@@ -98,10 +97,8 @@
  * @property {number} dpr - Device pixel ratio
  */
 
-
 const _responsiveInstances = new WeakMap(); // canvas -> { observer, drawFn }
 const _animationInstances  = new WeakMap(); // canvas -> { rafId, drawFn, startTime }
-
 
 function _resolveCanvas(target) {
     const el = typeof target === 'string' ? document.querySelector(target) : target;
@@ -124,7 +121,6 @@ function _sizeOf(el) {
         dpr:    el.width / (el.clientWidth || 1),
     };
 }
-
 
 /**
  * Get a canvas 2D context, optionally setting physical dimensions.
@@ -213,7 +209,6 @@ export function draw(target, drawFn) {
     ctx.restore();
 }
 
-
 /**
  * Make a canvas responsive — redraws automatically whenever its size changes.
  *
@@ -259,7 +254,6 @@ export function responsive(target, drawFn) {
         redraw,
     };
 }
-
 
 /**
  * Load an image into a canvas, resizing the canvas to match.
@@ -352,7 +346,6 @@ export function download(target, filename = 'canvas.png', type = 'image/png', qu
     link.click();
 }
 
-
 /**
  * Draw a grid of evenly-spaced lines across the canvas.
  */
@@ -401,7 +394,6 @@ export function drawAxes(ctx, width, height, options = {}) {
 
     ctx.restore();
 }
-
 
 /**
  * Draw a bar chart.
@@ -551,7 +543,6 @@ export function pieChart(target, data, options = {}) {
     });
 }
 
-
 /**
  * Animate canvas drawing using requestAnimationFrame.
  * The draw callback receives (ctx, size, progress, elapsed).
@@ -599,7 +590,6 @@ export function animate(target, drawFn, duration = Infinity) {
         },
     };
 }
-
 
 export const canvas = {
     get,

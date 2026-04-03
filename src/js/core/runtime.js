@@ -1,4 +1,4 @@
-// src/js/core/runtime.js
+
 /**
  * oja/runtime.js
  * Passive configuration store, hook registry, and unified event bus gateway.

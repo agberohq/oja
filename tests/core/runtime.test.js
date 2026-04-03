@@ -1,7 +1,6 @@
-// tests/core/runtime.test.js
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runtime } from '../../src/js/core/runtime.js';
-
 
 /** Capture all runtime:error events fired on document */
 function listenRuntimeError() {
@@ -14,11 +13,9 @@ function listenRuntimeError() {
     };
 }
 
-
 afterEach(() => {
     runtime.destroy();
 });
-
 
 describe('runtime.env()', () => {
     it('defaults to development', () => {
@@ -45,7 +42,6 @@ describe('runtime.env()', () => {
         expect(() => runtime.env('staging')).toThrow('[oja/runtime]');
     });
 });
-
 
 describe('runtime.define() / runtime.get()', () => {
     it('round-trips a string', () => {
@@ -84,7 +80,6 @@ describe('runtime.define() / runtime.get()', () => {
     });
 });
 
-
 describe('runtime.sandbox()', () => {
     it('defaults to false', () => {
         expect(runtime.isSandboxed()).toBe(false);
@@ -110,7 +105,6 @@ describe('runtime.sandbox()', () => {
         expect(runtime.isSandboxed()).toBe(true);
     });
 });
-
 
 describe('runtime.allowOrigins() / runtime.isOriginAllowed()', () => {
     it('empty list allows everything (default)', () => {
@@ -150,7 +144,6 @@ describe('runtime.allowOrigins() / runtime.isOriginAllowed()', () => {
         expect(() => runtime.allowOrigins('https://api.myapp.com')).toThrow('[oja/runtime]');
     });
 });
-
 
 describe('runtime.onFetch() / runtime.runFetchHooks()', () => {
     it('returns opts unchanged when no hooks are registered', () => {
@@ -215,7 +208,6 @@ describe('runtime.onFetch() / runtime.runFetchHooks()', () => {
     });
 });
 
-
 describe('runtime.onError() / runtime.reportError()', () => {
     it('fires all registered handlers', () => {
         const spy1 = vi.fn();
@@ -253,7 +245,6 @@ describe('runtime.onError() / runtime.reportError()', () => {
         expect(spy).not.toHaveBeenCalled();
     });
 });
-
 
 describe('runtime.onNavigate() / runtime.runNavigateHooks()', () => {
     const base = {
@@ -323,7 +314,6 @@ describe('runtime.onNavigate() / runtime.runNavigateHooks()', () => {
     });
 });
 
-
 describe('runtime.ready()', () => {
     it('fires immediately (via microtask) when DOM is already loaded', async () => {
         const spy = vi.fn();
@@ -349,7 +339,6 @@ describe('runtime.ready()', () => {
         expect(errorSpy).toHaveBeenCalledWith(expect.any(Error), 'runtime:ready');
     });
 });
-
 
 describe('runtime.destroy()', () => {
     it('clears all fetch hooks', () => {
@@ -407,7 +396,6 @@ describe('runtime.destroy()', () => {
         expect(spy).toHaveBeenCalledOnce();
     });
 });
-
 
 describe('method chaining', () => {
     it('all setters chain correctly', () => {

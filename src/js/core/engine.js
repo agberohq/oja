@@ -241,7 +241,7 @@ function _morphElement(target, source, opts) {
     // Incompatible node types or tags — replace wholesale
     if (target.nodeType !== source.nodeType || target.nodeName !== source.nodeName) {
         const replacement = source.cloneNode(true);
-        target.parentNode?.replaceChild(replacement, target);
+        Node.prototype.replaceChild.call(target.parentNode, replacement, target);
         opts.onNodeAdded?.(replacement);
         return;
     }
@@ -324,7 +324,7 @@ function _morphChildren(parent, newParent, opts) {
     let cursor = parent.firstChild;
     for (const node of order) {
         if (cursor === node) { cursor = cursor.nextSibling; }
-        else { parent.insertBefore(node, cursor); }
+        else { Node.prototype.insertBefore.call(parent, node, cursor); }
     }
 }
 
@@ -742,7 +742,7 @@ function _reorderChildren(parent, order) {
     let cursor = parent.firstChild;
     for (const node of order) {
         if (cursor === node) { cursor = cursor.nextSibling; }
-        else { parent.insertBefore(node, cursor ?? null); }
+        else { Node.prototype.insertBefore.call(parent, node, cursor ?? null); }
     }
 }
 

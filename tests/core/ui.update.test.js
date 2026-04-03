@@ -494,3 +494,114 @@ describe('placement methods — renamed to avoid native collision', () => {
         expect(document.body.children[0]).toBe(sibling);
     });
 });
+
+describe('placeBefore() — replaces deprecated insertBefore selector API', () => {
+    afterEach(() => { document.body.innerHTML = ''; });
+
+    it('inserts element as previous sibling of selector target', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        make.div({ id: 'a' }).placeBefore('#b');
+        const children = Array.from(document.body.children);
+        expect(children[0].id).toBe('a');
+        expect(children[1].id).toBe('b');
+    });
+
+    it('accepts an Element as target', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        const b = document.getElementById('b');
+        make.div({ id: 'a' }).placeBefore(b);
+        expect(document.body.children[0].id).toBe('a');
+    });
+
+    it('warns when selector target not found', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        make.div().placeBefore('#does-not-exist');
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('placeBefore'),
+            expect.anything()
+        );
+        warn.mockRestore();
+    });
+
+    it('returns the element for chaining', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        const el = make.div({ id: 'a' });
+        expect(el.placeBefore('#b')).toBe(el);
+    });
+
+    it('does NOT warn when placeBefore is called (no target-not-found false positive)', () => {
+        document.body.innerHTML = '<div id="b"></div>';
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        make.div({ id: 'a' }).placeBefore('#b');
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+});
+
+
+describe('insertBefore() — native DOM method preserved on _renderable elements', () => {
+    // Regression: _renderable was overriding insertBefore with a selector-based fn.
+    // engine.list/_reorderChildren calls parent.insertBefore(node, cursor) with DOM nodes.
+    // The override caused [oja/make] insertBefore: target not found on every reconcile.
+    // Now insertBefore falls through to native behaviour when called with DOM nodes.
+
+    afterEach(() => { document.body.innerHTML = ''; });
+
+    it('native insertBefore(node, refNode) still works on _renderable elements', () => {
+        document.body.innerHTML = '<div id="parent"><span id="b">b</span></div>';
+        const parent = find('#parent');   // _renderable enhanced
+        const newNode = document.createElement('span');
+        newNode.id = 'a';
+        newNode.textContent = 'a';
+        const ref = document.getElementById('b');
+
+        // This is the call engine.list makes internally
+        Node.prototype.insertBefore.call(parent, newNode, ref);
+
+        const children = Array.from(parent.children);
+        expect(children[0].id).toBe('a');
+        expect(children[1].id).toBe('b');
+    });
+
+    it('engine.list does not warn when container is a _renderable find() result', async () => {
+        // Regression: documents the real production failure.
+        // A developer does:  const { engine } = await import('@agberohq/oja');
+        // inside a component script, then passes a find() result as the container.
+        // engine.list must work correctly even though find() overrides insertBefore.
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        // Simulate _renderable enhancement: override insertBefore with selector version
+        container.__oja_enhanced__ = true;
+        container.insertBefore = function(target) {
+            if (target instanceof Node) {
+                return Node.prototype.insertBefore.call(this, ...arguments);
+            }
+            const t = typeof target === 'string' ? document.querySelector(target) : null;
+            if (!t?.parentNode) console.warn('[oja/make] insertBefore: target not found:', target);
+            return this;
+        };
+
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        // This is the production pattern: dynamic import inside a component script
+        const { list } = await import('../../src/js/core/engine.js');
+        const render = (item, existing) => {
+            const d = existing || document.createElement('div');
+            d.textContent = item.id;
+            return d;
+        };
+
+        // First render
+        list(container, [{ id: 'a' }, { id: 'b' }], { key: i => i.id, render });
+        // Re-render with different order — triggers _reorderChildren
+        list(container, [{ id: 'b' }, { id: 'a' }], { key: i => i.id, render });
+
+        expect(warn).not.toHaveBeenCalled();
+        expect(container.children[0].textContent).toBe('b');
+        expect(container.children[1].textContent).toBe('a');
+
+        warn.mockRestore();
+        container.remove();
+    });
+});
