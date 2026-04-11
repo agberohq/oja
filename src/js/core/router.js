@@ -98,16 +98,13 @@
  */
 
 import { Store }          from './store.js';
-import { Out }            from './out.js';
+import { Out, _setCompositeRouter } from './out.js';
 import { component }      from './component.js';
 import { runtime }        from './runtime.js';
 import { emit as _emit }  from './events.js';
+import { state }          from './reactive.js';
 
 const _store = new Store('oja:router');
-
-const _prefetchQueue = new Set();
-const _prefetchCache = new Map();  // url -> { promise, timestamp, priority }
-const _prefetchLinks = new WeakMap(); // element -> { url, timeout }
 
 const PREFETCH_CACHE_MAX = 100; // max entries — evict oldest on overflow
 
@@ -117,9 +114,6 @@ const PREFETCH_DEFAULTS = {
     priority:      'low',
     maxConcurrent: 3,
 };
-
-let _prefetchConfig = { ...PREFETCH_DEFAULTS };
-let _prefetchActive = 0;
 
 class _RouteNode {
     constructor(segment = '') {
@@ -136,13 +130,30 @@ class _RouteNode {
 export class Router {
     /**
      * @param {Object} options
-     *   mode    : 'hash' | 'path'  — URL strategy (default: 'hash')
-     *   outlet  : string           — CSS selector for page container (default: '#app')
-     *   loading : Out              — shown immediately while page loads (default: none)
-     *   prefetch: boolean          — enable automatic prefetching (default: false)
-     *   vfs     : VFS              — VFS instance; all Out.component() calls check it first
+     *   mode      : 'hash' | 'path'  — URL strategy (default: 'hash')
+     *   outlet    : string           — CSS selector for page container (default: '#app')
+     *   loading   : Out              — shown immediately while page loads (default: none)
+     *   prefetch  : boolean          — enable automatic prefetching (default: false)
+     *   vfs       : VFS              — VFS instance; all Out.component() calls check it first
+     *   routes    : Object           — declarative route map { pattern: Out | [...mw, Out] }
+     *   autoStart : boolean          — call start() automatically after construction (default: false)
+     *
+     * ─── Declarative route map ─────────────────────────────────────────────────
+     *
+     *   const router = new Router({
+     *     mode: 'hash',
+     *     outlet: '#app',
+     *     routes: {
+     *       '/':        Out.html('<h1>Home</h1>'),
+     *       '/about':   Out.component('pages/about.html'),
+     *       '/hosts':   [requireAuth, Out.component('pages/hosts.html')],
+     *       '404':      Out.component('pages/404.html'),   // special key
+     *       'error':    Out.component('pages/error.html'), // special key
+     *     },
+     *     autoStart: true,
+     *   });
      */
-    constructor({ mode = 'hash', outlet = '#app', loading = null, prefetch = false, vfs = null } = {}) {
+    constructor({ mode = 'hash', outlet = '#app', loading = null, prefetch = false, vfs = null, routes = null, autoStart = false } = {}) {
         this._mode             = mode;
         this._outlet           = outlet;
         this._loadingResponder = loading;
@@ -155,15 +166,41 @@ export class Router {
         this._started          = false;
         this._navId            = 0;
         this._navController    = null; // AbortController for in-flight navigation
+        // Reactive signal — updated on every successful navigation.
+        // read:  router.pathSignal()        → current path string or null
+        // write: internal only (_setPath)
+        const [_readPath, _writePath] = state(null);
+        this._readPath  = _readPath;
+        this._writePath = _writePath;
         this._beforeEach       = [];
         this._afterEach        = [];
         this._prefetchEnabled  = prefetch;
         this._namedRoutes      = new Map(); // name → pattern
         this._urlHandler       = null;      // stored for destroy()
+        this._prefetchObserver = null;      // IntersectionObserver — stored for destroy()
+
+        // Per-instance prefetch state (prevents cross-instance pollution)
+        this._prefetchQueue  = new Set();
+        this._prefetchCache  = new Map();
+        this._prefetchLinks  = new WeakMap();
+        this._prefetchConfig = { ...PREFETCH_DEFAULTS };
+        this._prefetchActive = 0;
 
         // Register VFS with Out so all component fetches check local store first.
         // Can also be set independently via Out.vfsUse(vfs) before router.start().
         if (vfs) Out.vfsUse(vfs);
+
+        // Declarative route map — iterate and register via Get() / NotFound() / Error()
+        if (routes && typeof routes === 'object') {
+            for (const [pattern, responder] of Object.entries(routes)) {
+                if (pattern === '404')   { this.NotFound(responder); }
+                else if (pattern === 'error') { this.Error(responder); }
+                else                     { this.Get(pattern, responder); }
+            }
+        }
+
+        // Auto-start after routes are registered
+        if (autoStart) this.start();
     }
 
     // Prefetching
@@ -172,7 +209,7 @@ export class Router {
      * Configure prefetching behaviour.
      */
     configurePrefetch(config = {}) {
-        _prefetchConfig = { ..._prefetchConfig, ...config };
+        this._prefetchConfig = { ...this._prefetchConfig, ...config };
         return this;
     }
 
@@ -182,7 +219,7 @@ export class Router {
      */
     async prefetch(target, options = {}) {
         const urls = Array.isArray(target) ? target : [target];
-        const opts = { ..._prefetchConfig, ...options };
+        const opts = { ...this._prefetchConfig, ...options };
         await Promise.allSettled(urls.map(url => this._prefetchRoute(url, opts)));
         return this;
     }
@@ -193,29 +230,29 @@ export class Router {
      *   router.prefetchOnHover('.nav-link', { delay: 100 });
      */
     prefetchOnHover(selector, options = {}) {
-        const opts = { ..._prefetchConfig, ...options };
+        const opts = { ...this._prefetchConfig, ...options };
 
         const handler = (e) => {
             if (!e.target || typeof e.target.closest !== 'function') return;
             const link = e.target.closest(selector);
             if (!link) return;
 
-            if (_prefetchLinks.has(link)) clearTimeout(_prefetchLinks.get(link).timeout);
+            if (this._prefetchLinks.has(link)) clearTimeout(this._prefetchLinks.get(link).timeout);
 
             const timeout = setTimeout(() => {
                 const href = link.getAttribute('href') || link.dataset.href || link.dataset.page;
                 if (href) this._prefetchRoute(this._normalizePath(href), opts);
             }, opts.delay);
 
-            _prefetchLinks.set(link, { url: link.href, timeout });
+            this._prefetchLinks.set(link, { url: link.href, timeout });
         };
 
         const cancelHandler = (e) => {
             if (!e.target || typeof e.target.closest !== 'function') return;
             const link = e.target.closest(selector);
             if (!link) return;
-            const data = _prefetchLinks.get(link);
-            if (data) { clearTimeout(data.timeout); _prefetchLinks.delete(link); }
+            const data = this._prefetchLinks.get(link);
+            if (data) { clearTimeout(data.timeout); this._prefetchLinks.delete(link); }
         };
 
         document.addEventListener('mouseenter', handler, { passive: true });
@@ -228,17 +265,17 @@ export class Router {
     }
 
     async _prefetchRoute(path, options) {
-        if (_prefetchCache.has(path)) {
-            const cached = _prefetchCache.get(path);
+        if (this._prefetchCache.has(path)) {
+            const cached = this._prefetchCache.get(path);
             if (Date.now() - cached.timestamp < 60000) return cached.promise;
         }
 
-        if (_prefetchActive >= _prefetchConfig.maxConcurrent) {
-            _prefetchQueue.add({ path, options });
+        if (this._prefetchActive >= this._prefetchConfig.maxConcurrent) {
+            this._prefetchQueue.add({ path, options });
             return;
         }
 
-        _prefetchActive++;
+        this._prefetchActive++;
 
         const promise = (async () => {
             try {
@@ -246,7 +283,7 @@ export class Router {
                 if (!match) return;
 
                 const controller = new AbortController();
-                const timeoutId  = setTimeout(() => controller.abort(), options.timeout);
+                const timeoutId  = setTimeout(() => controller.abort(), options.timeout ?? this._prefetchConfig.timeout);
 
                 if (match.responder && typeof match.responder.prefetch === 'function') {
                     await match.responder.prefetch({ signal: controller.signal });
@@ -254,15 +291,15 @@ export class Router {
 
                 clearTimeout(timeoutId);
                 // Evict oldest entry if cache is at capacity (LRU-lite: insertion order)
-                if (_prefetchCache.size >= PREFETCH_CACHE_MAX) {
-                    _prefetchCache.delete(_prefetchCache.keys().next().value);
+                if (this._prefetchCache.size >= PREFETCH_CACHE_MAX) {
+                    this._prefetchCache.delete(this._prefetchCache.keys().next().value);
                 }
-                _prefetchCache.set(path, { promise, timestamp: Date.now(), priority: options.priority });
+                this._prefetchCache.set(path, { promise, timestamp: Date.now(), priority: options.priority });
                 this._processPrefetchQueue();
             } catch (e) {
                 if (e.name !== 'AbortError') console.warn(`[oja/router] Prefetch failed for ${path}:`, e);
             } finally {
-                _prefetchActive--;
+                this._prefetchActive--;
                 this._processPrefetchQueue();
             }
         })();
@@ -271,9 +308,9 @@ export class Router {
     }
 
     _processPrefetchQueue() {
-        if (_prefetchQueue.size === 0 || _prefetchActive >= _prefetchConfig.maxConcurrent) return;
-        const [next] = _prefetchQueue;
-        _prefetchQueue.delete(next);
+        if (this._prefetchQueue.size === 0 || this._prefetchActive >= this._prefetchConfig.maxConcurrent) return;
+        const [next] = this._prefetchQueue;
+        this._prefetchQueue.delete(next);
         this._prefetchRoute(next.path, next.options);
     }
 
@@ -386,7 +423,7 @@ export class Router {
     }
 
     _setupPrefetchDetection() {
-        const observer = new IntersectionObserver((entries) => {
+        this._prefetchObserver = new IntersectionObserver((entries) => {
             for (const entry of entries) {
                 if (entry.isIntersecting) {
                     const link = entry.target;
@@ -399,7 +436,7 @@ export class Router {
                 }
             }
         });
-        document.querySelectorAll('[data-prefetch], a[data-page]').forEach(el => observer.observe(el));
+        document.querySelectorAll('[data-prefetch], a[data-page]').forEach(el => this._prefetchObserver.observe(el));
     }
 
     async _handleURL(defaultPath = '/') {
@@ -536,6 +573,7 @@ export class Router {
 
         this._current = pathname;
         this._params  = ctx.params;
+        this._writePath(pathname);
         _store.set('page',   pathname);
         _store.set('params', ctx.params);
 
@@ -598,6 +636,27 @@ export class Router {
     current() { return this._current; }
 
     /**
+     * pathSignal() — reactive read signal for the current path.
+     *
+     * Returns a signal function (same shape as state()) that re-runs any
+     * effect() or Out.to().bind() that reads it whenever the route changes.
+     *
+     *   // Re-render nav on every navigation:
+     *   Out.to('#nav').bind(router.pathSignal(), path =>
+     *       Out.html(buildNav(path))
+     *   );
+     *
+     *   // Side-effect on route change:
+     *   effect(() => {
+     *       const path = router.pathSignal()();
+     *       document.title = pageTitles[path] ?? 'App';
+     *   });
+     *
+     * @returns {Function} read-only reactive signal — call it to read the current value
+     */
+    pathSignal() { return this._readPath; }
+
+    /**
      * Register a named route pattern.
      * Allows URL generation from name + params instead of string construction.
      *
@@ -635,12 +694,46 @@ export class Router {
      * Remove the URL event listener.    /**
      * Remove the URL event listener. Call when replacing a router instance.
      */
+    /**
+     * Fully tear down the router — remove URL listener, cancel in-flight navigation,
+     * disconnect prefetch observer, unmount the active page, and clear hooks.
+     * Safe to call multiple times.
+     */
     destroy() {
-        if (!this._urlHandler) return;
-        const eventName = this._mode === 'hash' ? 'hashchange' : 'popstate';
-        window.removeEventListener(eventName, this._urlHandler);
-        this._urlHandler = null;
-        this._started = false;
+        if (!this._urlHandler && !this._started) return;
+
+        // Remove URL event listener
+        if (this._urlHandler) {
+            const eventName = this._mode === 'hash' ? 'hashchange' : 'popstate';
+            window.removeEventListener(eventName, this._urlHandler);
+            this._urlHandler = null;
+        }
+
+        // Cancel any in-flight navigation
+        this._navController?.abort();
+        this._navController = null;
+
+        // Stop IntersectionObserver used for prefetch detection
+        this._prefetchObserver?.disconnect();
+        this._prefetchObserver = null;
+
+        // Clear per-instance prefetch state
+        this._prefetchQueue.clear();
+        this._prefetchCache.clear();
+        this._prefetchActive = 0;
+
+        // Unmount the active page so component lifecycle hooks (onUnmount) fire
+        const outlet = document.querySelector(this._outlet);
+        if (outlet) {
+            import('./component.js').then(({ component }) => {
+                component._runUnmount(outlet);
+            }).catch(() => {});
+        }
+
+        // Clear lifecycle hooks
+        this._beforeEach = [];
+        this._afterEach  = [];
+        this._started    = false;
     }
 
     /**
@@ -941,3 +1034,47 @@ function _buildQuery(params = {}) {
 function _wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// ─── Router singleton ─────────────────────────────────────────────────────────
+//
+// createRouter(options) — creates, registers, and returns the singleton.
+// Call once in main.js. Subsequent imports of `router` get the same instance.
+//
+// router — lazy Proxy that forwards all property access to the registered
+// singleton. Safe to import before createRouter() is called, as long as you
+// don't invoke methods before then.
+//
+//   // main.js
+//   import { createRouter } from './oja.js';
+//   const router = createRouter({ mode: 'hash', outlet: '#app', routes: { ... } });
+//
+//   // anywhere.js
+//   import { router } from './oja.js';
+//   router.navigate('/hosts');
+//   router.current(); // → '/hosts'
+
+let _singleton = null;
+
+export function createRouter(options) {
+    _singleton = new Router(options);
+    return _singleton;
+}
+
+export const router = new Proxy({}, {
+    get(_, key) {
+        if (!_singleton) throw new Error(
+            '[oja/router] No router registered. Call createRouter() before using the router singleton.'
+        );
+        const val = _singleton[key];
+        return typeof val === 'function' ? val.bind(_singleton) : val;
+    },
+    set(_, key, value) {
+        if (!_singleton) throw new Error('[oja/router] No router registered.');
+        _singleton[key] = value;
+        return true;
+    },
+});
+
+// Register the router singleton proxy with out.js so _CompositeOut.render()
+// can include it in the composite scope without a dynamic import.
+_setCompositeRouter(router);
