@@ -33,28 +33,40 @@
  *
  * ─── Out shorthands ───────────────────────────────────────────────────────────
  *
- *   Out.c()  → Out.component()
- *   Out.h()  → Out.html()
- *   Out.t()  → Out.text()
+ *   Out.c()    → Out.component()
+ *   Out.h()    → Out.html()
+ *   Out.t()    → Out.text()
+ *   Out.cmp()  → Out.composite()
+ *
+ * ─── Router singleton ─────────────────────────────────────────────────────────
+ *
+ *   // main.js — create and register the singleton
+ *   import { createRouter } from './oja.js';
+ *   const router = createRouter({ mode: 'hash', outlet: '#app', routes: { ... } });
+ *
+ *   // anywhere.js — use the singleton
+ *   import { router } from './oja.js';
+ *   router.navigate('/hosts');
  */
 
 export { timeout, interval, sleep, defer, withDefer }     from './js/core/system.js';
 
 export { Store }                                          from './js/core/store.js';
 export { state, effect, derived, batch, context,
-    watch, untrack, readonly, signal }              from './js/core/reactive.js';
+    watch, untrack, readonly, signal }                    from './js/core/reactive.js';
 
 export { render, renderRaw, fill, each, template }        from './js/core/template.js';
 export { Out, Responder }                                 from './js/core/out.js';
 export { segment }                                        from './js/core/segment.js';
 export { animate }                                        from './js/core/animate.js';
 
-export { Router }                                         from './js/core/router.js';
+export { Router, createRouter, router }                   from './js/core/router.js';
 export { component,
     container, props, ready, ref, scoped,
+    registerUnmount,
 }                                                         from './js/core/component.js';
 export { currentContainer }                               from './js/core/_context.js';
-export { layout, allSlotsReady }           from './js/core/layout.js';
+export { layout, allSlotsReady }                          from './js/core/layout.js';
 
 export {
     ui,
@@ -67,14 +79,14 @@ export {
 }                                                         from './js/core/ui.js';
 
 export {
-    on, once, off, emit, listen, listenOnce, waitFor,
+    on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     debounce, throttle, rafThrottle,
     keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
     onResize, onMutation,
-    onlyOnce,                    // was exported from events.js but missing from barrel
-    onClickOutside, onHover, onLongPress,  //
+    onlyOnce,
+    onClickOutside, onHover, onLongPress,
 }                                                         from './js/core/events.js';
 
 export {
@@ -95,12 +107,12 @@ export { MsgPackCodec }                                   from './js/core/codecs
 
 export { plugin }                                         from './js/core/plugin.js';
 
-export const VERSION = '0.0.1';
+export const VERSION = '0.3.0';
 
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
     watch, untrack, readonly, signal }                   from './js/core/reactive.js';
-import { on, once, off, emit, listen, listenOnce, waitFor,
+import { on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
@@ -117,8 +129,9 @@ import { Out, Responder }                                from './js/core/out.js'
 import { Api }                                           from './js/core/api.js';
 import { JsonCodec, jsonCodec }                          from './js/core/codecs/json.js';
 import { MsgPackCodec }                                  from './js/core/codecs/msgpack.js';
-import { Router }                                        from './js/core/router.js';
-import { component, container, props, ready, ref, scoped } from './js/core/component.js';
+import { Router, createRouter, router }                  from './js/core/router.js';
+import { component, container, props, ready, ref, scoped,
+    registerUnmount }                                    from './js/core/component.js';
 import { layout, allSlotsReady }                         from './js/core/layout.js';
 import { segment }                                       from './js/core/segment.js';
 import { animate }                                       from './js/core/animate.js';
@@ -128,7 +141,7 @@ import { plugin }                                        from './js/core/plugin.
 export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly, signal };
 
 export const Event = {
-    on, once, off, emit, listen, listenOnce, waitFor,
+    on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,
@@ -155,8 +168,9 @@ export const Oja = {
     Out, Responder, render, renderRaw, fill, each, template,
     segment, animate,
     // Routing
-    Router, component, layout, allSlotsReady,
-    container, props, ready, ref, scoped,
+    Router, createRouter, router,
+    component, layout, allSlotsReady,
+    container, props, ready, ref, scoped, registerUnmount,
     // DOM
     DOM, ui,
     find, findAll, findAllIn,
@@ -167,7 +181,7 @@ export const Oja = {
     matches, closest,
     // Events
     Event,
-    on, once, off, emit, listen, listenOnce, waitFor,
+    on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
     onVisible, onceVisible, unobserve, createVisibilityObserver,

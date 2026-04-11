@@ -3,14 +3,14 @@
  *
  * Use this when you want everything in one import:
  *
- *   import { Router, Out, modal, chart, auth, pagination, uploader, analytics } from './oja.full.js';
+ *   import { Router, Out, modal, chart, auth, pagination, Analytics, analytics } from './oja.full.js';
  *
  * For production apps that care about bundle size, import from specific layers:
  *
- *   import { Router, Out }   from './oja.js';            — kernel only
- *   import { modal, notify } from './js/ui/modal.js';    — ui layer
- *   import { auth }          from './js/ext/auth.js';    — ext layer
- *   import { encrypt }       from './js/utils/encrypt.js';
+ *   import { Router, Out, createRouter, router } from './oja.js';  — kernel only
+ *   import { modal, notify }  from './js/ui/modal.js';             — ui layer
+ *   import { auth }           from './js/ext/auth.js';             — ext layer
+ *   import { encrypt }        from './js/utils/encrypt.js';
  *
  * ─── What is in each layer ────────────────────────────────────────────────────
  *
@@ -18,9 +18,9 @@
  *     System:    timeout, interval, sleep, defer, withDefer
  *     State:     Store, state, effect, derived, batch, context
  *     Rendering: Out, Responder, render, template, segment, animate
- *     Routing:   Router, component, layout
+ *     Routing:   Router, createRouter, router, component, layout
  *     DOM:       ui, find, findAll, query, queryAll, createEl …
- *     Events:    on, emit, listen, keys, debounce …
+ *     Events:    on, emit, listen, scopedListen, keys, debounce …
  *     Engine:    engine, morph, bindText, bindClass …
  *     Network:   Api
  *     Codecs:    JsonCodec, MsgPackCodec
@@ -32,10 +32,10 @@
  *     clickmenu, collapse, accordion, countdown, wizard
  *
  *   js/ext/ (opt-in features)
- *     auth, pagination, chart, history, channel, config,
- *     runner, VFS, sw, socket (OjaSSE, OjaSocket), OjaWorker, OjaWasm, webrtc,
- *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter, OjaUploader, uploader,
- *     OjaAnalytics, analytics
+ *     auth, pagination, chart, History, history, channel, config,
+ *     Runner, VFS, sw, SSE, Socket, Worker, Wasm, webrtc,
+ *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter,
+ *     Uploader, Analytics, analytics
  *
  *   js/utils/ (pure utilities)
  *     encrypt, logger, debug, adapter, search (Trie, Search),
@@ -57,38 +57,39 @@ export { dragdrop }                                       from './js/ui/dragdrop
 export { popover }                                        from './js/ui/popover.js';
 export { virtualList }                                    from './js/ui/virtual-list.js';
 export { mask }                                           from './js/ui/mask.js';
-export { clickmenu }                                          from './js/ui/clickmenu.js';
-export { collapse, accordion }                                from './js/ui/collapse.js';
-export { countdown }                                          from './js/ui/countdown.js';
-export { wizard }                                             from './js/ui/wizard.js';
+export { clickmenu }                                      from './js/ui/clickmenu.js';
+export { collapse, accordion }                            from './js/ui/collapse.js';
+export { countdown }                                      from './js/ui/countdown.js';
+export { wizard }                                         from './js/ui/wizard.js';
 
 export { auth }                                           from './js/ext/auth.js';
 export { pagination }                                     from './js/ext/pagination.js';
 export { chart }                                          from './js/ext/chart.js';
-export { OjaHistory, history }                            from './js/ext/history.js';
+// History — class + facade singleton (history.namespace(), history.push(), etc.)
+export {   History, history }                 from './js/ext/history.js';
 export { Channel, go, pipeline, fanOut, fanIn,
     merge, split }                                        from './js/ext/channel.js';
 export { config }                                         from './js/ext/config.js';
 export { Runner }                                         from './js/ext/runner.js';
 export { VFS }                                            from './js/ext/vfs.js';
-export { sw, send, post, syncVFS, clearVFS }                       from './js/ext/sw.js';
-export { OjaSSE, OjaSocket }                              from './js/ext/socket.js';
-export { OjaWorker }                                      from './js/ext/worker.js';
-export { OjaWasm }                                        from './js/ext/wasm.js';
+export { sw, send, post, syncVFS, clearVFS }              from './js/ext/sw.js';
+export { SSE, Socket as Socket }             from './js/ext/socket.js';
+export { Worker }                            from './js/ext/worker.js';
+export { Wasm }                                from './js/ext/wasm.js';
 export { webrtc }                                         from './js/ext/webrtc.js';
 export { infiniteScroll }                                 from './js/ext/infinitescroll.js';
 export { pullToRefresh }                                  from './js/ext/pulltorefresh.js';
 export { cssVars }                                        from './js/ext/cssvars.js';
 export { lazy }                                           from './js/ext/lazy.js';
 export { exporter }                                       from './js/ext/export.js';
-export { OjaUploader, uploader }                          from './js/ext/uploader.js';
-export { OjaAnalytics, analytics }                        from './js/ext/analytics.js';
+export { Uploader }                        from './js/ext/uploader.js';
+export {  Analytics, analytics }           from './js/ext/analytics.js';
 
 export { encrypt }                                        from './js/utils/encrypt.js';
 export { logger }                                         from './js/utils/logger.js';
 export { debug }                                          from './js/utils/debug.js';
 export { adapter }                                        from './js/utils/adapter.js';
-export { progress }                                        from './js/utils/progress.js';
+export { progress }                                       from './js/utils/progress.js';
 export { Trie, Search }                                   from './js/utils/search.js';
 export {
     uppercase, lowercase, capitalize, titleCase,
