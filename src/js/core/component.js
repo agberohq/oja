@@ -81,6 +81,7 @@ import { pushContainer, popContainer, currentContainer, _setReadyFn, _getReadyFn
 import { execScripts }                 from './_exec.js';
 import { emit, _setComponentScopeHook } from './events.js';
 import { _setComponentChannelHook }      from './reactive.js';
+import { _setCompositeRegisterUnmount }  from './out.js';
 
 const _cache = new Map();
 
@@ -289,6 +290,23 @@ export function _getScopeForTest(el) {
     return _scopes.get(el) ?? null;
 }
 
+/**
+ * registerUnmount(el, fn) — register a cleanup callback on any element's scope,
+ * even when that element is not the current active container.
+ *
+ * Used by Out.composite() so classic-script composites can hook into the same
+ * lifecycle that Out.component() inline scripts use. The router calls
+ * component._runUnmount(outlet) on navigation, which drains these callbacks.
+ *
+ *   // In a composite script's scope injection:
+ *   onUnmount: (fn) => registerUnmount(container, fn)
+ */
+export function registerUnmount(el, fn) {
+    if (!el || typeof fn !== 'function') return;
+    const scope = _getScope(el);
+    if (scope) scope.unmount.push(fn);
+}
+
 function _getScope(el) {
     if (!el) return null;
     if (!_scopes.has(el)) {
@@ -304,6 +322,10 @@ _setComponentScopeHook((unsub) => {
     const scope = _getScope(currentContainer());
     if (scope) scope.ons.push(unsub);
 });
+
+// Register registerUnmount with out.js so _CompositeOut.render() can hook
+// composite scripts into the component lifecycle without a dynamic import.
+_setCompositeRegisterUnmount(registerUnmount);
 
 // When a channel() is created while a component is mounting, register it
 // for auto-destruction when that component unmounts. This prevents named
