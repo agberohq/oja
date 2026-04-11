@@ -49,6 +49,8 @@
  *   router.navigate('/hosts');
  */
 
+export const VERSION = '0.3.0';
+
 export { timeout, interval, sleep, defer, withDefer }     from './js/core/system.js';
 
 export { Store }                                          from './js/core/store.js';
@@ -107,7 +109,7 @@ export { MsgPackCodec }                                   from './js/core/codecs
 
 export { plugin }                                         from './js/core/plugin.js';
 
-export const VERSION = '0.3.0';
+
 
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
