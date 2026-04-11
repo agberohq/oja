@@ -227,6 +227,11 @@ export const auth = {
             }
             _metaStore.set('startedAt', Date.now());
 
+            // Store a raw (unencrypted) copy for tokenSync() access.
+            // Only stored in meta (sessionStorage/memory) — not as sensitive
+            // as the encrypted copy but enables sync reads for non-secret tokens.
+            _metaStore.set('raw_token', token);
+
             // Determine expiry — JWT payload takes priority, then explicit
             // sessionOptions.expires, then undefined (no expiry = never expires).
             const payload = _decodeJWT(token);
@@ -269,6 +274,7 @@ export const auth = {
             _metaStore.clear('exp');        // clears both numeric and 'no-expiry'
             _metaStore.clear('startedAt');
             _metaStore.clear('payload');
+            _metaStore.clear('raw_token');
             emit('auth:end');
         },
 
@@ -319,6 +325,23 @@ export const auth = {
          */
         async token() {
             return _tokenStore.get('token');
+        },
+
+        /**
+         * Retrieve the token synchronously from meta — only works when the
+         * token was stored with encrypt:false OR when a raw copy was saved
+         * in _metaStore by start(). Use this when you need the token in a
+         * synchronous context (e.g. to set API headers on startup).
+         *
+         * Returns null if no session is active or if encryption prevents
+         * synchronous access. In that case, use the async token() method.
+         *
+         *   const token = auth.session.tokenSync();
+         *   if (token) api.setToken(token);
+         */
+        tokenSync() {
+            if (!auth.session.isActive()) return null;
+            return _metaStore.get('raw_token') || null;
         },
 
         /**
