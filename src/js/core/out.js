@@ -856,6 +856,21 @@ class OutTarget {
         return this;
     }
 
+    /**
+     * Render an external classic-script composite into this target.
+     * Accepts all argument forms that Out.composite() does.
+     *
+     *   Out.to('#app').composite('pages/hosts.html', 'pages/hosts.js');
+     *   Out.to('#app').composite('pages/hosts.html', 'pages/hosts.js', 'pages/hosts.css');
+     *   Out.to('#app').composite({ html, js, css, data });
+     */
+    composite(a, b, c, d, e) {
+        if (!this._condition || this._condition()) {
+            this._render(Out.composite(a, b, c, d, e));
+        }
+        return this;
+    }
+
     fn(asyncFn, options = {}) {
         if (!this._condition || this._condition()) {
             this._render(new _FnOut(asyncFn, { ...options, ...this._options }));
@@ -951,7 +966,7 @@ class OutTarget {
         const stop = () => clearInterval(id);
 
         // Register with component scope for auto-cleanup on unmount
-        // (_registerWithActiveComponent is imported at module level in events.js)
+
         try { _registerWithActiveComponent?.(stop); } catch {}
 
         this._pollStop = stop;
@@ -1268,6 +1283,383 @@ function createTagHandler(target) {
     };
 }
 
+// CSS scoping helpers
+// Rewrites `.selector` → `[data-oja-composite="id"] .selector` so composite
+// styles are contained to their own container. Handles @media, @supports,
+// @layer wrappers correctly. @keyframes and @font-face are left untouched.
+
+const _CSS_AT_PASSTHROUGH = /^@(keyframes|font-face|charset|import|namespace)/i;
+
+function _scopeCSSBlock(block, scopeAttr) {
+    // block is the content inside a @media / @supports / @layer { ... } wrapper.
+    // We only scope the inner rule-sets, not the at-rule itself.
+    return block.replace(/([^{}]+)\{([^{}]*)\}/g, (_m, sel, decl) => {
+        const trimmed = sel.trim();
+        if (!trimmed || _CSS_AT_PASSTHROUGH.test(trimmed)) return _m;
+        const scoped = trimmed.split(',').map(s => `[data-oja-composite="${scopeAttr}"] ${s.trim()}`).join(', ');
+        return `${scoped} {${decl}}`;
+    });
+}
+
+function _scopeCSS(css, scopeId) {
+    // State machine: walk the CSS token-by-token to find top-level rules vs
+    // at-rules with blocks. We don't use regex on the full string because
+    // nested @media blocks would confuse a flat regex.
+    let out   = '';
+    let i     = 0;
+    const L   = css.length;
+
+    while (i < L) {
+        // Skip whitespace / comments at top level
+        if (css.slice(i, i + 2) === '/*') {
+            const end = css.indexOf('*/', i + 2);
+            if (end === -1) { out += css.slice(i); break; }
+            out += css.slice(i, end + 2);
+            i = end + 2;
+            continue;
+        }
+
+        // Find the next { to classify what we're looking at
+        const brace = css.indexOf('{', i);
+        if (brace === -1) { out += css.slice(i); break; }
+
+        const preamble = css.slice(i, brace).trim();
+        i = brace + 1;
+
+        // Find matching closing brace (supports one level of nesting for @media)
+        let depth = 1, j = i;
+        while (j < L && depth > 0) {
+            if (css[j] === '{') depth++;
+            else if (css[j] === '}') depth--;
+            j++;
+        }
+        const inner = css.slice(i, j - 1);
+        i = j;
+
+        if (!preamble) { out += `{${inner}}`; continue; }
+
+        // @keyframes, @font-face etc — pass through verbatim
+        if (_CSS_AT_PASSTHROUGH.test(preamble)) {
+            out += `${preamble} {${inner}}\n`;
+            continue;
+        }
+
+        // @media / @supports / @layer — scope the inner rules, keep wrapper
+        if (/^@/.test(preamble)) {
+            out += `${preamble} {\n${_scopeCSSBlock(inner, scopeId)}\n}\n`;
+            continue;
+        }
+
+        // Regular selector rule — scope directly
+        const scoped = preamble.split(',')
+            .map(s => `[data-oja-composite="${scopeId}"] ${s.trim()}`)
+            .join(', ');
+        out += `${scoped} {${inner}}\n`;
+    }
+
+    return out;
+}
+
+function _injectScopedCSS(cssText, scopeId) {
+    const attr  = `data-oja-composite-style`;
+    const existing = document.head.querySelector(`style[${attr}="${scopeId}"]`);
+    if (existing) return; // already injected (e.g. after re-render)
+
+    const style = document.createElement('style');
+    style.setAttribute(attr, scopeId);
+    style.textContent = _scopeCSS(cssText, scopeId);
+    document.head.appendChild(style);
+}
+
+function _removeScopedCSS(scopeId) {
+    document.head
+        .querySelectorAll(`style[data-oja-composite-style="${scopeId}"]`)
+        .forEach(el => el.remove());
+}
+
+// Fetch plain text (CSS). Mirrors _fetchHTML but skips VFS write-back.
+async function _fetchText(url, options = {}) {
+    const now       = Date.now();
+    const cached    = _cache.get(url);
+    const activeVfs = options.vfsOverride !== undefined ? options.vfsOverride : _vfs;
+
+    if (cached && (now - cached.timestamp) < CACHE_TTL && !options.bypassCache) {
+        return cached.html;
+    }
+
+    if (activeVfs) {
+        try {
+            const text = await activeVfs.readText(url);
+            if (text !== null) {
+                _cache.set(url, { html: text, timestamp: now, size: text.length });
+                return text;
+            }
+        } catch { /* VFS miss — fall through */ }
+    }
+
+    if (options.signal?.aborted) throw new Error('[oja/out] fetch aborted');
+    if (!runtime.isOriginAllowed(url)) throw new Error(`[oja/out] blocked origin: ${url}`);
+
+    const res = await fetch(url, runtime.runFetchHooks(url, { signal: options.signal }));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    while (_cache.size >= CACHE_MAX) _cache.delete(_cache.keys().next().value);
+    _cache.set(url, { html: text, timestamp: now, size: new Blob([text]).size });
+    return text;
+}
+
+// Deduce { html, js, css } from an arbitrary argument list by file extension.
+// Accepts positional (html, js, css) or object form { html, js, css, data, ...opts }.
+function _normalizeCompositeArgs(a, b, c, d, e) {
+    if (a && typeof a === 'object' && !Array.isArray(a) && ('html' in a || 'js' in a)) {
+        // Object form: Out.composite({ html, js, css, data, ...options })
+        const { html = null, js = null, css = null, data = {}, ...opts } = a;
+        return { html, js, css, data, opts };
+    }
+
+    // Positional: Out.composite(fileA, fileB?, fileC?, data?, options?)
+    // Collect all string args as file paths, classify by extension.
+    const files  = [];
+    let   data   = {};
+    let   opts   = {};
+
+    for (const arg of [a, b, c, d, e]) {
+        if (arg === null || arg === undefined) continue;
+        if (typeof arg === 'string') files.push(arg);
+        else if (typeof arg === 'object' && !Array.isArray(arg)) {
+            // First plain object = data, second = options
+            if (!Object.keys(data).length && !('timeout' in arg) && !('vfs' in arg) && !('bypassCache' in arg) && !('signal' in arg)) {
+                data = arg;
+            } else {
+                opts = arg;
+            }
+        }
+    }
+
+    let html = null, js = null, css = null;
+    for (const f of files) {
+        const ext = f.split('.').pop().toLowerCase();
+        if (ext === 'html' || ext === 'htm') {
+            if (html !== null) throw new Error(`[oja/out] Out.composite() received two HTML files: "${html}" and "${f}". Only one is allowed.`);
+            html = f;
+        } else if (ext === 'js' || ext === 'ts' || ext === 'mjs') {
+            if (js !== null) throw new Error(`[oja/out] Out.composite() received two JS files: "${js}" and "${f}". Only one is allowed.`);
+            js = f;
+        } else if (ext === 'css') {
+            if (css !== null) throw new Error(`[oja/out] Out.composite() received two CSS files: "${css}" and "${f}". Only one is allowed.`);
+            css = f;
+        }
+    }
+
+    return { html, js, css, data, opts };
+}
+
+// _CompositeOut
+//
+// Renders an HTML template + an external classic <script src> + optional CSS.
+// Unlike _ComponentOut (which uses _exec.js blob-URL modules), composite JS is
+// loaded as a plain <script src="..."> — no type="module", no blob wrapping.
+// This makes it fully compatible with HTML/JS minifiers (tdewolff/minify etc.)
+// that cannot safely process module scripts embedded in HTML.
+//
+// Communication between the host page and the composite script uses a
+// window[scopeKey] handshake (same SCOPE_PREFIX as _exec.js) — the script
+// reads container + props synchronously and calls ready() when done.
+//
+// Composite scripts CANNOT use import/export. They receive:
+//   const { container, props, ready } = window[document.currentScript.dataset.ojaScope];
+//
+// If you need ES module imports, use Out.component() via _exec.js instead.
+
+const COMPOSITE_SCOPE_PREFIX = '__oja_scope_';
+let   _compositeCounter      = 0;
+
+// Composite scope helpers — set synchronously at module load time via
+// _setCompositeHelpers(), called by component.js and router.js.
+// Using a hook pattern (same as _componentScopeHook in events.js) avoids
+// dynamic import() inside render(), which would add extra microtask ticks
+// and cause test timing issues. Both callers already import out.js, so
+// there is no circular dependency.
+let _compositeRegisterUnmount = null;
+let _compositeRouter          = null;
+
+/** @internal — called by component.js after module init */
+export function _setCompositeRegisterUnmount(fn) {
+    _compositeRegisterUnmount = fn;
+}
+
+/** @internal — called by router.js after the singleton proxy is created */
+export function _setCompositeRouter(routerProxy) {
+    _compositeRouter = routerProxy;
+}
+
+class _CompositeOut extends _Out {
+    constructor(html, js, css = null, data = {}, options = {}) {
+        super('composite', html, options);
+        this._jsUrl  = js;
+        this._cssUrl = css;
+        this._data   = data;
+        this._vfs    = options.vfs !== undefined ? options.vfs : undefined;
+    }
+
+    async render(container, context = {}) {
+        const props   = { ...context, ...this._data };
+        const timeout = this._options.timeout ?? 5000;
+        const signal  = this._options.signal ?? context.signal ?? null;
+
+        // Unique composite ID: used both as scope key and CSS scoping attribute.
+        const scopeId  = `oja-cmp-${Date.now()}_${++_compositeCounter}_${Math.random().toString(36).slice(2, 7)}`;
+        const scopeKey = `${COMPOSITE_SCOPE_PREFIX}${scopeId}`;
+
+        // Mark the container so scoped CSS selectors can target it.
+        // Saved so we can clean up the <style> tag on navigation (router calls
+        // component._runUnmount which tears down the scope — CSS is removed
+        // via a MutationObserver registered below).
+        container.setAttribute('data-oja-composite', scopeId);
+
+        // Fetch and render the HTML template (VFS → cache → network)
+        if (this._payload) {
+            const html = await _fetchHTML(this._payload, {
+                bypassCache: this._options.bypassCache,
+                vfsOverride: this._vfs,
+                signal,
+            });
+            container.innerHTML = templateRender(html, props);
+            fill(container, props);
+        }
+
+        // Fetch and inject scoped CSS (non-blocking — warn on failure, never throw)
+        if (this._cssUrl) {
+            _fetchText(this._cssUrl, { vfsOverride: this._vfs, signal })
+                .then(css => _injectScopedCSS(css, scopeId))
+                .catch(e  => console.warn(`[oja/out] composite: failed to load CSS: ${this._cssUrl}`, e));
+        }
+
+        // Register a MutationObserver so the <style> tag is removed automatically
+        //    when this container is detached from the DOM (e.g. router navigation).
+        if (this._cssUrl) {
+            const obs = new MutationObserver(() => {
+                if (!document.body.contains(container)) {
+                    _removeScopedCSS(scopeId);
+                    obs.disconnect();
+                }
+            });
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+
+        // If no JS, we're done.
+        if (!this._jsUrl) return;
+
+        // Window scope handshake — written before the <script> is injected.
+        //    The composite script reads this synchronously via document.currentScript.
+        //
+        //    Composite scripts receive a rich scope object that mirrors Out.component():
+        //      const { container, props, ready, find, findAll, onUnmount, router } =
+        //          window[document.currentScript.dataset.ojaScope];
+        //
+        //    _compositeRegisterUnmount and _compositeRouter are set synchronously at
+        //    module load time via _setCompositeHelpers() — no async import() needed.
+
+        return new Promise((resolve) => {
+            let settled = false;
+
+            const settle = () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timerId);
+                document.removeEventListener('oja:composite-ready', onReadyEvent);
+                // Defer scope key deletion — give the script's synchronous
+                // post-load code one more tick before we clean up.
+                setTimeout(() => { delete window[scopeKey]; }, 0);
+                resolve();
+            };
+
+            // Timeout guard — resolves instead of hanging if script never calls ready()
+            let timerId = null;
+            if (timeout > 0) timerId = setTimeout(() => {
+                console.warn(`[oja/out] composite timeout (${timeout}ms): ${this._jsUrl}`);
+                settle();
+            }, timeout);
+
+            // Abort signal — remove injected script and resolve cleanly
+            if (signal) {
+                signal.addEventListener('abort', () => {
+                    container.querySelector(`script[data-oja-scope="${scopeKey}"]`)?.remove();
+                    settle();
+                }, { once: true });
+            }
+
+            // Event-based ready: the composite script can dispatch instead of
+            // calling ready() directly — useful when the script has no access
+            // to document.currentScript (e.g. loaded via a bundler).
+            const onReadyEvent = (e) => {
+                if (e.detail?.scope === scopeKey) settle();
+            };
+            document.addEventListener('oja:composite-ready', onReadyEvent);
+
+            // The actual scope object exposed to the composite script.
+            // Mirrors the Out.component() developer experience as closely as possible:
+            //   find / findAll  — scoped querySelector, no global DOM leaks
+            //   onUnmount       — hooks into component lifecycle; router calls _runUnmount on navigate
+            //   router          — the singleton proxy; safe to reference before start()
+            window[scopeKey] = {
+                container,
+                props,
+                ready:     settle,
+                find:      (sel) => container.querySelector(sel),
+                findAll:   (sel) => Array.from(container.querySelectorAll(sel)),
+                onUnmount: (fn)  => _compositeRegisterUnmount?.(container, fn),
+                router:    _compositeRouter,
+            };
+
+            // Inject the classic <script src> tag.
+            //    NO type="module" — this is intentional. Classic scripts are
+            //    minifier-safe. The trade-off: no import/export in composite JS.
+            const script      = document.createElement('script');
+            script.src        = this._jsUrl;
+            // data-oja-scope lets the composite script find its scope key via
+            //   window[document.currentScript.dataset.ojaScope]
+            script.dataset.ojaScope = scopeKey;
+
+            script.addEventListener('error', (e) => {
+                console.error(`[oja/out] composite script failed to load: ${this._jsUrl}`, e);
+                settle(); // don't hang on network error
+            }, { once: true });
+
+            // For inline-only composites that have no async work, the script
+            // may call ready() synchronously during the load event — that's fine,
+            // settle() is idempotent.
+            container.appendChild(script);
+        });
+    }
+
+    async prefetch(options = {}) {
+        const jobs = [];
+        if (this._payload) {
+            jobs.push(
+                _fetchHTML(this._payload, { signal: options.signal, vfsOverride: this._vfs, bypassCache: options.bypassCache })
+                    .catch(e => { if (e.name !== 'AbortError') console.warn(`[oja/out] composite prefetch (html): ${this._payload}`, e); })
+            );
+        }
+        if (this._cssUrl) {
+            jobs.push(
+                _fetchText(this._cssUrl, { signal: options.signal, vfsOverride: this._vfs })
+                    .catch(e => { if (e.name !== 'AbortError') console.warn(`[oja/out] composite prefetch (css): ${this._cssUrl}`, e); })
+            );
+        }
+        // JS is a real URL — just warm the browser cache via a preload hint
+        if (this._jsUrl && !options.bypassCache) {
+            const link = document.createElement('link');
+            link.rel   = 'preload';
+            link.as    = 'script';
+            link.href  = this._jsUrl;
+            document.head.appendChild(link);
+        }
+        await Promise.allSettled(jobs);
+        return this;
+    }
+}
+
 class _SegmentOut extends _Out {
     constructor(name, data = {}) {
         super('segment', name);
@@ -1546,11 +1938,114 @@ export const Out = {
     vfsGet() {
         return _vfs;
     },
+
+    /**
+     * Out.composite(html, js, css?, data?, options?)
+     * Out.composite(js,   html, css?, data?, options?)  — order doesn't matter
+     * Out.composite({ html, js, css?, data?, ...options })
+     *
+     * Renders an HTML template paired with an external classic <script src>.
+     * Unlike Out.component() (which uses <script type="module"> via blob URLs),
+     * composite JS is loaded as a plain classic script — making it fully
+     * compatible with HTML/JS minifiers such as tdewolff/minify.
+     *
+     * Trade-off: composite JS files cannot use ES import/export.
+     * The script receives the container and props via a window scope handshake:
+     *
+     *   // inside dashboard.js
+     *   const { container, props, ready, find, findAll, onUnmount, router } =
+     *       window[document.currentScript.dataset.ojaScope];
+     *
+     *   const search = find('#searchInput');
+     *   const timer  = setInterval(refresh, 30_000);
+     *   onUnmount(() => clearInterval(timer));
+     *   ready();
+     *
+     * Scope object properties:
+     *   container  {Element}   — the DOM element this composite rendered into
+     *   props      {Object}    — merged data/context passed at render time
+     *   ready      {Function}  — call when async setup is complete
+     *   find       {Function}  — container.querySelector shorthand (scoped)
+     *   findAll    {Function}  — container.querySelectorAll shorthand (scoped)
+     *   onUnmount  {Function}  — register a cleanup fn called on router navigation
+     *   router     {Proxy}     — the router singleton (requires createRouter() first)
+     *
+     * Options:
+     *   timeout     {number}  ms before render resolves anyway (default: 5000)
+     *   vfs         {VFS}     per-instance VFS (overrides Out.vfsUse())
+     *   bypassCache {boolean} skip in-memory HTML cache
+     *
+     * @returns {_CompositeOut}
+     */
+    composite(a, b, c, d, e) {
+        const { html, js, css, data, opts } = _normalizeCompositeArgs(a, b, c, d, e);
+        if (!html && !js) {
+            throw new Error('[oja/out] Out.composite() requires at least an html or js file');
+        }
+        return new _CompositeOut(html, js, css, data, opts);
+    },
+
+    /**
+     * Out.page(html, js?, css?, data?, options?)
+     *
+     * Semantic alias for Out.composite() intended for router usage.
+     * Identical behaviour — the name signals "this is a full page", which
+     * enables router tooling (title updates, scroll-reset, prefetch-on-hover)
+     * to distinguish page transitions from sub-component renders.
+     *
+     * Falls back to Out.component() when no JS is provided — plain HTML pages
+     * do not need the composite handshake overhead.
+     *
+     *   r.Get('/dashboard', Out.page('pages/dashboard.html', 'pages/dashboard.js'));
+     *   r.Get('/about',     Out.page('pages/about.html'));   // html-only → component
+     *
+     * @returns {_CompositeOut | _ComponentOut}
+     */
+    page(a, b, c, d, e) {
+        const { html, js, css, data, opts } = _normalizeCompositeArgs(a, b, c, d, e);
+        if (!js) {
+            // No JS — use the lighter _ComponentOut path (no handshake overhead)
+            return new _ComponentOut(html, data, {}, opts);
+        }
+        return new _CompositeOut(html, js, css, data, { ...opts, _isPage: true });
+    },
+
+    /**
+     * Out.within(element) — scoped rendering root.
+     *
+     * Returns a scope object whose .to(selector) resolves the selector against
+     * `element` instead of the global document. Prevents accidental matches on
+     * elements belonging to sibling components when IDs are not globally unique.
+     *
+     *   // Inside a composite or component script:
+     *   Out.within(container).to('#stepPanel').component('steps/step-1.html');
+     *   Out.within(container).to('#stepPanel').composite('steps/step.html', 'steps/step.js');
+     *
+     * @param {Element} scopeEl — the container to search within
+     * @returns {{ to(selector): OutTarget }}
+     */
+    within(scopeEl) {
+        if (!(scopeEl instanceof Element)) {
+            console.warn('[oja/out] Out.within() requires a DOM Element');
+            return { to: () => new OutTarget(null) };
+        }
+        return {
+            to(selector) {
+                const el = typeof selector === 'string'
+                    ? scopeEl.querySelector(selector)
+                    : selector instanceof Element ? selector : null;
+                if (!el) console.warn(`[oja/out] Out.within().to() — element not found: ${selector}`);
+                // Pass the resolved Element directly — OutTarget._resolve() handles Elements natively.
+                return new OutTarget(el);
+            },
+        };
+    },
 };
 
-Out.c = Out.component;
-Out.h = Out.html;
-Out.t = Out.text;
+Out.c    = Out.component;
+Out.h    = Out.html;
+Out.t    = Out.text;
+Out.cmp  = Out.composite; // short alias
 
 // Backwards-compatible alias — Out is the canonical name.
 export const Responder = Out;
