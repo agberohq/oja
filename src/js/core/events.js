@@ -263,6 +263,35 @@ export function listenOnce(name, fn) {
 }
 
 /**
+ * scopedListen(name, fn) — listen for a named event and auto-unsubscribe when
+ * the current component unmounts.
+ *
+ * Identical to listen() but registers the unsubscribe function with the active
+ * component scope (if any). When the router navigates away, component._runUnmount()
+ * calls all registered unsubs — no manual cleanup needed.
+ *
+ * If called outside a component context (e.g. in a module top-level), behaves
+ * exactly like listen() and returns the unsub for manual control.
+ *
+ *   // Inside an Out.component() inline script:
+ *   scopedListen('metrics:updated', renderMetrics);
+ *   scopedListen('hosts:changed', renderHosts);
+ *   // No onUnmount() call needed — cleaned up automatically on navigation.
+ *
+ *   // For composite scripts, use onUnmount directly (no active context):
+ *   const unsub = listen('metrics:updated', renderMetrics);
+ *   onUnmount(() => unsub());
+ *
+ * @returns {Function} unsub — call to unsubscribe early if needed
+ */
+export function scopedListen(name, fn) {
+    const unsub = listen(name, fn);
+    // Reuse the same hook that on() uses — no circular import, no extra infrastructure.
+    _registerWithActiveComponent(unsub);
+    return unsub;
+}
+
+/**
  * Wait for an event to fire, returns a promise.
  * Useful in async flows.
  *
