@@ -182,6 +182,7 @@ export const table = {
             truncateMode   = 'ellipsis',
             mobile         = { summaryColumns: 2 },
             fetchData      = null,
+            resizableColumns = false,   // drag-to-resize column widths
         } = opts;
 
         // State
@@ -238,8 +239,11 @@ export const table = {
             const tr = document.createElement('tr');
             for (const col of _allCols()) {
                 const th = document.createElement('th');
+                th.style.position = 'relative'; // needed for resize handle
                 th.innerHTML = col.label;
                 if (col.width) th.style.width = col.width;
+                if (col.minWidth) th.style.minWidth = typeof col.minWidth === 'number' ? col.minWidth + 'px' : col.minWidth;
+                if (col.maxWidth) th.style.maxWidth = typeof col.maxWidth === 'number' ? col.maxWidth + 'px' : col.maxWidth;
 
                 if (col._select) {
                     th.className = 'oja-th-select';
@@ -267,6 +271,33 @@ export const table = {
                     th.addEventListener('click', handler);
                     _listeners.push({ el: th, type: 'click', handler });
                 }
+
+                // Drag-to-resize handle
+                if (resizableColumns && !col._select && !col._actions) {
+                    const handle = document.createElement('div');
+                    handle.className = 'oja-th-resize-handle';
+                    handle.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:1;user-select:none;';
+                    handle.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const startX  = e.clientX;
+                        const startW  = th.offsetWidth;
+                        const minW    = col.minWidth ? parseInt(col.minWidth) : 40;
+                        const maxW    = col.maxWidth ? parseInt(col.maxWidth) : 2000;
+                        const onMove  = (ev) => {
+                            const newW = Math.min(Math.max(startW + (ev.clientX - startX), minW), maxW);
+                            th.style.width = newW + 'px';
+                        };
+                        const onUp    = () => {
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup',   onUp);
+                        };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup',   onUp);
+                    });
+                    th.appendChild(handle);
+                }
+
                 tr.appendChild(th);
             }
             thead.appendChild(tr);
