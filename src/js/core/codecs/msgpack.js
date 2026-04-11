@@ -20,7 +20,7 @@
  *
  *   import { MsgPackCodec } from '../oja/codecs/msgpack.js';
  *
- *   const ws = new OjaSocket('wss://api.example.com/live', {
+ *   const ws = new Socket('wss://api.example.com/live', {
  *       codec: new MsgPackCodec()
  *   });
  *

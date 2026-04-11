@@ -450,8 +450,8 @@ engine.list('#notes', notes(), {
 ## Known limitations
 
 - **Nested `{{range}}` loops**: inner `Index`/`First`/`Last` are list-absolute in chunked renders — access the outer variable by its `data-as` name.
-- **`OjaWasm` worker mode**: JS import callbacks are stubbed in the worker thread. Use non-worker mode for WASM modules that need JS callbacks.
-- **`OjaWorker` scope isolation**: worker functions are serialised as strings — they cannot close over variables from the outer scope.
+- **`Wasm` worker mode**: JS import callbacks are stubbed in the worker thread. Use non-worker mode for WASM modules that need JS callbacks.
+- **`Worker` scope isolation**: worker functions are serialised as strings — they cannot close over variables from the outer scope.
 - **`webrtc.js`**: WebRTC signaling is application-specific. Wire your own signaling server using `createPeer()` / `createOffer()` / `setLocalDescription()`.
 
 ---

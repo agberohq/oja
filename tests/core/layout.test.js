@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { layout } from '../../src/js/core/layout.js';
 
-
 function makeOut(html) {
     return {
         __isOut: true,
@@ -19,7 +18,6 @@ afterEach(() => {
     vi.useRealTimers();
     document.body.innerHTML = '';
 });
-
 
 describe('layout.inject()', () => {
     it('writes an HTML string into an element matched by selector', async () => {
@@ -67,7 +65,6 @@ describe('layout.inject()', () => {
     });
 });
 
-
 describe('layout.onReady()', () => {
     it('calls the hook when layout:mounted fires (outside a script context)', async () => {
         const fn = vi.fn();
@@ -88,7 +85,6 @@ describe('layout.onReady()', () => {
         expect(layout.onReady(() => {})).toBe(layout);
     });
 });
-
 
 describe('layout.slot()', () => {
     it('fills a [data-slot] element with an HTML string', async () => {
@@ -127,7 +123,6 @@ describe('layout.slot()', () => {
         expect(handler).toHaveBeenCalled();
     });
 });
-
 
 describe('layout.slotReady()', () => {
     it('is a function on the layout object', () => {
@@ -168,7 +163,7 @@ describe('layout.slotReady()', () => {
         // In this case the event-based path handles it
         layout.slotReady('nav-early');
         // allSlotsReady for that slot should resolve via the event it emits
-        // (This tests the event emission path rather than the callback path)
+
         const promise = new Promise(resolve => {
             document.addEventListener('layout:slot-ready', (e) => {
                 if (e.detail?.name === 'nav-early') resolve();
@@ -200,7 +195,6 @@ describe('layout.slotReady()', () => {
         }).not.toThrow();
     });
 });
-
 
 describe('layout.allSlotsReady()', () => {
     it('is a function on the layout object', () => {

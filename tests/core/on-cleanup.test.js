@@ -14,7 +14,6 @@ import { on, off, emit }                                    from '../../src/js/c
 import { component, _setActiveForTest, _getScopeForTest }  from '../../src/js/core/component.js';
 import { query }                                            from '../../src/js/core/ui.js';
 
-
 function makeEl(tag = 'div', attrs = {}) {
     const el = document.createElement(tag);
     Object.entries(attrs).forEach(([k, v]) => {
@@ -39,7 +38,6 @@ afterEach(() => {
     document.body.innerHTML = '';
     _setActiveForTest(null);
 });
-
 
 describe('on() — return value is a callable unsub', () => {
 
@@ -108,7 +106,6 @@ describe('on() — return value is a callable unsub', () => {
         unsubB();
     });
 });
-
 
 describe('on() — auto-cleanup on component unmount via _activeElement', () => {
 
@@ -235,7 +232,6 @@ describe('on() — auto-cleanup on component unmount via _activeElement', () => 
     });
 });
 
-
 describe('query()', () => {
 
     it('is exported from ui.js', () => {
@@ -285,7 +281,6 @@ describe('query()', () => {
     });
 });
 
-
 describe('findAll name-conflict — query() is the safe alternative', () => {
 
     it('import statement is NOT detected by the declares() guard', () => {
@@ -298,7 +293,7 @@ describe('findAll name-conflict — query() is the safe alternative', () => {
         const declares = (name) =>
             new RegExp(`\\b(?:const|let|var|function)\\s+${name}\\b`).test(body);
 
-        expect(declares('findAll')).toBe(false); // bug: import not detected
+        expect(declares('findAll')).toBe(false); // import not detected
     });
 
     it('query is not in the _exec.js injection list so it is always safe to import', () => {

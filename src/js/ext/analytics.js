@@ -28,7 +28,7 @@
 import { listen } from '../core/events.js';
 import { Store }  from '../core/store.js';
 
-export class OjaAnalytics {
+export class Analytics {
     constructor(options = {}) {
         this.options = {
             endpoint: '/api/telemetry',
@@ -221,4 +221,4 @@ export class OjaAnalytics {
     }
 }
 
-export const analytics = new OjaAnalytics();
+export const analytics = new Analytics();

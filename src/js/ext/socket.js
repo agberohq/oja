@@ -4,9 +4,9 @@
  *
  * ─── SSE — server pushes to client ───────────────────────────────────────────
  *
- *   import { OjaSSE } from '../oja/socket.js';
+ *   import { SSE } from '../oja/socket.js';
  *
- *   const sse = new OjaSSE('/api/events', { withCredentials: true });
+ *   const sse = new SSE('/api/events', { withCredentials: true });
  *
  *   sse.on('metrics', (data) => updateMetrics(data));
  *   sse.on('log',     (data) => appendLog(data));
@@ -19,9 +19,9 @@
  *
  * ─── WebSocket — two-way communication ───────────────────────────────────────
  *
- *   import { OjaSocket } from '../oja/socket.js';
+ *   import { Socket } from '../oja/socket.js';
  *
- *   const ws = new OjaSocket('wss://api.example.com/live');
+ *   const ws = new Socket('wss://api.example.com/live');
  *
  *   ws.on('connect',    ()     => ws.send({ type: 'subscribe', channel: 'hosts' }));
  *   ws.on('message',    (data) => handleMessage(data));
@@ -34,7 +34,7 @@
  *
  *   import { MsgPackCodec } from '../oja/codecs/msgpack.js';
  *
- *   const ws = new OjaSocket('wss://api.example.com/live', {
+ *   const ws = new Socket('wss://api.example.com/live', {
  *       codec: new MsgPackCodec()
  *   });
  *
@@ -43,7 +43,7 @@
  *   Both SSE and WebSocket reconnect automatically with exponential backoff:
  *     attempt 1: 1s, attempt 2: 2s, attempt 3: 4s ... max: 30s
  *
- *   new OjaSSE('/events', {
+ *   new SSE('/events', {
  *       reconnect      : true,   // default: true
  *       reconnectDelay : 1000,   // base delay ms (default: 1000)
  *       maxDelay       : 30000,  // max delay ms  (default: 30000)
@@ -63,7 +63,7 @@ const JsonCodec = {
     binaryType: 'text'
 };
 
-export class OjaSSE {
+export class SSE {
     /**
      * @param {string} url
      * @param {Object} options
@@ -204,7 +204,7 @@ export class OjaSSE {
     }
 }
 
-export class OjaSocket {
+export class Socket {
     /**
      * @param {string} url            — ws:// or wss://
      * @param {Object} options

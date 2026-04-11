@@ -39,7 +39,6 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-
 describe('reorder() — basic setup', () => {
     it('returns an object with a destroy() function', () => {
         const list = makeList();
@@ -81,7 +80,6 @@ describe('reorder() — basic setup', () => {
     });
 });
 
-
 describe('reorder() — idempotency guard', () => {
     it('calling reorder() twice on same list does not throw', () => {
         const list = makeList();
@@ -116,11 +114,10 @@ describe('reorder() — idempotency guard', () => {
         expect(before).toBe(3);
 
         // A new item added without the attribute should be picked up by MutationObserver
-        // (we test the skip logic: existing items with the attribute are not re-processed)
+
         inst.destroy();
     });
 });
-
 
 describe('reorder() — destroy()', () => {
     it('removes data-oja-draggable attribute from items', () => {
@@ -169,7 +166,6 @@ describe('reorder() — destroy()', () => {
     });
 });
 
-
 describe('reorder() — handle option', () => {
     it('attaches draggable to the handle element, not the item', () => {
         const list = document.createElement('ul');
@@ -209,7 +205,6 @@ describe('reorder() — handle option', () => {
         expect(hdl.getAttribute('draggable')).toBeNull();
     });
 });
-
 
 describe('reorder() — AbortController integration', () => {
     it('addEventListener is called with a signal option', () => {

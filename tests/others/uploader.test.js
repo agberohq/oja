@@ -39,7 +39,7 @@ async function flushMicrotasks(n = 5) {
     for (let i = 0; i < n; i++) await Promise.resolve();
 }
 
-describe('OjaUploader', () => {
+describe('Uploader', () => {
     let xhrInstances = [];
 
     beforeEach(() => {

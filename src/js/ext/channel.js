@@ -4,12 +4,12 @@
  *
  * A Channel is a typed pipe between producers and consumers.
  * It can run in async mode (main thread coordination) or worker mode
- * (true parallel processing via Web Workers).
+ * (true parallel processing via Web Worker).
  *
- * Channel moves data. OjaWorker runs code. They compose cleanly:
+ * Channel moves data. Worker runs code. They compose cleanly:
  *
  *   const ch     = new Channel({ buffer: 10, workers: true, name: 'images' });
- *   const worker = new OjaWorker((self) => {
+ *   const worker = new Worker((self) => {
  *       self.handle('process', async (data) => doHeavyWork(data));
  *   });
  *

@@ -3,22 +3,22 @@
  * WebAssembly loader — clean API for today, ready for the Component Model tomorrow.
  *
  * Today's WASM requires manual fetch + instantiate + memory management.
- * OjaWasm abstracts all of that into a single clean interface.
+ * Wasm abstracts all of that into a single clean interface.
  *
  * ─── Why this matters ─────────────────────────────────────────────────────────
  *
  *   The WebAssembly Component Model (in development) will eventually allow:
  *     import { processImage } from './processor.wasm';
  *
- *   Until browsers support that natively, OjaWasm provides the same clean API
- *   surface today. When the Component Model lands, OjaWasm can switch to the
+ *   Until browsers support that natively, Wasm provides the same clean API
+ *   surface today. When the Component Model lands, Wasm can switch to the
  *   native path transparently — your call sites stay identical.
  *
  * ─── Basic usage ──────────────────────────────────────────────────────────────
  *
- *   import { OjaWasm } from '../oja/wasm.js';
+ *   import { Wasm } from '../oja/wasm.js';
  *
- *   const wasm = new OjaWasm('/modules/image-processor.wasm');
+ *   const wasm = new Wasm('/modules/image-processor.wasm');
  *   await wasm.ready();
  *
  *   const result = await wasm.call('processImage', imageBuffer);
@@ -26,7 +26,7 @@
  *
  * ─── With JS imports (WASM needs functions from JS) ──────────────────────────
  *
- *   const wasm = new OjaWasm('/modules/heavy.wasm', {
+ *   const wasm = new Wasm('/modules/heavy.wasm', {
  *       imports: {
  *           env: {
  *               log    : (ptr, len) => console.log(wasm.getString(ptr, len)),
@@ -38,7 +38,7 @@
  *
  * ─── Run in a Worker (non-blocking — recommended for heavy WASM) ──────────────
  *
- *   const wasm = new OjaWasm('/modules/stable-diffusion.wasm', { worker: true });
+ *   const wasm = new Wasm('/modules/stable-diffusion.wasm', { worker: true });
  *   await wasm.ready();
  *
  *   // Main thread stays free — WASM runs off-thread
@@ -65,7 +65,7 @@
  * ─── Real-world patterns ──────────────────────────────────────────────────────
  *
  *   // Generative image — runs WASM off-thread, state on main thread
- *   const generator = new OjaWasm('/wasm/generator.wasm', { worker: true });
+ *   const generator = new Wasm('/wasm/generator.wasm', { worker: true });
  *   await generator.ready();
  *
  *   on('#generate-btn', 'click', async (e, el) => {
@@ -81,15 +81,15 @@
  *   component.onUnmount(() => generator.close());
  *
  *   // ID card editor — synchronous WASM on main thread
- *   const renderer = new OjaWasm('/wasm/card-renderer.wasm');
+ *   const renderer = new Wasm('/wasm/card-renderer.wasm');
  *   await renderer.ready();
  *   const cardPng = await renderer.call('renderCard', cardData);
  */
 
-import { OjaWorker } from './worker.js';
+import { Worker } from './worker.js';
 import { debug }     from '../utils/debug.js';
 
-export class OjaWasm {
+export class Wasm {
     /**
      * @param {string} url       — path to .wasm file
      * @param {Object} options
@@ -179,8 +179,8 @@ export class OjaWasm {
             importNames[ns] = Object.keys(fns);
         }
 
-        this._worker = new OjaWorker((self) => {
-            // ⚠️ Self-contained — cannot access outer scope
+        this._worker = new Worker((self) => {
+            // Self-contained — cannot access outer scope
             let _exports = null;
             let _memory  = null;
 

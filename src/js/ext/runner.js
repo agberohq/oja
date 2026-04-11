@@ -3,7 +3,7 @@
  * Persistent background worker with typed message protocol.
  *
  * A Runner is a long-lived worker that owns its own state for the lifetime
- * of the application. Unlike OjaWorker (run a function once) or Channel
+ * of the application. Unlike Worker (run a function once) or Channel
  * (pipe data between tasks), Runner is for infrastructure that needs to
  * stay alive, maintain internal state, and respond to messages over time.
  *

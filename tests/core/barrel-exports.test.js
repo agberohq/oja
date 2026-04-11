@@ -46,6 +46,31 @@ describe('oja.js barrel — new exports present', async () => {
     it('Oja.onLongPress is a function',           () => expect(typeof oja.Oja?.onLongPress).toBe('function'));
     it('Oja.Reactive.signal is a function',       () => expect(typeof oja.Oja?.Reactive?.signal).toBe('function'));
     it('Oja.version is a string',                 () => expect(typeof oja.Oja?.version).toBe('string'));
+
+    // Router singleton
+    it('exports createRouter function',           () => expect(typeof oja.createRouter).toBe('function'));
+    it('exports router proxy',                    () => expect(typeof oja.router).toBe('object'));
+    it('Oja.createRouter is a function',          () => expect(typeof oja.Oja?.createRouter).toBe('function'));
+
+    // Component lifecycle additions
+    it('exports registerUnmount',                 () => expect(typeof oja.registerUnmount).toBe('function'));
+
+    // Events additions
+    it('exports scopedListen',                    () => expect(typeof oja.scopedListen).toBe('function'));
+    it('Event.scopedListen is a function',        () => expect(typeof oja.Event?.scopedListen).toBe('function'));
+
+    // Out additions
+    it('Out.within is a function',                () => {
+        const { Out } = oja;
+        expect(typeof Out.within).toBe('function');
+    });
+    it('Out.to().composite is a function',        () => {
+        const { Out } = oja;
+        const div = document.createElement('div');
+        document.body.appendChild(div);
+        expect(typeof Out.to(div).composite).toBe('function');
+        document.body.removeChild(div);
+    });
 });
 
 describe('oja.full.js barrel — collapse/accordion/wizard present', async () => {
@@ -62,10 +87,16 @@ describe('oja.full.js barrel — collapse/accordion/wizard present', async () =>
     it('exports mask', () => expect(typeof full.mask).toBe('object'));
     it('exports exporter', () => expect(typeof full.exporter).toBe('object'));
 
-    // Class exports (for subclassing / instanceof checks)
-    it('exports OjaAnalytics class', () => expect(typeof full.OjaAnalytics).toBe('function'));
-    it('analytics is an OjaAnalytics instance', () => expect(full.analytics).toBeInstanceOf(full.OjaAnalytics));
-    it('exports OjaUploader class', () => expect(typeof full.OjaUploader).toBe('function'));
+    // Class exports — renamed (Oja prefix removed)
+    it('exports Analytics class',  () => expect(typeof full.Analytics).toBe('function'));
+    it('analytics is an Analytics instance', () => expect(full.analytics).toBeInstanceOf(full.Analytics));
+    it('exports Uploader class',   () => expect(typeof full.Uploader).toBe('function'));
+    it('exports SSE class',        () => expect(typeof full.SSE).toBe('function'));
+    it('exports Socket class',     () => expect(typeof full.Socket).toBe('function'));
+    it('exports Worker class',     () => expect(typeof full.Worker).toBe('function'));
+    it('exports Wasm class',       () => expect(typeof full.Wasm).toBe('function'));
+    it('exports History class',    () => expect(typeof full.History).toBe('function'));
+    it('history singleton exists', () => expect(typeof full.history).toBe('object'));
 
     // sw shorthands (non-colliding)
     it('exports sw.send shorthand', () => expect(typeof full.send).toBe('function'));
@@ -214,6 +245,15 @@ describe('router — new methods present', () => {
         const r = new Router({ mode: 'hash', outlet: '#app' });
         expect(typeof r.name).toBe('function');
         expect(typeof r.path).toBe('function');
+    });
+    it('Router instance has pathSignal() returning a reactive signal', async () => {
+        const { Router } = await import('../../src/js/core/router.js');
+        const r = new Router({ mode: 'hash', outlet: '#app' });
+        expect(typeof r.pathSignal).toBe('function');
+        // The signal is a readable function — calling it returns the current path
+        const sig = r.pathSignal();
+        expect(typeof sig).toBe('function');
+        expect(sig()).toBeNull(); // null before any navigation
     });
 });
 

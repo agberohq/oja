@@ -1035,7 +1035,7 @@ function _wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Router singleton ─────────────────────────────────────────────────────────
+// Router singleton
 //
 // createRouter(options) — creates, registers, and returns the singleton.
 // Call once in main.js. Subsequent imports of `router` get the same instance.

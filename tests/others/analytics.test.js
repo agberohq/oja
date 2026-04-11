@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { OjaAnalytics } from '../../src/js/ext/analytics.js';
+import { Analytics } from '../../src/js/ext/analytics.js';
 import { emit } from '../../src/js/core/events.js';
 
-describe('OjaAnalytics', () => {
+describe('Analytics', () => {
     let mockFetch;
     let mockSendBeacon;
     let instances = [];
 
     // Helper: create and register instance for cleanup
     function makeAnalytics(opts) {
-        const a = new OjaAnalytics(opts);
+        const a = new Analytics(opts);
         instances.push(a);
         return a;
     }

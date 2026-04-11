@@ -251,7 +251,7 @@ const WORKER_FN = function(self) {
     });
 };
 
-export class OjaUploader {
+export class Uploader {
     constructor(options = {}) {
         this.options = {
             url: '/upload',
@@ -482,5 +482,5 @@ export class OjaUploader {
 }
 
 export const uploader = {
-    create: (options) => new OjaUploader(options)
+    create: (options) => new Uploader(options)
 };

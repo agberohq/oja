@@ -167,7 +167,7 @@
  *
  * ─── Socket codecs ────────────────────────────────────────────────────────────
  *
- *   Register named codecs for use when constructing OjaSocket instances.
+ *   Register named codecs for use when constructing Socket instances.
  *   The default codec is JSON. Register alternatives (e.g. MessagePack) here
  *   and refer to them by name rather than importing in every socket file.
  *
@@ -177,7 +177,7 @@
  *
  *   // Use by name when creating a socket:
  *   import { plugin } from '../oja/plugin.js';
- *   const ws = new OjaSocket('/ws', { codec: plugin.getCodec('msgpack') });
+ *   const ws = new Socket('/ws', { codec: plugin.getCodec('msgpack') });
  *
  *   // Or retrieve and pass directly:
  *   const codec = plugin.getCodec('msgpack');
@@ -561,7 +561,7 @@ export const plugin = {
      *   binaryType       → 'text' | 'binary'     — WebSocket binary mode
      *
      * The built-in JSON codec is always available. Register alternatives here
-     * and retrieve them by name when constructing OjaSocket instances.
+     * and retrieve them by name when constructing Socket instances.
      *
      * @param {string} name  — codec identifier
      * @param {Object} codec — { encode, decode, binaryType }
@@ -571,7 +571,7 @@ export const plugin = {
      *   plugin.codec('msgpack', new MsgPackCodec());
      *
      *   // Use by name:
-     *   const ws = new OjaSocket('/ws/metrics', {
+     *   const ws = new Socket('/ws/metrics', {
      *       codec: plugin.getCodec('msgpack'),
      *   });
      */

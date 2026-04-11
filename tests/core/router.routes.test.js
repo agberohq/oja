@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Router, createRouter, router } from '../../src/js/core/router.js';
 import { Out } from '../../src/js/core/out.js';
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// helpers
 
 function makeOutlet(id = 'app') {
     const el = document.createElement('div');
@@ -39,7 +39,7 @@ beforeEach(async () => {
     };
 });
 
-// ── routes object in constructor ──────────────────────────────────────────────
+// routes object in constructor
 
 describe('Router — routes object in constructor', () => {
     let outlet;
@@ -132,7 +132,7 @@ describe('Router — routes object in constructor', () => {
     });
 });
 
-// ── autoStart option ──────────────────────────────────────────────────────────
+// autoStart option
 
 describe('Router — autoStart option', () => {
     let outlet;
@@ -162,7 +162,7 @@ describe('Router — autoStart option', () => {
     });
 });
 
-// ── createRouter / router singleton ──────────────────────────────────────────
+// createRouter / router singleton
 
 describe('createRouter / router singleton', () => {
     let outlet;
@@ -204,7 +204,7 @@ describe('createRouter / router singleton', () => {
     });
 });
 
-// ── destroy() completeness ────────────────────────────────────────────────────
+// destroy() completeness
 
 describe('Router — destroy()', () => {
     let outlet;
@@ -282,7 +282,7 @@ describe('Router — destroy()', () => {
     });
 });
 
-// ── per-instance prefetch state ───────────────────────────────────────────────
+// per-instance prefetch state
 
 describe('Router — per-instance prefetch state', () => {
     let o1, o2;
