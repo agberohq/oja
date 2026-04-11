@@ -22,7 +22,7 @@
  *
  * ─── Basic usage (unchanged from before) ─────────────────────────────────────
  *
- *   const worker = new OjaWorker((self) => {
+ *   const worker = new Worker((self) => {
  *       self.handle('compress', async (data) => compress(data));
  *   });
  *   const result = await worker.call('compress', rawData);
@@ -31,7 +31,7 @@
  *
  * ─── Explicit inline-module (Tauri-safe) ─────────────────────────────────────
  *
- *   const worker = new OjaWorker(
+ *   const worker = new Worker(
  *       (self) => { self.handle('parse', (md) => marked.parse(md)); },
  *       { type: 'inline-module' }
  *   );
@@ -44,14 +44,14 @@
  *   }
  *
  *   // app.js
- *   const parser = new OjaWorker(null, {
+ *   const parser = new Worker(null, {
  *       type: 'module',
  *       url:  new URL('./workers/parser.js', import.meta.url).href,
  *   });
  *
  * ─── Loading scripts (classic mode) ──────────────────────────────────────────
  *
- *   const worker = new OjaWorker(
+ *   const worker = new Worker(
  *       (self) => {
  *           marked.setOptions({ gfm: true });
  *           self.handle('parse', (md) => marked.parse(md));
@@ -61,11 +61,20 @@
  *
  * ─── Detect available modes ───────────────────────────────────────────────────
  *
- *   const { classic, module: mod, inlineModule } = OjaWorker.detect();
+ *   const { classic, module: mod, inlineModule } = Worker.detect();
  */
 
 import { debug }   from '../utils/debug.js';
 import { runtime } from '../core/runtime.js';
+
+// Capture the native global Worker constructor BEFORE this module's exported
+// `Worker` class is declared. ES module semantics mean that after the `export
+// class Worker` declaration, bare `new Worker()` inside this file would resolve
+// to the exported class and recurse infinitely. _NativeWorker is used by all
+// internal builder functions (_buildClassicWorker, _buildInlineModuleWorker,
+// _buildModuleWorker, _detect) that need the real browser/shim Worker.
+// eslint-disable-next-line no-undef
+const _NativeWorker = globalThis.Worker;
 
 // Classic bootstrap — runs as a top-level classic worker script.
 // Uses bare `onmessage =` so the WorkerShim in tests captures it correctly.
@@ -161,15 +170,15 @@ function _detect() {
     } catch (_) {}
 
     // Module Worker support — only meaningful outside the test shim.
-    // data: URL module Workers require the real Worker implementation.
+    // data: URL module Worker require the real Worker implementation.
     let moduleSupport = false;
     if (!isShimEnvironment) {
         try {
-            const w = new Worker('data:text/javascript,', { type: 'module' });
+            const w = new _NativeWorker('data:text/javascript,', { type: 'module' });
             w.terminate();
             moduleSupport = true;
         } catch (_) {
-            // TypeError = module Workers not supported at all.
+            // TypeError = module Worker not supported at all.
             // Other errors (DOMException for CSP, etc.) = supported but restricted.
             moduleSupport = !(_ instanceof TypeError);
         }
@@ -197,8 +206,8 @@ function _buildClassicWorker(workerFn, scripts, name) {
     const blob = new Blob([src], { type: 'text/javascript' });
     const url  = URL.createObjectURL(blob);
     // Safe to revoke immediately for classic workers — browser reads source synchronously.
-    // (Module workers load asynchronously so we cannot revoke at construction time.)
-    const w    = new Worker(url);
+
+    const w    = new _NativeWorker(url);
     URL.revokeObjectURL(url);
     debug.log('worker', 'created:classic', { name });
     return w;
@@ -208,7 +217,7 @@ function _buildInlineModuleWorker(workerFn, name) {
     const inner = `;(${workerFn.toString()})(_api);`;
     const src   = _moduleBootstrap(inner);
     const url   = `data:text/javascript;charset=utf-8,${encodeURIComponent(src)}`;
-    const w     = new Worker(url, { type: 'module' });
+    const w     = new _NativeWorker(url, { type: 'module' });
     debug.log('worker', 'created:inline-module', { name });
     return w;
 }
@@ -222,12 +231,12 @@ _userFn(_api);
 `;
     const src = _moduleBootstrap(inner);
     const url = `data:text/javascript;charset=utf-8,${encodeURIComponent(src)}`;
-    const w   = new Worker(url, { type: 'module' });
+    const w   = new _NativeWorker(url, { type: 'module' });
     debug.log('worker', 'created:module', { name, fileUrl });
     return w;
 }
 
-export class OjaWorker {
+export class Worker {
     /**
      * @param {Function|null} workerFn
      *   Self-contained function to run in the worker. Cannot access outer scope.
@@ -365,7 +374,7 @@ export class OjaWorker {
 
     /**
      * Detect which modes are available in the current environment.
-     *   const { classic, module: mod, inlineModule } = OjaWorker.detect();
+     *   const { classic, module: mod, inlineModule } = Worker.detect();
      */
     static detect() { return _detect(); }
 

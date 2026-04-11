@@ -1,11 +1,11 @@
 /**
  * tests/others/worker-scripts.test.js
  *
- * OjaWorker — options.scripts + three-mode tests.
+ * Worker — options.scripts + three-mode tests.
  * Mirrors tests/core/worker-scripts.test.js with focus on the others/ suite.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { OjaWorker, _resetWorkerDetectionCache } from '../../src/js/ext/worker.js';
+import { Worker, _resetWorkerDetectionCache } from '../../src/js/ext/worker.js';
 
 
 let importScriptsCalls = [];
@@ -26,9 +26,9 @@ afterEach(() => {
 });
 
 
-describe('OjaWorker — options.scripts', () => {
+describe('Worker — options.scripts', () => {
     it('calls importScripts with a single URL before handler runs', async () => {
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/lib.js'] }
         );
@@ -38,7 +38,7 @@ describe('OjaWorker — options.scripts', () => {
     });
 
     it('calls importScripts with multiple URLs preserving order', async () => {
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/a.js', 'https://example.com/b.js'] }
         );
@@ -49,14 +49,14 @@ describe('OjaWorker — options.scripts', () => {
     });
 
     it('does not call importScripts when scripts option is absent', async () => {
-        const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
+        const w = new Worker((self) => { self.handle('ping', () => 'pong'); });
         await w.call('ping');
         expect(importScriptsCalls).toHaveLength(0);
         w.close();
     });
 
     it('does not call importScripts when scripts is an empty array', async () => {
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: [] }
         );
@@ -70,7 +70,7 @@ describe('OjaWorker — options.scripts', () => {
             importScriptsCalls.push(...urls);
             globalThis.__testLib = { version: '2.0' };
         };
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => {
                 self.handle('version', () =>
                     typeof __testLib !== 'undefined' ? __testLib.version : 'missing'
@@ -84,7 +84,7 @@ describe('OjaWorker — options.scripts', () => {
     });
 
     it('name option works alongside scripts', async () => {
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/x.js'], name: 'named-worker' }
         );
@@ -97,7 +97,7 @@ describe('OjaWorker — options.scripts', () => {
         const origCreate = URL.createObjectURL;
         URL.createObjectURL = (blob) => { blobs.push(blob.__shimText ?? ''); return origCreate(blob); };
         try {
-            new OjaWorker(
+            new Worker(
                 (self) => { self.handle('ping', () => 'pong'); },
                 { scripts: ['https://cdn.example.com/marked.min.js'] }
             ).close();
@@ -114,7 +114,7 @@ describe('OjaWorker — options.scripts', () => {
         const origCreate = URL.createObjectURL;
         URL.createObjectURL = (blob) => { blobs.push(blob.__shimText ?? ''); return origCreate(blob); };
         try {
-            new OjaWorker((self) => { self.handle('ping', () => 'pong'); }).close();
+            new Worker((self) => { self.handle('ping', () => 'pong'); }).close();
         } finally { URL.createObjectURL = origCreate; }
         // Filter out the _detect() probe blob; check the actual worker blob.
         const workerBlob = blobs.find(b => b.includes('handle('));
@@ -124,42 +124,42 @@ describe('OjaWorker — options.scripts', () => {
 });
 
 
-describe('OjaWorker — core behaviour unchanged', () => {
+describe('Worker — core behaviour unchanged', () => {
     it('call() resolves with handler return value', async () => {
-        const w = new OjaWorker((self) => { self.handle('double', (n) => n * 2); });
+        const w = new Worker((self) => { self.handle('double', (n) => n * 2); });
         expect(await w.call('double', 5)).toBe(10);
         w.close();
     });
 
     it('call() rejects when handler throws', async () => {
-        const w = new OjaWorker((self) => { self.handle('fail', () => { throw new Error('worker error'); }); });
+        const w = new Worker((self) => { self.handle('fail', () => { throw new Error('worker error'); }); });
         await expect(w.call('fail')).rejects.toThrow('worker error');
         w.close();
     });
 
     it('call() rejects after close()', async () => {
-        const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
+        const w = new Worker((self) => { self.handle('ping', () => 'pong'); });
         w.close();
         await expect(w.call('ping')).rejects.toThrow('closed');
     });
 });
 
 
-describe('OjaWorker — mode', () => {
+describe('Worker — mode', () => {
     it('auto mode resolves to classic or inline-module', () => {
-        const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); });
+        const w = new Worker((self) => { self.handle('ping', () => 'pong'); });
         expect(['classic', 'inline-module']).toContain(w.mode);
         w.close();
     });
 
     it('explicit classic mode sets mode getter', () => {
-        const w = new OjaWorker((self) => { self.handle('ping', () => 'pong'); }, { type: 'classic' });
+        const w = new Worker((self) => { self.handle('ping', () => 'pong'); }, { type: 'classic' });
         expect(w.mode).toBe('classic');
         w.close();
     });
 
     it('scripts force classic mode in auto', () => {
-        const w = new OjaWorker(
+        const w = new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { scripts: ['https://example.com/lib.js'] }
         );
@@ -167,15 +167,15 @@ describe('OjaWorker — mode', () => {
         w.close();
     });
 
-    it('OjaWorker.detect() returns an object with boolean keys', () => {
-        const caps = OjaWorker.detect();
+    it('Worker.detect() returns an object with boolean keys', () => {
+        const caps = Worker.detect();
         expect(typeof caps.classic).toBe('boolean');
         expect(typeof caps.module).toBe('boolean');
         expect(typeof caps.inlineModule).toBe('boolean');
     });
 
     it('unknown type throws TypeError immediately', () => {
-        expect(() => new OjaWorker(
+        expect(() => new Worker(
             (self) => { self.handle('ping', () => 'pong'); },
             { type: 'nonexistent' }
         )).toThrow(TypeError);
