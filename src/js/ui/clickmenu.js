@@ -62,7 +62,6 @@ const SEP_CLASS    = 'oja-ctx-sep';
 const DANGER_CLASS = 'danger';
 const DIS_CLASS    = 'disabled';
 
-
 let _current    = null;   // active menu element
 let _onClose    = null;   // close callback
 let _cleanupFn  = null;   // removes document listeners
@@ -248,106 +247,6 @@ function _mount(menu, opts = {}) {
         window.removeEventListener('resize',       _close);
     };
 }
-
-
-function _injectStyles() {
-    if (document.getElementById('oja-ctx-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'oja-ctx-styles';
-    style.textContent = `
-.oja-ctx-menu {
-    background: var(--bg-panel, #1c2128);
-    border: 1px solid var(--border, #30363d);
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);
-    padding: 4px 0;
-    min-width: 172px;
-    max-width: 280px;
-    outline: none;
-    animation: oja-ctx-in .1s ease;
-}
-@keyframes oja-ctx-in {
-    from { opacity: 0; transform: scale(.97) translateY(-4px); }
-    to   { opacity: 1; transform: scale(1)   translateY(0); }
-}
-.oja-ctx-item {
-    display: block;
-    width: 100%;
-    padding: 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    outline: none;
-    text-align: left;
-    color: var(--text-secondary, #8b949e);
-    font-size: 12.5px;
-    font-family: var(--sans, system-ui, sans-serif);
-    transition: background .1s, color .1s;
-    border-radius: 0;
-}
-.oja-ctx-item:hover,
-.oja-ctx-item:focus {
-    background: var(--bg-hover, #21262d);
-    color: var(--text-primary, #e6edf3);
-}
-.oja-ctx-item.danger { color: var(--danger, #f85149); }
-.oja-ctx-item.danger:hover,
-.oja-ctx-item.danger:focus {
-    background: var(--danger-subtle, rgba(248,81,73,.1));
-    color: var(--danger, #f85149);
-}
-.oja-ctx-item.disabled {
-    opacity: .4;
-    cursor: default;
-    pointer-events: none;
-}
-.oja-ctx-inner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 14px;
-    width: 100%;
-}
-.oja-ctx-icon {
-    flex-shrink: 0;
-    width: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    opacity: .8;
-}
-.oja-ctx-label {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.oja-ctx-shortcut {
-    flex-shrink: 0;
-    font-size: 10.5px;
-    color: var(--text-muted, #484f58);
-    font-family: var(--mono, monospace);
-    margin-left: auto;
-    padding-left: 12px;
-}
-.oja-ctx-sep {
-    height: 1px;
-    background: var(--border, #21262d);
-    margin: 3px 0;
-}
-`;
-    document.head.appendChild(style);
-}
-
-if (typeof document !== 'undefined') {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _injectStyles, { once: true });
-    } else {
-        _injectStyles();
-    }
-}
-
 
 export const clickmenu = {
 
