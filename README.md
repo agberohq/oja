@@ -209,11 +209,6 @@ find('#host-list').list(() => hosts(), {
     render: h => Out.c('components/host-row.html', h),
     empty:  Out.h('<p>No hosts yet</p>'),
 });
-
-// Batch — update every matching element
-findAll('.host-row').forEach(el =>
-    el.update({ class: { toggle: 'selected' } })
-);
 ```
 
 #### Async-safe DOM access
@@ -245,8 +240,6 @@ setTimeout(async () => {
 ```
 
 `scoped()` gives you bound `find`/`findAll` functions for anything inside the container. `ref()` captures one specific element. Both are permanently bound to the container at the moment they are called — they work correctly from any callback, async function, or effect.
-
-`find()` works correctly for synchronous top-level code. Use `scoped()` or `ref()` whenever you need DOM access in an async context.
 
 ---
 
@@ -311,6 +304,142 @@ ready();
 | `ready()` | Signals setup is complete — resolves the mount promise |
 
 Signals in props are unwrapped automatically — access `props().tasks` and it calls `tasks()` for you.
+
+---
+
+## Auth — session management
+
+Oja's auth module handles JWTs, opaque tokens, role checks, and route protection without any external library.
+
+### Quick setup
+
+```js
+import { auth, context } from '@agberohq/oja';
+
+export const [currentUser, setCurrentUser] = context('user', null);
+
+// Define access levels — called on every route check
+auth.level('public',    () => true);
+auth.level('protected', () => auth.session.isActive());
+auth.level('admin',     () => auth.session.isActive() && auth.hasRole('admin'));
+
+// Hooks — fire at session lifecycle points
+auth.session.OnStart(async (token) => {
+    api.setToken(token);                          // set synchronously via tokenSync()
+    const dest = auth.session.intendedPath() || '/';
+    auth.session.clearIntendedPath();
+    router.navigate(dest);
+});
+
+auth.session.OnRenew((newToken) => api.setToken(newToken));
+
+auth.session.OnExpiry(() => {
+    setCurrentUser(null);
+    router.navigate('/login');
+    notify.warn('Session expired. Please sign in again.');
+});
+```
+
+### Starting a session after login
+
+```js
+form.on(loginForm, {
+    submit: async (data) => {
+        const user = await api.login(data.username, data.password);
+        await auth.session.start(user.token);  // stores token, fires OnStart
+        setCurrentUser(user);
+        return user;
+    },
+    success: () => notify.success('Welcome back!'),
+    error:   (err) => notify.error(err.message),
+});
+```
+
+### Session API
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `auth.session.start(token, refreshToken?, options?)` | `Promise<void>` | Stores token, fires `OnStart` hooks |
+| `auth.session.end()` | `Promise<void>` | Clears token, fires no hooks — call before logout redirect |
+| `auth.session.renew(newToken, newRefreshToken?)` | `Promise<void>` | Replaces token, fires `OnRenew` hooks |
+| `auth.session.isActive()` | `boolean` | Synchronous — safe in middleware and effects |
+| `auth.session.token()` | `Promise<string\|null>` | Async — decrypted token string |
+| `auth.session.tokenSync()` | `string\|null` | **Synchronous** — returns `null` if inactive. Use in `OnStart` to set API headers immediately |
+| `auth.session.user()` | `object\|null` | Decoded JWT payload — `sub`, `roles`, custom claims |
+| `auth.session.expiresIn()` | `number` | Milliseconds until expiry, `Infinity` if no expiry set |
+| `auth.session.intendedPath()` | `string\|null` | Path the user was heading to before being redirected |
+| `auth.session.setIntendedPath(path)` | `void` | Set manually if needed |
+| `auth.session.clearIntendedPath()` | `void` | Call after navigating to the intended path |
+
+### `tokenSync()` — synchronous token access
+
+`tokenSync()` is the method added for cases where you need the token before any async operation resolves — for example, setting an API authorization header the moment a session starts:
+
+```js
+// In OnStart — synchronous, no await needed
+auth.session.OnStart((token) => {
+    // tokenSync() returns the same token immediately
+    const t = auth.session.tokenSync();
+    if (t) api.setToken(t);
+});
+
+// Also useful on app startup to restore a previous session
+const savedToken = auth.session.tokenSync();
+if (savedToken) api.setToken(savedToken);
+```
+
+`tokenSync()` returns `null` when no session is active — it never throws.
+
+### Non-JWT tokens
+
+Not every API uses JWTs. Oja supports opaque tokens and Basic auth too:
+
+```js
+// Opaque token — pass { expires: null } for no-expiry session
+await auth.session.start('Bearer sk-abc123', null, { expires: null });
+auth.session.isActive(); // → true
+
+// Fixed expiry — useful for session cookies or API keys with known TTL
+await auth.session.start('api-key-xyz', null, { expires: Date.now() + 8 * 3600_000 });
+
+// No options — isActive() returns false (original behaviour, preserved for compatibility)
+await auth.session.start('legacy-token');
+auth.session.isActive(); // → false
+```
+
+### Protecting routes
+
+```js
+// Middleware style — on individual routes
+router.Get('/admin', auth.middleware('admin'), Out.c('pages/admin.html'));
+
+// Group style — covers all routes in the group
+const app = router.Group('/');
+app.Use(auth.middleware('protected', '/login'));
+
+app.Get('/dashboard', Out.c('pages/dashboard.html'));
+app.Get('/settings',  Out.c('pages/settings.html'));
+```
+
+`auth.middleware()` stores the attempted path before redirecting — call `auth.session.intendedPath()` in `OnStart` to send the user where they were going.
+
+### Role checks
+
+```js
+// In a JWT payload: { sub: 'u1', roles: ['editor', 'viewer'], email_verified: true }
+
+auth.hasRole('editor');         // → true
+auth.hasRole('admin');          // → false
+
+// Check arbitrary claims
+auth.hasClaim('email_verified');        // → true  (claim exists)
+auth.hasClaim('email_verified', true);  // → true  (claim equals value)
+auth.hasClaim('department', 'eng');     // → false
+
+// Use in level definitions
+auth.level('editor',   () => auth.session.isActive() && auth.hasRole('editor'));
+auth.level('verified', () => auth.session.isActive() && auth.hasClaim('email_verified', true));
+```
 
 ---
 
@@ -396,10 +525,10 @@ engine.list('#notes', notes(), {
 | Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
 | Component lifecycle (`onMount`, `onUnmount`, `interval`) | `component` | core + full |
 | Template syntax (`{{}}`, `data-if`, `data-each`, filters) | built-in | core + full |
-| Auth (levels, session, JWT, middleware) | `auth` | core + full |
+| Auth (levels, session, JWT, tokenSync, middleware, roles) | `auth` | core + full |
 | Notifications (toast, banner, progress, promise) | `notify` | core + full |
 | Modals (stack, confirm, prompt, beforeClose guard) | `modal` | core + full |
-| Forms (lifecycle, validation, dirty tracking) | `form` | core + full |
+| Forms (lifecycle, validation, dirty tracking, secret, radio) | `form` | core + full |
 | Events (delegated, emit/listen, keyboard shortcuts) | `on`, `emit`, `listen` | core + full |
 | Store (session/local/memory, encrypt, watch, TTL) | `Store` | core + full |
 | Encryption (Web Crypto, seal/open/rotate) | `encrypt` | core + full |
@@ -410,15 +539,22 @@ engine.list('#notes', notes(), {
 | Collapse + accordion | `collapse`, `accordion` | core + full |
 | Wizard (multi-step form, modal-compatible) | `wizard` | full |
 | Search + autocomplete (full-text, fuzzy, Trie) | `Search`, `Trie` | core + full |
-| Table (sort, pagination, row actions, remote data) | `table` | full |
+| Table (sort, pagination, row actions, remote data, resizable columns) | `table` | full |
 | Inline charts (sparkline, timeSeries) | `Out.sparkline` | core + full |
 | Clipboard | `clipboard` | core + full |
 | Drag and drop | `dragdrop` | full |
 | VFS (offline-first IndexedDB, encrypt, persist, quota) | `VFS` | core + full |
 | Config (`oja.config.json`) | `config` | core + full |
-| SSE + WebSocket (auto-reconnect) | `OjaSSE`, `OjaSocket` | full |
+| SSE + WebSocket (auto-reconnect) | `SSE`, `Socket` | full |
 | Channel + go (Go-style concurrency) | `Channel`, `go` | full |
 | Runner (long-lived background worker) | `Runner` | full |
+| Command palette / hotkeys | `hotkeys` | full |
+| Floating panels | `panel` | full |
+| Datepicker | `datepicker` | full |
+| Searchable select | `select` | full |
+| Context menu | `clickmenu` | full |
+| Offline request queue | `Queue` | full |
+| Multi-user presence + cursors | `Presence` | full |
 | Logging + debug | `logger`, `debug` | core + full |
 | Adapter bridge (D3, Chart.js, GSAP) | `adapter` | core + full |
 
@@ -437,8 +573,9 @@ engine.list('#notes', notes(), {
 | DOM creation | `make()` with placement chain | Build, place, and update in one expression |
 | List lifecycle | `onMount`, `onItemMount`, `onItemRemove` | One-time plugin setup without guard flags; new-items-only callbacks |
 | URL strategy | Hash default, path opt-in | Hash works everywhere without server config |
-| CSS ownership | App owns all styles | Oja only owns lifecycle animation and UI component classes |
-| Auth | Declared at route | Never check `isActive()` manually |
+| CSS ownership | App owns all styles, framework CSS in `oja.css` | No JS-injected styles — all component CSS lives in one file |
+| Auth | Declared at route level | Never check `isActive()` manually in page logic |
+| `tokenSync()` | Synchronous token read | Set API headers immediately in `OnStart` without awaiting |
 | Event bus | Single unified bus | All modules emit on `events.js`. `runtime.on()` is the public subscription point |
 | Component communication | `signal()` | Reactive, holds current value — unlike fire-and-forget emit/listen |
 | Context write shorthand | `context.set(name, value)` | Write without destructuring when you don't need the read signal |
