@@ -682,7 +682,6 @@ context.inspect = () => {
     return snapshot;
 };
 
-
 // Like effect() but explicit about what to watch, passes (newVal, oldVal),
 // and does not run immediately by default.
 //
@@ -929,3 +928,92 @@ signal.destroyAll = function() {
     for (const ch of _signals.values()) ch.destroy();
     _signals.clear();
 };
+// createResource
+
+/**
+ * createResource(fetcher, options?) — async data fetching with reactive state.
+ *
+ * Wraps an async function in three reactive signals: data, loading, error.
+ * Any effect() or Out.to().bind() that reads these re-runs when they change.
+ *
+ * ─── Basic usage ──────────────────────────────────────────────────────────────
+ *
+ *   const [hosts, { loading, error, refetch }] = createResource(
+ *       () => api.get('/hosts')
+ *   );
+ *
+ *   effect(() => {
+ *       if (loading()) { Out.to('#app').html('<p>Loading…</p>'); return; }
+ *       if (error())   { Out.to('#app').html(`<p>${error().message}</p>`); return; }
+ *       Out.to('#app').component('pages/hosts.html', { hosts: hosts() });
+ *   });
+ *
+ * ─── Reactive source (refetch when signal changes) ────────────────────────────
+ *
+ *   const [pageId, setPageId] = state(1);
+ *
+ *   const [page] = createResource(
+ *       () => api.get(`/pages/${pageId()}`),   // reads pageId — auto-refetches
+ *       { defer: false }                        // fetch immediately (default)
+ *   );
+ *
+ * ─── Deferred (manual trigger) ────────────────────────────────────────────────
+ *
+ *   const [result, { refetch }] = createResource(
+ *       () => api.post('/run', payload),
+ *       { defer: true }
+ *   );
+ *
+ *   // later:
+ *   refetch();
+ *
+ * @param {Function} fetcher         — async () => data
+ * @param {Object}   [options]
+ * @param {boolean}  [options.defer] — if true, don't fetch on creation (default: false)
+ * @param {*}        [options.initialValue] — initial value of data() before first fetch
+ * @returns {[dataSignal, { loading, error, refetch, mutate }]}
+ */
+export function createResource(fetcher, options = {}) {
+    const { defer = false, initialValue = null } = options;
+
+    const [data,    setData]    = state(initialValue);
+    const [loading, setLoading] = state(false);
+    const [error,   setError]   = state(null);
+
+    let _seq = 0; // sequence number — ignores stale responses
+
+    async function _run() {
+        const seq = ++_seq;
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await fetcher();
+            if (seq === _seq) { // still the latest fetch
+                setData(result);
+            }
+        } catch (e) {
+            if (seq === _seq) setError(e);
+        } finally {
+            if (seq === _seq) setLoading(false);
+        }
+    }
+
+    if (!defer) {
+        // Run inside effect() so any signal reads inside fetcher() are tracked.
+        // If the fetcher reads a reactive signal (e.g. pageId()), this effect
+        // re-runs — and therefore re-fetches — whenever that signal changes.
+        effect(() => { _run(); });
+    }
+
+    /**
+     * Manually set data without re-fetching.
+     * Useful for optimistic updates.
+     *
+     *   mutate(prev => ({ ...prev, status: 'active' }));
+     */
+    function mutate(updater) {
+        setData(typeof updater === 'function' ? updater(data()) : updater);
+    }
+
+    return [data, { loading, error, refetch: _run, mutate }];
+}
