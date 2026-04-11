@@ -49,13 +49,12 @@
  *   router.navigate('/hosts');
  */
 
-export const VERSION = '0.3.0';
-
 export { timeout, interval, sleep, defer, withDefer }     from './js/core/system.js';
 
 export { Store }                                          from './js/core/store.js';
 export { state, effect, derived, batch, context,
-    watch, untrack, readonly, signal }                    from './js/core/reactive.js';
+    watch, untrack, readonly, signal,
+    createResource }                                      from './js/core/reactive.js';
 
 export { render, renderRaw, fill, each, template }        from './js/core/template.js';
 export { Out, Responder }                                 from './js/core/out.js';
@@ -109,11 +108,12 @@ export { MsgPackCodec }                                   from './js/core/codecs
 
 export { plugin }                                         from './js/core/plugin.js';
 
-
+export const VERSION = '0.4.0';
 
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
-    watch, untrack, readonly, signal }                   from './js/core/reactive.js';
+    watch, untrack, readonly, signal,
+    createResource }                                     from './js/core/reactive.js';
 import { on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     debounce, throttle, rafThrottle, keys,
     onScroll, onScrollDirection, isInViewport, getViewportPosition,
@@ -140,7 +140,7 @@ import { animate }                                       from './js/core/animate
 import { engine }                                        from './js/core/engine.js';
 import { plugin }                                        from './js/core/plugin.js';
 
-export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly, signal };
+export const Reactive = { state, effect, derived, batch, context, watch, untrack, readonly, signal, createResource };
 
 export const Event = {
     on, once, off, emit, listen, listenOnce, scopedListen, waitFor,

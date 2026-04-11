@@ -35,11 +35,11 @@
  *     auth, pagination, chart, History, history, channel, config,
  *     Runner, VFS, sw, SSE, Socket, Worker, Wasm, webrtc,
  *     infiniteScroll, pullToRefresh, cssVars, lazy, exporter,
- *     Uploader, Analytics, analytics
+ *     Uploader, Analytics, analytics, Vector, RAG
  *
  *   js/utils/ (pure utilities)
  *     encrypt, logger, debug, adapter, search (Trie, Search),
- *     formatter, register
+ *     formatter, register, similarity (cosine, jaccard, jaccardNgram …)
  */
 
 export * from './oja.js';
@@ -82,7 +82,7 @@ export { pullToRefresh }                                  from './js/ext/pulltor
 export { cssVars }                                        from './js/ext/cssvars.js';
 export { lazy }                                           from './js/ext/lazy.js';
 export { exporter }                                       from './js/ext/export.js';
-export { Uploader }                        from './js/ext/uploader.js';
+export { Uploader, uploader }                from './js/ext/uploader.js';
 export {  Analytics, analytics }           from './js/ext/analytics.js';
 
 export { encrypt }                                        from './js/utils/encrypt.js';
@@ -102,3 +102,37 @@ export {
 export { events, register, strictMode, isRegistered, getRegistered,
     emit as registryEmit, listen as registryListen }
     from './js/utils/register.js';
+
+// Similarity, Vector search, RAG
+// similarity.js — pure stateless math + Similarity class for corpus search
+export {
+    cosine, euclidean, manhattan, dot, normalize,
+    tokenize, jaccard, jaccardNgram,
+    Similarity,
+}                                                         from './js/utils/similarity.js';
+// Vector — in-memory vector store with optional Store/VFS persistence
+export { Vector }                                         from './js/ext/vector.js';
+// RAG — BM25 retrieval-augmented generation with optional Store/VFS persistence
+export { RAG }                                            from './js/ext/rag.js';
+
+// Diff
+// diff.js — Myers text diff and JSON structural diff (no DOM)
+export {
+    diff, diffLines, diffWords, diffSequence,
+    diffJson,
+    renderDiff, unifiedDiff,
+}                                                         from './js/utils/diff.js';
+
+// UI additions
+// panel.js — floating draggable non-blocking window panels
+export { panel }                                          from './js/ui/panel.js';
+// hotkeys.js — command palette (Ctrl+K fuzzy action launcher)
+export { hotkeys }                                        from './js/ui/hotkeys.js';
+// select.js — searchable select / combobox with multi-select and groups
+export { select }                                         from './js/ui/select.js';
+// datepicker.js — date and time picker widget
+export { datepicker }                                     from './js/ui/datepicker.js';
+
+// Ext additions
+// queue.js — offline-first request queue with auto-replay on reconnect
+export { Queue }                                          from './js/ext/queue.js';
