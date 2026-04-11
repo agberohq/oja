@@ -173,4 +173,36 @@ export const tabs = {
             },
         };
     },
+
+    /**
+     * Render a secondary (sub) tab bar inside a parent tab's content area.
+     * Automatically uses 'pill' variant and manages panel visibility.
+     *
+     * ─── Usage ─────────────────────────────────────────────────────────────────
+     *
+     *   // Outer tabs already rendered. When 'routes' tab is active, render
+     *   // sub-tabs for engine / extras / auth / headers inside its panel.
+     *
+     *   const sub = tabs.sub('#routeSubTabs', [
+     *       { key: 'engine',  label: 'Engine'  },
+     *       { key: 'extras',  label: 'Extras'  },
+     *       { key: 'auth',    label: 'Auth'    },
+     *       { key: 'headers', label: 'Headers' },
+     *   ], {
+     *       panels:   '#routePanels',   // container with [data-tab] children
+     *       active:   'engine',
+     *       onChange: (key) => {},
+     *   });
+     *
+     * Equivalent to tabs.render() with variant:'pill' — just a semantic
+     * shorthand that makes code intent clear when tabs are nested.
+     *
+     * @param {string|Element} target  — nav container
+     * @param {Object[]}       defs    — [{ key, label, disabled? }]
+     * @param {Object}         opts    — same as render(), defaults variant:'pill'
+     * @returns {{ activate, active, destroy }}
+     */
+    sub(target, defs, opts = {}) {
+        return this.render(target, defs, { variant: 'pill', ...opts });
+    },
 };

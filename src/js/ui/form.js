@@ -609,27 +609,196 @@ export const form = {
      *       onChange: (value) => updatePricing(value)
      *   });
      */
+    /**
+     * Enhance a radio group with change handler, card/button visual style,
+     * programmatic get/set, and keyboard navigation.
+     *
+     *   // Basic — change handler only
+     *   form.radio('[name="plan"]', {
+     *       onChange: (value) => updatePricing(value)
+     *   });
+     *
+     *   // Card style — wraps each radio in a styled card label
+     *   const r = form.radio('[name="plan"]', {
+     *       style: 'card',    // or 'button' for pill-button toggle
+     *       onChange: (value) => updatePricing(value)
+     *   });
+     *   r.get();         // → current checked value
+     *   r.set('pro');    // → programmatically select
+     *   r.disable('enterprise'); // → disable specific option
+     *   r.enable('enterprise');
+     *
+     * @param {string|NodeList} target
+     * @param {Object} options
+     *   style    : 'default' | 'card' | 'button' — visual presentation
+     *   onChange : fn(value, el)
+     * @returns {{ get, set, disable, enable }}
+     */
     radio(target, options = {}) {
         const radios = typeof target === 'string'
-            ? document.querySelectorAll(target)
-            : target;
+            ? [...document.querySelectorAll(target)]
+            : [...target];
 
-        if (!radios || radios.length === 0) return this;
+        if (!radios || radios.length === 0) return { get: () => null, set: () => {}, disable: () => {}, enable: () => {} };
 
-        const { onChange = null } = options;
+        const { onChange = null, style = 'default' } = options;
 
-        if (onChange) {
+        // Apply visual style by adding class to the wrapping label
+        if (style === 'card' || style === 'button') {
+            const cls = style === 'card' ? 'oja-radio-card' : 'oja-radio-btn';
             radios.forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    if (e.target.checked) {
-                        onChange(e.target.value, e.target);
-                        this._updateDirtyState(radio.form);
-                    }
-                });
+                const label = radio.closest('label') || radio.parentElement;
+                if (label) label.classList.add(cls);
             });
         }
 
-        return this;
+        const _updateStyles = (checkedValue) => {
+            if (style === 'default') return;
+            const cls = style === 'card' ? 'oja-radio-card--checked' : 'oja-radio-btn--checked';
+            radios.forEach(radio => {
+                const label = radio.closest('label') || radio.parentElement;
+                if (label) label.classList.toggle(cls, radio.value === checkedValue);
+            });
+        };
+
+        // Init styles for already-checked radio
+        const initial = radios.find(r => r.checked);
+        if (initial) _updateStyles(initial.value);
+
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    _updateStyles(e.target.value);
+                    onChange?.(e.target.value, e.target);
+                    this._updateDirtyState(radio.form);
+                }
+            });
+        });
+
+        return {
+            get: () => radios.find(r => r.checked)?.value ?? null,
+            set: (value) => {
+                const match = radios.find(r => r.value === value);
+                if (match && !match.disabled) {
+                    match.checked = true;
+                    match.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            },
+            disable: (value) => { const r = radios.find(r => r.value === value); if (r) { r.disabled = true; const l = r.closest('label') || r.parentElement; l?.classList.add('oja-radio--disabled'); } },
+            enable:  (value) => { const r = radios.find(r => r.value === value); if (r) { r.disabled = false; const l = r.closest('label') || r.parentElement; l?.classList.remove('oja-radio--disabled'); } },
+        };
+    },
+
+    /**
+     * Secret / password field with visibility toggle and optional strength meter.
+     *
+     *   form.secret('#password', {
+     *       strength: true,   // show strength meter below field
+     *       onStrength: (score, label) => console.log(score, label),
+     *   });
+     *
+     *   form.secret('#apiKey', {
+     *       toggleLabel: ['Show key', 'Hide key'],
+     *   });
+     *
+     * Injects a toggle button as the next sibling and optionally a strength bar.
+     * Adds class 'oja-secret-wrap' to the parent element for CSS positioning.
+     *
+     * @param {string|Element} target  — password/text input
+     * @param {Object} options
+     *   strength      : boolean — show password strength meter (default: false)
+     *   toggleLabel   : [showText, hideText] — button labels
+     *   onStrength    : fn(score 0-4, label string)
+     * @returns {{ show, hide, toggle, strength }}
+     */
+    secret(target, options = {}) {
+        const el = _resolve(target);
+        if (!el || (el.type !== 'password' && el.type !== 'text')) return null;
+
+        const {
+            strength:     showStrength = false,
+            toggleLabel:  [showLabel, hideLabel] = ['Show', 'Hide'],
+            onStrength    = null,
+        } = options;
+
+        // Wrap parent for relative positioning
+        const parent = el.parentElement;
+        if (parent) parent.classList.add('oja-secret-wrap');
+
+        // Toggle button
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'oja-secret-toggle';
+        btn.setAttribute('aria-label', showLabel);
+        btn.textContent = showLabel;
+
+        let visible = false;
+
+        const _toggle = () => {
+            visible = !visible;
+            el.type = visible ? 'text' : 'password';
+            btn.textContent = visible ? hideLabel : showLabel;
+            btn.setAttribute('aria-label', visible ? hideLabel : showLabel);
+            btn.setAttribute('aria-pressed', String(visible));
+        };
+
+        btn.addEventListener('click', _toggle);
+        el.insertAdjacentElement('afterend', btn);
+
+        // Strength meter
+        let _strengthBar = null;
+        let _strengthLabel = null;
+
+        if (showStrength) {
+            const wrap = document.createElement('div');
+            wrap.className = 'oja-strength';
+            _strengthBar   = document.createElement('div');
+            _strengthBar.className = 'oja-strength-bar';
+            _strengthLabel = document.createElement('span');
+            _strengthLabel.className = 'oja-strength-label';
+            wrap.appendChild(_strengthBar);
+            wrap.appendChild(_strengthLabel);
+            btn.insertAdjacentElement('afterend', wrap);
+
+            const _LEVELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+            const _CLASSES = ['', 'oja-strength--weak', 'oja-strength--fair', 'oja-strength--good', 'oja-strength--strong'];
+
+            const _score = (val) => {
+                if (!val) return 0;
+                let s = 0;
+                if (val.length >= 8)  s++;
+                if (val.length >= 12) s++;
+                if (/[A-Z]/.test(val) && /[a-z]/.test(val)) s++;
+                if (/\d/.test(val)) s++;
+                if (/[^A-Za-z0-9]/.test(val)) s++;
+                return Math.min(4, s);
+            };
+
+            el.addEventListener('input', () => {
+                const score = _score(el.value);
+                _strengthBar.className = `oja-strength-bar ${_CLASSES[score]}`;
+                _strengthBar.style.width = `${score * 25}%`;
+                _strengthLabel.textContent = _LEVELS[score];
+                onStrength?.(score, _LEVELS[score]);
+            });
+        }
+
+        return {
+            show:   () => { if (!visible) _toggle(); },
+            hide:   () => { if (visible) _toggle(); },
+            toggle: () => _toggle(),
+            score:  () => {
+                if (!showStrength) return null;
+                const val = el.value;
+                let s = 0;
+                if (val.length >= 8)  s++;
+                if (val.length >= 12) s++;
+                if (/[A-Z]/.test(val) && /[a-z]/.test(val)) s++;
+                if (/\d/.test(val)) s++;
+                if (/[^A-Za-z0-9]/.test(val)) s++;
+                return Math.min(4, s);
+            },
+        };
     },
 
     // Checkbox
