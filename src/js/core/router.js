@@ -98,7 +98,7 @@
  */
 
 import { Store }          from './store.js';
-import { Out, _setCompositeRouter } from './out.js';
+import { Out, _setModuleRouter } from './out.js';
 import { component }      from './component.js';
 import { runtime }        from './runtime.js';
 import { emit as _emit }  from './events.js';
@@ -1077,4 +1077,4 @@ export const router = new Proxy({}, {
 
 // Register the router singleton proxy with out.js so _CompositeOut.render()
 // can include it in the composite scope without a dynamic import.
-_setCompositeRouter(router);
+_setModuleRouter(router);

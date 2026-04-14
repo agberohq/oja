@@ -25,7 +25,11 @@
  *
  *   import { layout } from '../oja/layout.js';
  *
+ *   // Legacy (inline script, execScripts path):
  *   await layout.apply('#layout', 'layouts/main.html', { user });
+ *
+ *   // Modern (ESM module function, minifiable, DI-enabled):
+ *   await layout.apply('#layout', () => import('./layouts/main.js'), 'layouts/main.html', { user });
  *   router.start('/dashboard');
  *
  * ─── Multiple layouts ─────────────────────────────────────────────────────────
@@ -41,6 +45,23 @@
  *   // Re-fill data-bind attributes in the current layout without a full remount.
  *   // Useful for updating the user name in the nav after profile changes.
  *   layout.update({ user: updatedUser });
+ *
+ * ─── Dependency injection (layout.apply with JS) ──────────────────────────────
+ *
+ *   // In your layout module function:
+ *   export default async function({ provide, ready }) {
+ *       provide('api',   new Api({ base: getHost() }));
+ *       provide('store', store);
+ *       ready();
+ *   }
+ *
+ *   // In any child page mounted by Out.module:
+ *   export default async function({ inject, find, ready }) {
+ *       const api   = inject('api');
+ *       const store = inject('store');
+ *       const data  = await api.get('/hosts');
+ *       ready();
+ *   }
  *
  * ─── Layout-scoped lifecycle ─────────────────────────────────────────────────
  *
@@ -90,7 +111,7 @@
 import { render, fill }  from './template.js';
 import { execScripts }   from './_exec.js';
 import { emit }          from './events.js';
-import { Out }           from './out.js';
+import { Out, _setLayoutInjectorHook } from './out.js';
 
 // Tracks the active layout per container element.
 const _active = new Map(); // containerEl → { url, unmountHooks, readyHooks, intervals, timeouts }
@@ -113,45 +134,214 @@ export const layout = {
      * @param {Object}         data    — data passed to template interpolation
      * @returns {Promise<Element>}
      */
-    async apply(target, url, data = {}) {
+    /**
+     * Mount a layout shell — the persistent chrome that wraps all pages.
+     *
+     * Accepts any combination of HTML template and JS module:
+     *
+     *   // HTML only
+     *   await layout.apply('#shell', 'layouts/shell.html');
+     *
+     *   // HTML + JS module (either argument order)
+     *   await layout.apply('#shell', 'layouts/shell.html', 'layouts/shell.js');
+     *   await layout.apply('#shell', 'layouts/shell.js', 'layouts/shell.html');
+     *
+     *   // HTML + factory function
+     *   await layout.apply('#shell', 'layouts/shell.html', () => import('./layouts/shell.js'));
+     *
+     *   // HTML + inline async function
+     *   await layout.apply('#shell', 'layouts/shell.html', async ({ find, provide, ready }) => { ... });
+     *
+     *   // Object form
+     *   await layout.apply('#shell', { html: 'layouts/shell.html', js: 'layouts/shell.js', data: { user } });
+     *
+     *   // With data
+     *   await layout.apply('#shell', 'layouts/shell.html', 'layouts/shell.js', { user });
+     *
+     * The JS default export receives a scope object:
+     *   { container, find, findAll, provide, onUnmount, onReady, ready, signal }
+     *
+     * @param {string|Element} target
+     * @param {string|Function|Object} a  — html url, js url, factory fn, or object form
+     * @param {string|Function}        [b] — html url, js url, or factory fn
+     * @param {Object}                 [data]
+     */
+    async apply(target, a, b, data = {}) {
         const container = _resolve(target);
         if (!container) return null;
 
+        // Normalise arguments
+        let htmlUrl = null, jsArg = null;
+
+        if (a && typeof a === 'object' && !Array.isArray(a) && !(a instanceof Function)) {
+            if ('html' in a || 'js' in a) {
+                // Object form: { html, js, data }
+                ({ html: htmlUrl = null, js: jsArg = null, data = {} } = a);
+            } else {
+                // Module object passed directly: { default: fn }
+                jsArg = a;
+            }
+        } else {
+            // Positional — classify each arg by type / extension
+            for (const arg of [a, b]) {
+                if (!arg) continue;
+                if (typeof arg === 'function') {
+                    jsArg = arg;
+                } else if (typeof arg === 'string') {
+                    const ext = arg.split('.').pop().toLowerCase();
+                    if (ext === 'html' || ext === 'htm') htmlUrl = arg;
+                    else jsArg = arg; // .js / .mjs / .ts → JS
+                }
+            }
+            // If b is a plain object it's the data arg
+            if (b && typeof b === 'object' && !(b instanceof Function) && !Array.isArray(b)
+                && typeof a === 'string') {
+                data = b;
+                jsArg = null; // b was data, not js
+                // re-classify a
+                const ext = a.split('.').pop().toLowerCase();
+                if (ext === 'html' || ext === 'htm') { htmlUrl = a; }
+                else { jsArg = a; htmlUrl = null; }
+            }
+        }
+
+        // Wrap a JS URL string as a dynamic import factory
+        if (typeof jsArg === 'string') {
+            const url = jsArg;
+            jsArg = () => import(/* @vite-ignore */ url);
+        }
+
+        // Cache key — include js identity so remount fires when js changes
+        const cacheKey = [htmlUrl, typeof jsArg === 'function' ? jsArg.toString().slice(0, 60) : ''].join('|');
+
         const current = _active.get(container);
 
-        // Reuse the existing shell if the same URL is already mounted.
-        // This is what makes layouts different from components — navigating
-        // between routes under the same layout does not repaint the chrome.
-        if (current && current.url === url) {
+        // Reuse if identical layout already mounted
+        if (current && current.url === cacheKey && !jsArg) {
             if (Object.keys(data).length > 0) fill(container, data);
             return container;
         }
 
         if (current) await _teardown(container);
 
-        const html = await _fetchLayout(url);
-        container.innerHTML = render(html, data);
-        fill(container, data);
+        // Render HTML
+        if (htmlUrl) {
+            const html = await _fetchLayout(htmlUrl);
+            container.innerHTML = render(html, data);
+            fill(container, data);
+        }
 
         const controller = new AbortController();
-        _active.set(container, { url, unmountHooks: [], readyHooks: [], intervals: [], timeouts: [], controller });
+        _active.set(container, {
+            url:          cacheKey,
+            provided:     new Map(),
+            unmountHooks: [],
+            readyHooks:   [],
+            intervals:    [],
+            timeouts:     [],
+            controller,
+        });
         _currentContainer = container;
 
-        await execScripts(container, url);
+        // Execute JS
+        if (jsArg) {
+            // Build scope
+            const _unsubs = [];
+
+            // on(selectorOrEl, event, handler) — scoped to container, auto-cleaned on unmount.
+            //   on('.nav-link', 'click', handler) — delegates within container
+            //   on(someElement, 'click', handler) — direct listener
+            // Returns an unsub for early removal.
+            const on = (selectorOrEl, event, handler) => {
+                let unsub;
+                if (typeof selectorOrEl === 'string') {
+                    const wrapped = (e) => {
+                        if (!e.target?.closest) return;
+                        const target = e.target.closest(selectorOrEl);
+                        if (target && container.contains(target)) handler(e, target);
+                    };
+                    container.addEventListener(event, wrapped);
+                    unsub = () => container.removeEventListener(event, wrapped);
+                } else if (selectorOrEl instanceof EventTarget) {
+                    selectorOrEl.addEventListener(event, handler);
+                    unsub = () => selectorOrEl.removeEventListener(event, handler);
+                } else {
+                    return () => {};
+                }
+                _unsubs.push(unsub);
+                return unsub;
+            };
+
+            const off = (unsub) => {
+                unsub?.();
+                const idx = _unsubs.indexOf(unsub);
+                if (idx !== -1) _unsubs.splice(idx, 1);
+            };
+
+            const scope = {
+                container,
+                data,
+                find:      (sel) => container.querySelector(sel),
+                findAll:   (sel) => Array.from(container.querySelectorAll(sel)),
+                on,
+                off,
+                provide:   (key, val) => {
+                    const entry = _active.get(container);
+                    if (entry) entry.provided.set(key, val);
+                    else console.warn('[oja/layout] provide() called after layout was unmounted');
+                },
+                onUnmount: (fn) => layout.onUnmount(fn),
+                onReady:   (fn) => layout.onReady(fn),
+                get signal() { return controller.signal; },
+                ready: () => {},
+            };
+
+            // Resolve fn: factory (fn.length===0 + returns module namespace) → use .default
+            //             inline fn (fn.length>=1) → call directly
+            //             module object → use .default
+            let fn = jsArg;
+            try {
+                if (fn && typeof fn === 'object') {
+                    fn = fn.default ?? fn;
+                } else if (typeof fn === 'function' && fn.length === 0) {
+                    const mod = await fn();
+                    const isNamespace = mod !== null && mod !== undefined && typeof mod === 'object' &&
+                        (mod[Symbol.toStringTag] === 'Module' || 'default' in mod);
+                    if (isNamespace) fn = mod.default;
+                }
+            } catch (e) {
+                console.error('[oja/layout] layout.apply() failed to resolve module:', e);
+                _currentContainer = null;
+                return container;
+            }
+
+            if (typeof fn === 'function') {
+                try { await fn(scope); }
+                catch (e) { console.error('[oja/layout] layout.apply() function threw:', e); }
+            } else if (jsArg) {
+                console.error('[oja/layout] layout.apply() could not resolve a function from:', jsArg);
+            }
+
+            // Auto-clean any listeners registered via scope.on() when layout unmounts
+            layout.onUnmount(() => { _unsubs.forEach(u => u()); _unsubs.length = 0; });
+        } else if (htmlUrl) {
+            // HTML-only path: execute any inline <script> tags (legacy)
+            await execScripts(container, htmlUrl);
+        }
 
         _currentContainer = null;
 
-        // Fire onReady hooks registered during script execution
+        // Fire onReady hooks
         const entry = _active.get(container);
         if (entry?.readyHooks?.length) {
-            for (const fn of entry.readyHooks) {
-                try { await fn(); } catch (e) {
+            for (const hook of entry.readyHooks) {
+                try { await hook(); } catch (e) {
                     console.warn('[oja/layout] onReady hook error:', e);
                 }
             }
         }
 
-        emit('layout:mounted', { url, container });
+        emit('layout:mounted', { url: htmlUrl || cacheKey, container });
         return container;
     },
 
@@ -484,6 +674,32 @@ export const layout = {
             await next();
         };
     },
+
+    /**
+     * Returns an inject function bound to the active layout's provided Map.
+     * Called by _ModuleOut.render() to pass inject() into page scope.
+     *
+     * inject(key) returns the value registered by provide(key, val) in the
+     * layout module function, or undefined if not found.
+     *
+     * @param {string|Element} [target] — layout container (defaults to last applied)
+     * @returns {Function} inject — (key: string) => any
+     */
+    // Clear the HTML template cache — useful in tests or after hot-reload.
+    clearCache(url) {
+        if (url) _htmlCache.delete(url);
+        else     _htmlCache.clear();
+        return this;
+    },
+
+    injector(target) {
+        const container = _resolve(target) || _lastContainer();
+        if (!container || !_active.has(container)) return (_key) => undefined;
+        const provided = _active.get(container).provided;
+        if (!provided) return (_key) => undefined;
+        return (key) => provided.get(key);
+    },
+
 };
 
 const _htmlCache = new Map();
@@ -537,6 +753,10 @@ function _resolve(target) {
 function _isSelector(value) {
     return typeof value === 'string';
 }
+
+// Wire the layout injector hook into out.js so _ModuleOut.render() can call
+// layout.injector() without creating a circular import dependency.
+_setLayoutInjectorHook(() => layout.injector());
 // allSlotsReady is available as layout.allSlotsReady() and also as a named export
 // so apps can import it directly: import { allSlotsReady } from './layout.js'
 export function allSlotsReady(names, timeout = 10000, options = {}) {

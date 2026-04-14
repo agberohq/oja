@@ -81,7 +81,7 @@ import { pushContainer, popContainer, currentContainer, _setReadyFn, _getReadyFn
 import { execScripts }                 from './_exec.js';
 import { emit, _setComponentScopeHook } from './events.js';
 import { _setComponentChannelHook }      from './reactive.js';
-import { _setCompositeRegisterUnmount }  from './out.js';
+import { _setCompositeUnmountHook }  from './out.js';
 
 const _cache = new Map();
 
@@ -325,7 +325,7 @@ _setComponentScopeHook((unsub) => {
 
 // Register registerUnmount with out.js so _CompositeOut.render() can hook
 // composite scripts into the component lifecycle without a dynamic import.
-_setCompositeRegisterUnmount(registerUnmount);
+_setCompositeUnmountHook(registerUnmount);
 
 // When a channel() is created while a component is mounting, register it
 // for auto-destruction when that component unmounts. This prevents named

@@ -64,11 +64,11 @@ describe('oja.js barrel — new exports present', async () => {
         const { Out } = oja;
         expect(typeof Out.within).toBe('function');
     });
-    it('Out.to().composite is a function',        () => {
+    it('Out.to().module is a function',        () => {
         const { Out } = oja;
         const div = document.createElement('div');
         document.body.appendChild(div);
-        expect(typeof Out.to(div).composite).toBe('function');
+        expect(typeof Out.to(div).module).toBe('function');
         document.body.removeChild(div);
     });
 });

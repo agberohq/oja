@@ -36,7 +36,6 @@
  *   Out.c()    → Out.component()
  *   Out.h()    → Out.html()
  *   Out.t()    → Out.text()
- *   Out.cmp()  → Out.composite()
  *
  * ─── Router singleton ─────────────────────────────────────────────────────────
  *
