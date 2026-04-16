@@ -1,6 +1,6 @@
 {
     "name": "@agberohq/oja",
-    "version": "0.2.3",
+    "version": "0.3.0",
     "description": "Minimal zero-build JavaScript framework for multi-app SPAs",
     "author": "Agbero HQ <https://github.com/agberohq>",
     "license": "MIT",
