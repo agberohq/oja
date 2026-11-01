@@ -12,7 +12,9 @@
 #   make watch      → rebuild on save (dev, core IIFE)
 #   make clean      → remove build/
 #   make check      → show output sizes
-#   make release    → tag + push current package.json version (triggers CI)
+#   make release-patch   → bump patch & release (0.3.0 → 0.3.1)
+#   make release-minor   → bump minor & release (0.3.0 → 0.4.0)
+#   make release-major   → bump major & release (0.3.0 → 1.0.0)
 #   make simple     → Closure Compiler SIMPLE mode (smaller)
 #   make advanced   → Closure Compiler ADVANCED mode (smallest)
 #   make compare    → build all and compare sizes
@@ -132,11 +134,22 @@ css: $(CSS_OUT)
 
 # ─── Release — bump, commit, tag, push ───────────────────────────────────────
 # Usage:
-#   make release         → bump patch (0.0.3 → 0.0.4)
-#   make release BUMP=minor  → bump minor (0.1.0)
-#   make release BUMP=major  → bump major (1.0.0)
+#   make release-patch   → bump patch (0.3.0 → 0.3.1)
+#   make release-minor   → bump minor (0.3.0 → 0.4.0)
+#   make release-major   → bump major (0.3.0 → 1.0.0)
+#   make release         → bump patch (default, same as release-patch)
+#   make release BUMP=minor  → legacy alias for release-minor
 
 BUMP ?= patch
+
+release-patch:
+	@$(MAKE) release BUMP=patch
+
+release-minor:
+	@$(MAKE) release BUMP=minor
+
+release-major:
+	@$(MAKE) release BUMP=major
 
 release:
 	@git diff --quiet && git diff --cached --quiet \
@@ -271,4 +284,4 @@ clean:
 	@rm -rf $(BUILD_DIR) $(EXTERN_DIR)
 	@echo "✓ Cleaned"
 
-.PHONY: all core full css watch check clean release simple advanced compare
+.PHONY: all core full css watch check clean release release-patch release-minor release-major simple advanced compare
