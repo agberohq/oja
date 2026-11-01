@@ -1335,14 +1335,10 @@ const router = new Router({ mode: 'hash', outlet: '#main-outlet' });
 router.Get('/login', Out.component('pages/login.html'));
 
 const app = router.Group('/');
-app.Use(async (ctx, next) => {
-    if (!currentUser() && ctx.path !== '/login') {
-        auth.session.setIntendedPath(ctx.path);
-        ctx.redirect('/login');
-        return;
-    }
-    await next();
-});
+app.Use(auth.middleware('protected', '/login'));
+// ↑ If the user is not logged in, the middleware stores the intended path
+//   and redirects to /login. After login, auth.session.intendedPath()
+//   returns the stored path so you can send the user where they were going.
 
 app.Get('/',        Out.component('pages/home.html',    { currentUser, tasks }));
 app.Get('/tasks',   Out.component('pages/tasks.html',   { currentUser, tasks }));
@@ -3545,7 +3541,7 @@ template.filter('truncate', (s, len = 50) => s.length > len ? s.slice(0, len) + 
 `canvas` provides convenience wrappers around the 2D canvas API — responsive sizing, draw state management, and built-in charts.
 
 ```js
-import * as canvas from '@agberohq/oja';
+import { canvas } from '@agberohq/oja';
 
 // Get context with optional dimensions (accounts for device pixel ratio)
 const ctx = canvas.get('#my-canvas', { width: 800, height: 600 });
