@@ -195,6 +195,15 @@ function _esc(str) {
         .replace(/'/g, '&#39;');
 }
 
+// A real AbortError, so callers can distinguish "superseded navigation" from a
+// genuine render failure and avoid painting an error page over the new route.
+function _abortError(message = '[oja/out] render aborted') {
+    if (typeof DOMException === 'function') return new DOMException(message, 'AbortError');
+    const err = new Error(message);
+    err.name = 'AbortError';
+    return err;
+}
+
 const _cache    = new Map();
 const CACHE_TTL = 60_000;
 const CACHE_MAX = 50;
@@ -230,7 +239,7 @@ async function _fetchHTML(url, options = {}) {
         }
     }
 
-    if (options.signal?.aborted) throw new Error('[oja/out] fetch aborted');
+    if (options.signal?.aborted) throw _abortError();
 
     if (!runtime.isOriginAllowed(url)) throw new Error(`[oja/out] blocked origin: ${url}`);
 
@@ -255,7 +264,7 @@ async function _fetchHTML(url, options = {}) {
         emit('out:fetch-end', { url, ms: performance.now() - start, size });
         return html;
     } catch (e) {
-        emit('out:fetch-error', { url, error: e.message });
+        if (e?.name !== 'AbortError') emit('out:fetch-error', { url, error: e.message });
         throw e;
     }
 }
@@ -500,7 +509,9 @@ class _ComponentOut extends _Out {
     }
 
     async render(container, context = {}) {
-        const mergedData = { ...context, ...this._data };
+        // The navigation AbortSignal must not leak into template data.
+        const { signal, ...dataContext } = context;
+        const mergedData = { ...dataContext, ...this._data };
         const start      = performance.now();
         const loadingEl  = container.querySelector('[data-loading]');
         const errorEl    = container.querySelector('[data-error]');
@@ -512,7 +523,13 @@ class _ComponentOut extends _Out {
             const html = await _fetchHTML(this._payload, {
                 bypassCache:  this._options.bypassCache,
                 vfsOverride:  this._vfs,
+                signal,
             });
+
+            // A superseded navigation must never touch this container. The fetch
+            // may have ignored the abort (cache hit, custom fetch, polyfill), so
+            // the signal is re-checked immediately before the DOM write.
+            if (signal?.aborted) throw _abortError();
 
             container.innerHTML = templateRender(html, mergedData);
             fill(container, mergedData);
@@ -527,6 +544,9 @@ class _ComponentOut extends _Out {
             const oldActive = component._activeElement;
             component._activeElement = container;
             try {
+                // Must await: component scripts register onMount/onReady/onUnmount
+                // hooks. Resolving before they run lets the router drain the scope
+                // early, so those hooks are silently lost on first render.
                 if (!runtime.isSandboxed()) await execScripts(container, this._payload, mergedData);
             } finally {
                 component._activeElement = oldActive;
@@ -539,6 +559,13 @@ class _ComponentOut extends _Out {
             });
 
         } catch (e) {
+            // A superseded navigation is not a render failure: leave the outlet
+            // to the navigation that replaced this one.
+            if (e?.name === 'AbortError' || signal?.aborted) {
+                emit('out:render-aborted', { url: this._payload });
+                throw e;
+            }
+
             console.error(`[oja/out] component load failed: ${this._payload}`, e);
 
             if (errorEl) {

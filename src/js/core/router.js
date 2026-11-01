@@ -492,6 +492,8 @@ export class Router {
 
         if (container) await component._runUnmount(container);
 
+        if (currentNavId !== this._navId) return;
+
         if (!match) {
             for (const fn of this._beforeEach) await fn(ctx);
             await this._render(this._notFound, ctx);
@@ -564,6 +566,7 @@ export class Router {
         try {
             await runChain(0);
         } catch (err) {
+            if (currentNavId !== this._navId) return;
             console.error('[oja/router] middleware chain error:', err);
             await this._render(this._errorResponder, { ...ctx, error: err });
             return;
@@ -580,6 +583,9 @@ export class Router {
         try {
             await this._render(match.responder, ctx);
         } catch (err) {
+            // A render that lost its navigation aborts its fetch. That is not a
+            // page error — the newer navigation owns the outlet.
+            if (err?.name === 'AbortError' || currentNavId !== this._navId) return;
             console.error('[oja/router] render error:', err);
             await this._render(this._errorResponder, { ...ctx, error: err });
             return;
@@ -605,17 +611,25 @@ export class Router {
         const container = document.querySelector(this._outlet);
         if (!container) return;
 
+        // Capture which navigation this render belongs to. A newer navigate()
+        // increments _navId and aborts _navController, so both are checked:
+        // a superseded render must neither start its DOM work nor finish it.
+        const navId  = this._navId;
+        const signal = this._navController?.signal;
+
         container.classList.add('oja-leaving');
         await _wait(150);
+
+        if (navId !== this._navId) return;
         container.classList.remove('oja-leaving');
 
         container.innerHTML = '';
-        // Pass the navigation AbortSignal through context so Out.fn() and
-        // other async responders can cancel in-flight work on next navigation.
-        const renderCtx = this._navController
-            ? { ...ctx, signal: this._navController.signal }
-            : ctx;
+        // Pass the navigation AbortSignal through context so Out.component()
+        // can cancel its fetch and Out.fn() can cancel its work.
+        const renderCtx = signal ? { ...ctx, signal } : ctx;
         await responder.render(container, renderCtx);
+
+        if (navId !== this._navId) return;
 
         container.classList.add('oja-entering');
         await _wait(50);
