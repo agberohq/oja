@@ -802,12 +802,14 @@ export class Router {
         document.querySelectorAll('[data-page]').forEach(el => {
             const active = el.dataset.page === path;
             el.classList.toggle('active', active);
-            el.setAttribute('aria-current', active ? 'page' : null);
+            if (active) el.setAttribute('aria-current', 'page');
+            else        el.removeAttribute('aria-current');
         });
         document.querySelectorAll('[data-href]').forEach(el => {
             const active = el.dataset.href === path;
             el.classList.toggle('active', active);
-            el.setAttribute('aria-current', active ? 'page' : null);
+            if (active) el.setAttribute('aria-current', 'page');
+            else        el.removeAttribute('aria-current');
         });
     }
 
@@ -827,10 +829,24 @@ export class Router {
 
         for (const seg of segments) {
             if (seg.startsWith('{') && seg.endsWith('}')) {
+                const paramName = seg.slice(1, -1);
+
                 if (!node.paramChild) {
                     node.paramChild           = new _RouteNode(seg);
-                    node.paramChild.paramName = seg.slice(1, -1);
+                    node.paramChild.paramName = paramName;
+                } else if (node.paramChild.paramName !== paramName) {
+                    // A trie node holds one param child, so two different names
+                    // at the same position collapse into one. Params are keyed
+                    // by the first name, which silently leaves the second route
+                    // reading `undefined` from params(). Surface it.
+                    console.warn(
+                        `[oja/router] conflicting param name at the same path position: ` +
+                        `"{${node.paramChild.paramName}}" is already registered, ` +
+                        `"{${paramName}}" will be ignored — params are keyed by the first name. ` +
+                        `Use one param name per path position.`
+                    );
                 }
+
                 node = node.paramChild;
             } else {
                 if (!node.children.has(seg)) node.children.set(seg, new _RouteNode(seg));
