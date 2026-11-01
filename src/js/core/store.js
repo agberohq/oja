@@ -90,6 +90,9 @@ class _MemoryAdapter {
     clearNamespace(prefix) { for (const k of [...this._map.keys()]) if (k.startsWith(prefix)) this._map.delete(k); }
 }
 
+// Namespaces already warned about encrypt:true without an explicit secret.
+const _warnedImplicitSecrets = new Set();
+
 export class Store {
     /**
      * @param {string} namespace   — scopes all keys
@@ -106,6 +109,18 @@ export class Store {
         this._aad     = options.aad     || null;
         this._encrypt = options.encrypt && encrypt.available();
         this._layer   = null;
+
+        // A namespace-derived key is public knowledge. Surface it once per
+        // namespace instead of silently shipping obfuscation labelled as
+        // encryption.
+        if (options.encrypt && !options.secret && !_warnedImplicitSecrets.has(namespace)) {
+            _warnedImplicitSecrets.add(namespace);
+            console.warn(
+                `[oja/store] "${namespace}" uses encrypt:true without an explicit \`secret\`. ` +
+                `The key is derived from the namespace, which is public — treat this as ` +
+                `obfuscation, not confidentiality. Pass { secret } for real encryption.`
+            );
+        }
         this._changes = new Map();   // key → Set<fn>
         this._wildcardListeners = new Set(); // for onChange('*')
         this._ttlTimers = new Map(); // key → timer id

@@ -93,6 +93,12 @@ const _timers = new Map([
 let _refreshInProgress = false;
 let _refreshSubscribers = [];
 
+// In-memory copy of the current token, populated by start()/renew() and primed
+// by token(). It is deliberately never persisted: tokenSync() is a convenience,
+// not a storage strategy. After a page reload this is null until the encrypted
+// copy is read once with `await auth.session.token()`.
+let _rawToken = null;
+
 const REFRESH_THRESHOLD = 5 * 60 * 1000;
 const REFRESH_BUFFER = 30 * 1000;
 
@@ -227,10 +233,10 @@ export const auth = {
             }
             _metaStore.set('startedAt', Date.now());
 
-            // Store a raw (unencrypted) copy for tokenSync() access.
-            // Only stored in meta (sessionStorage/memory) — not as sensitive
-            // as the encrypted copy but enables sync reads for non-secret tokens.
-            _metaStore.set('raw_token', token);
+            // Keep a copy in memory only. It must never be written to storage:
+            // a raw bearer token at rest is readable by any script that can read
+            // localStorage/sessionStorage, which defeats the encrypted store.
+            _rawToken = token;
 
             // Determine expiry — JWT payload takes priority, then explicit
             // sessionOptions.expires, then undefined (no expiry = never expires).
@@ -274,7 +280,9 @@ export const auth = {
             _metaStore.clear('exp');        // clears both numeric and 'no-expiry'
             _metaStore.clear('startedAt');
             _metaStore.clear('payload');
+            // Legacy cleanup: older versions persisted the raw token here.
             _metaStore.clear('raw_token');
+            _rawToken = null;
             emit('auth:end');
         },
 
@@ -287,6 +295,7 @@ export const auth = {
         async renew(newToken, newRefreshToken = null) {
             _stopAllTimers();
             await _tokenStore.set('token', newToken);
+            _rawToken = newToken;
 
             if (newRefreshToken) {
                 await _tokenStore.set('refresh_token', newRefreshToken);
@@ -322,26 +331,40 @@ export const auth = {
 
         /**
          * Retrieve the raw token string (async, decrypted).
+         *
+         * Also primes the in-memory copy used by tokenSync(), so a reload can
+         * restore synchronous access with a single await:
+         *
+         *   api.setToken(await auth.session.token());
          */
         async token() {
-            return _tokenStore.get('token');
+            const token = await _tokenStore.get('token');
+            if (token) _rawToken = token;
+            return token;
         },
 
         /**
-         * Retrieve the token synchronously from meta — only works when the
-         * token was stored with encrypt:false OR when a raw copy was saved
-         * in _metaStore by start(). Use this when you need the token in a
-         * synchronous context (e.g. to set API headers on startup).
+         * Retrieve the token synchronously from the in-memory cache.
          *
-         * Returns null if no session is active or if encryption prevents
-         * synchronous access. In that case, use the async token() method.
+         * The token is never written to storage in cleartext, so this cache is
+         * populated by:
+         *   - start() / renew() — same session, immediately
+         *   - token()           — after a reload, once the encrypted copy is read
+         *
+         * On a fresh page load the cache is empty until `await token()` runs.
+         * If you need the token before anything async resolves, await token()
+         * once during boot (e.g. in auth.session.OnStart) and keep using
+         * tokenSync() afterwards.
+         *
+         * Returns null when no session is active or the cache is cold — it never
+         * throws.
          *
          *   const token = auth.session.tokenSync();
          *   if (token) api.setToken(token);
          */
         tokenSync() {
             if (!auth.session.isActive()) return null;
-            return _metaStore.get('raw_token') || null;
+            return _rawToken || null;
         },
 
         /**
