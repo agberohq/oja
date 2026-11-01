@@ -349,7 +349,7 @@ class _HtmlOut extends _Out {
 
     async render(container) {
         container.innerHTML = this._payload;
-        if (!runtime.isSandboxed()) execScripts(container, null, {});
+        if (!runtime.isSandboxed()) await execScripts(container, null, {});
     }
 
     getText() {
@@ -527,7 +527,7 @@ class _ComponentOut extends _Out {
             const oldActive = component._activeElement;
             component._activeElement = container;
             try {
-                if (!runtime.isSandboxed()) execScripts(container, this._payload, mergedData);
+                if (!runtime.isSandboxed()) await execScripts(container, this._payload, mergedData);
             } finally {
                 component._activeElement = oldActive;
             }
@@ -628,7 +628,7 @@ class _FnOut extends _Out {
                 }
             } else if (typeof result === 'string') {
                 container.innerHTML = result;
-                if (!runtime.isSandboxed()) execScripts(container, null, {});
+                if (!runtime.isSandboxed()) await execScripts(container, null, {});
             }
         } catch (e) {
             console.error('[oja/out] fn Out threw:', e);
