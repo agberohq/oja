@@ -1,5 +1,3 @@
-> WARNING: This project is under active development.
-
 <p align="center">
   <img src="assets/oja_icon.png" width="300" alt="Oja Logo">
 </p>
