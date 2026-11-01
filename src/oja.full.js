@@ -71,6 +71,7 @@ export { Channel, go, pipeline, fanOut, fanIn,
     merge, split }                                        from './js/ext/channel.js';
 export { config }                                         from './js/ext/config.js';
 export { Runner }                                         from './js/ext/runner.js';
+export { Presence }                                        from './js/ext/presence.js';
 export { VFS }                                            from './js/ext/vfs.js';
 export { sw, send, post, syncVFS, clearVFS }              from './js/ext/sw.js';
 export { SSE, Socket as Socket }             from './js/ext/socket.js';
