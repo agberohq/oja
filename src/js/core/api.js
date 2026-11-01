@@ -318,12 +318,24 @@ export class Api {
 
         if (options.headers) Object.assign(headers, options.headers);
 
+        // Did the caller supply its own Content-Type? Raw uploads (HCL, CSV,
+        // protobuf, YAML, …) depend on it, and stripping it made servers that
+        // sniff the body fall back to their default codec — an HCL config
+        // posted with no Content-Type was decoded as JSON and rejected.
+        const callerSetContentType = !!options.headers &&
+            Object.keys(options.headers).some(k => k.toLowerCase() === 'content-type');
+
         const opts = { method, headers };
 
         if (body !== null) {
             if (options.raw || body instanceof FormData) {
                 opts.body = body;
-                delete opts.headers['Content-Type'];
+                // Only drop the header when the caller did not set one: for
+                // FormData the browser must generate the multipart boundary, and
+                // for everything else the absence of a codec header is correct.
+                if (!callerSetContentType) {
+                    delete opts.headers['Content-Type'];
+                }
             } else {
                 opts.body = await Promise.resolve(this._codec.encode(body));
             }
