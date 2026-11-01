@@ -47,16 +47,19 @@ CORE_ADVANCED = $(BUILD_DIR)/oja.core.advanced.js
 CSS_OUT = $(BUILD_DIR)/oja.min.css
 
 # Cross-platform size display (macOS + Linux)
-SIZE = $(shell if command -v numfmt >/dev/null 2>&1; then echo "numfmt --to=iec"; else echo "echo"; fi)
+# `cat` is the identity filter, so `wc -c < file | $(SIZE)` still prints bytes
+# when numfmt (GNU coreutils) is not installed.
+SIZE = $(shell if command -v numfmt >/dev/null 2>&1; then echo "numfmt --to=iec"; else echo "cat"; fi)
 
 # ─── Default — build everything ───────────────────────────────────────────────
 
 all: core full $(CSS_OUT)
 
 # ─── Core build ───────────────────────────────────────────────────────────────
-# reactive, template, events, router, out, component, modal, notify, ui,
-# form, auth, api, store, animate, channel, adapter, logger, debug,
-# history, validate, codecs — no plugins
+# The kernel only — everything reachable from src/oja.js:
+#   system, store, reactive, template, out, segment, animate, router,
+#   component, layout, ui, events, engine, api, runtime, plugin, codecs
+# UI patterns, extensions and utils are full-only (see src/oja.full.js).
 
 core: $(CORE_IIFE) $(CORE_ESM)
 
@@ -139,9 +142,10 @@ release:
 	@git diff --quiet && git diff --cached --quiet \
 		|| (echo "ERROR: uncommitted changes — commit first" && exit 1)
 	@npm version $(BUMP) --no-git-tag-version
+	@node scripts/sync-version.js
 	@VERSION=$$(node -p "require('./package.json').version"); \
 	TAG="v$$VERSION"; \
-	git add package.json package-lock.json; \
+	git add package.json package-lock.json src/oja.js; \
 	git commit -m "chore: release $$TAG"; \
 	git tag $$TAG; \
 	git push origin main; \

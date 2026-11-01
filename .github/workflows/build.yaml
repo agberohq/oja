@@ -38,10 +38,14 @@ jobs:
           test -f build/oja.core.min.js || (echo "ERROR: oja.core.min.js missing" && exit 1)
           test -f build/oja.min.css     || (echo "ERROR: oja.min.css missing"     && exit 1)
 
+      - name: Verify package entry points
+        run: npm run verify:package
+
       - name: Sync version from tag
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           npm version $VERSION --no-git-tag-version --allow-same-version
+          node scripts/sync-version.js
 
       - name: Publish to npm
         run: npm publish --access public

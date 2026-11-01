@@ -19,13 +19,23 @@
         "reactive"
     ],
     "type": "module",
-    "main": "build/oja.min.js",
-    "module": "build/oja.esm.js",
+    "main": "./build/oja.full.esm.js",
+    "module": "./build/oja.full.esm.js",
     "exports": {
         ".": {
-            "import": "./build/oja.esm.js",
-            "default": "./build/oja.min.js"
+            "import": "./build/oja.full.esm.js",
+            "default": "./build/oja.full.esm.js"
         },
+        "./full": {
+            "import": "./build/oja.full.esm.js",
+            "default": "./build/oja.full.esm.js"
+        },
+        "./core": {
+            "import": "./build/oja.core.esm.js",
+            "default": "./build/oja.core.esm.js"
+        },
+        "./css": "./build/oja.min.css",
+        "./build/*": "./build/*",
         "./src/*": "./src/*",
         "./src/js/*": "./src/js/*",
         "./src/js/codecs/*": "./src/js/codecs/*"
@@ -42,6 +52,8 @@
         "check": "make check",
         "clean": "make clean",
         "test": "vitest run",
+        "test:bugs": "vitest run tests/bugs",
+        "verify:package": "node scripts/verify-package.js",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "bench": "vitest bench --config vitest.bench.config.js",
