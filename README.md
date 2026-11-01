@@ -73,7 +73,17 @@ The import map goes in `index.html` once. Every script on the page — including
 
 Pin to a specific version in production:
 ```html
-"@agberohq/oja": "https://cdn.jsdelivr.net/npm/@agberohq/oja@0.0.11/build/oja.full.esm.js"
+"@agberohq/oja": "https://cdn.jsdelivr.net/npm/@agberohq/oja@0.3.0/build/oja.full.esm.js"
+```
+
+### npm subpaths
+
+The package ships both bundles, so you can pick your surface explicitly:
+
+```js
+import { Router, Out } from '@agberohq/oja';        // full build (default)
+import { Router, Out } from '@agberohq/oja/core';   // kernel only, smallest
+import '@agberohq/oja/css';                         // component styles
 ```
 
 ### npm
@@ -325,7 +335,7 @@ auth.level('admin',     () => auth.session.isActive() && auth.hasRole('admin'));
 
 // Hooks — fire at session lifecycle points
 auth.session.OnStart(async (token) => {
-    api.setToken(token);                          // set synchronously via tokenSync()
+    api.setToken(token);                          // the hook receives the token
     const dest = auth.session.intendedPath() || '/';
     auth.session.clearIntendedPath();
     router.navigate(dest);
@@ -364,7 +374,7 @@ form.on(loginForm, {
 | `auth.session.renew(newToken, newRefreshToken?)` | `Promise<void>` | Replaces token, fires `OnRenew` hooks |
 | `auth.session.isActive()` | `boolean` | Synchronous — safe in middleware and effects |
 | `auth.session.token()` | `Promise<string\|null>` | Async — decrypted token string |
-| `auth.session.tokenSync()` | `string\|null` | **Synchronous** — returns `null` if inactive. Use in `OnStart` to set API headers immediately |
+| `auth.session.tokenSync()` | `string\|null` | **Synchronous** — served from an in-memory cache; `null` if inactive, or on a fresh page load until `await token()` primes it |
 | `auth.session.user()` | `object\|null` | Decoded JWT payload — `sub`, `roles`, custom claims |
 | `auth.session.expiresIn()` | `number` | Milliseconds until expiry, `Infinity` if no expiry set |
 | `auth.session.intendedPath()` | `string\|null` | Path the user was heading to before being redirected |
@@ -373,22 +383,40 @@ form.on(loginForm, {
 
 ### `tokenSync()` — synchronous token access
 
-`tokenSync()` is the method added for cases where you need the token before any async operation resolves — for example, setting an API authorization header the moment a session starts:
+`tokenSync()` exists for the cases where you need the token without awaiting —
+setting an API header, wiring a socket handshake, or seeding a synchronous
+store.
+
+The token itself is **never written to storage in cleartext**. It lives in an
+in-memory cache that is filled in three ways:
+
+- `start()` / `renew()` — immediately, for the current session
+- `token()` — after a reload, once the encrypted copy has been read
+- `end()` clears it
 
 ```js
-// In OnStart — synchronous, no await needed
+// Same session — no await needed
 auth.session.OnStart((token) => {
-    // tokenSync() returns the same token immediately
-    const t = auth.session.tokenSync();
-    if (t) api.setToken(t);
+    api.setToken(token);            // the hook argument; or auth.session.tokenSync()
 });
 
-// Also useful on app startup to restore a previous session
-const savedToken = auth.session.tokenSync();
-if (savedToken) api.setToken(savedToken);
+// Fresh page load — the cache is cold, so prime it once:
+const restored = await auth.session.token();
+if (restored) api.setToken(restored);
+
+// From here on, synchronous access works again
+const t = auth.session.tokenSync();
 ```
 
-`tokenSync()` returns `null` when no session is active — it never throws.
+`tokenSync()` returns `null` when no session is active **or** when the cache is
+cold — it never throws. Always check the return value.
+
+> **Why not persist the token?** A bearer token at rest is readable by anything
+> that can read `localStorage` (XSS, a malicious extension, a shared subdomain).
+> The encrypted store is a second layer, not a substitute: pass an explicit
+> `secret` if you rely on it, because a namespace-derived key is obfuscation,
+> not confidentiality. The strongest option remains an httpOnly refresh cookie
+> plus a short-lived in-memory access token.
 
 ### Non-JWT tokens
 
@@ -525,26 +553,26 @@ engine.list('#notes', notes(), {
 | Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
 | Component lifecycle (`onMount`, `onUnmount`, `interval`) | `component` | core + full |
 | Template syntax (`{{}}`, `data-if`, `data-each`, filters) | built-in | core + full |
-| Auth (levels, session, JWT, tokenSync, middleware, roles) | `auth` | core + full |
-| Notifications (toast, banner, progress, promise) | `notify` | core + full |
-| Modals (stack, confirm, prompt, beforeClose guard) | `modal` | core + full |
-| Forms (lifecycle, validation, dirty tracking, secret, radio) | `form` | core + full |
+| Auth (levels, session, JWT, tokenSync, middleware, roles) | `auth` | full |
+| Notifications (toast, banner, progress, promise) | `notify` | full |
+| Modals (stack, confirm, prompt, beforeClose guard) | `modal` | full |
+| Forms (lifecycle, validation, dirty tracking, secret, radio) | `form` | full |
 | Events (delegated, emit/listen, keyboard shortcuts) | `on`, `emit`, `listen` | core + full |
 | Store (session/local/memory, encrypt, watch, TTL) | `Store` | core + full |
-| Encryption (Web Crypto, seal/open/rotate) | `encrypt` | core + full |
+| Encryption (Web Crypto, seal/open/rotate) | `encrypt` | full |
 | Engine (list reconcile, morph, `data-oja-bind`, lifecycle callbacks) | `engine` | core + full |
-| Progress (milestone hooks, reverse, bind, track) | `progress` | core + full |
+| Progress (milestone hooks, reverse, bind, track) | `progress` | full |
 | Runtime unified event bus (`runtime.on/off/emit`) | `runtime` | core + full |
 | Animate (fade, slide, collapse, countUp, typewriter, shake) | `animate` | core + full |
-| Collapse + accordion | `collapse`, `accordion` | core + full |
+| Collapse + accordion | `collapse`, `accordion` | full |
 | Wizard (multi-step form, modal-compatible) | `wizard` | full |
-| Search + autocomplete (full-text, fuzzy, Trie) | `Search`, `Trie` | core + full |
+| Search + autocomplete (full-text, fuzzy, Trie) | `Search`, `Trie` | full |
 | Table (sort, pagination, row actions, remote data, resizable columns) | `table` | full |
 | Inline charts (sparkline, timeSeries) | `Out.sparkline` | core + full |
-| Clipboard | `clipboard` | core + full |
+| Clipboard | `clipboard` | full |
 | Drag and drop | `dragdrop` | full |
-| VFS (offline-first IndexedDB, encrypt, persist, quota) | `VFS` | core + full |
-| Config (`oja.config.json`) | `config` | core + full |
+| VFS (offline-first IndexedDB, encrypt, persist, quota) | `VFS` | full |
+| Config (`oja.config.json`) | `config` | full |
 | SSE + WebSocket (auto-reconnect) | `SSE`, `Socket` | full |
 | Channel + go (Go-style concurrency) | `Channel`, `go` | full |
 | Runner (long-lived background worker) | `Runner` | full |
@@ -555,8 +583,8 @@ engine.list('#notes', notes(), {
 | Context menu | `clickmenu` | full |
 | Offline request queue | `Queue` | full |
 | Multi-user presence + cursors | `Presence` | full |
-| Logging + debug | `logger`, `debug` | core + full |
-| Adapter bridge (D3, Chart.js, GSAP) | `adapter` | core + full |
+| Logging + debug | `logger`, `debug` | full |
+| Adapter bridge (D3, Chart.js, GSAP) | `adapter` | full |
 
 ---
 
@@ -575,7 +603,7 @@ engine.list('#notes', notes(), {
 | URL strategy | Hash default, path opt-in | Hash works everywhere without server config |
 | CSS ownership | App owns all styles, framework CSS in `oja.css` | No JS-injected styles — all component CSS lives in one file |
 | Auth | Declared at route level | Never check `isActive()` manually in page logic |
-| `tokenSync()` | Synchronous token read | Set API headers immediately in `OnStart` without awaiting |
+| `tokenSync()` | Synchronous token read | In-memory cache — set API headers in `OnStart` without awaiting; prime once with `token()` after a reload |
 | Event bus | Single unified bus | All modules emit on `events.js`. `runtime.on()` is the public subscription point |
 | Component communication | `signal()` | Reactive, holds current value — unlike fire-and-forget emit/listen |
 | Context write shorthand | `context.set(name, value)` | Write without destructuring when you don't need the read signal |

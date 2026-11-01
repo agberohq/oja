@@ -1163,34 +1163,39 @@ form.on(loginForm, {
 ```
 
 When `auth.session.start()` is called:
-1. The token is stored securely in an encrypted store.
+1. The token is stored in the encrypted store — never in cleartext.
 2. The JWT is decoded and the expiry timer is set.
 3. `OnStart` hooks fire — this is where you call `api.setToken()` and navigate.
 
 ### `tokenSync()` — reading the token synchronously
 
-Most of the time you set the API token inside `OnStart` and never need to think about it again. But sometimes you need the token synchronously — for example on app startup, to restore a session that was active when the user last closed the tab:
+Most of the time you set the API token inside `OnStart` and never need to think about it again. `tokenSync()` is for code that genuinely cannot await — setting an authorization header, starting a socket handshake, seeding a synchronous store.
+
+The token is **never persisted in cleartext**. `tokenSync()` reads from an in-memory cache that is:
+
+- filled by `start()` and `renew()` for the current session
+- primed by `await auth.session.token()` after a reload
+- cleared by `auth.session.end()`
 
 ```js
-// app.js — runs on every page load
-import { auth } from '@agberohq/oja';
-import { api } from './api.js';
+// In OnStart — the hook already receives the token
+auth.session.OnStart((token) => api.setToken(token));
 
-// tokenSync() reads from a fast synchronous store — no await needed
-// Returns null if no session is active or the session has expired
-const token = auth.session.tokenSync();
-if (token) {
-    api.setToken(token); // restore the session immediately
-}
+// Fresh page load — the cache is cold, so prime it once
+const token = await auth.session.token();
+if (token) api.setToken(token);
+
+// …and synchronous access works from here on
+const t = auth.session.tokenSync();
 ```
 
-> **Why `tokenSync()` instead of `token()`?**
-> `token()` is async because it decrypts from an encrypted store. `tokenSync()` reads from a faster meta-store that holds a raw copy of the token — the tradeoff is that it returns `null` when the session is inactive, so always check the return value.
+> **Why not just persist the token?** Anything that can read `localStorage` — an XSS payload, an extension, a sibling subdomain — can read a persisted bearer token. Keeping it in memory removes that class of theft, at the cost of re-reading it (one `await`) after each reload. If you do rely on the encrypted store, pass an explicit `secret`: a key derived from the namespace is obfuscation, not confidentiality.
 
 `tokenSync()` returns `null` in these cases:
 - No session has been started
 - The session was ended with `auth.session.end()`
 - The JWT has expired (`isActive()` would return `false`)
+- The page was just loaded and `token()` has not been awaited yet (cold cache)
 
 ### Protecting routes
 
@@ -1271,8 +1276,8 @@ auth.session.isActive(); // → false
 | `auth.session.end()` | `Promise<void>` | Clears everything, no hooks |
 | `auth.session.renew(newToken, newRefresh?)` | `Promise<void>` | Replaces token, fires `OnRenew` |
 | `auth.session.isActive()` | `boolean` | Synchronous check — safe anywhere |
-| `auth.session.token()` | `Promise<string\|null>` | Async decrypted token |
-| `auth.session.tokenSync()` | `string\|null` | Synchronous — `null` if inactive |
+| `auth.session.token()` | `Promise<string\|null>` | Async decrypted token; primes the sync cache |
+| `auth.session.tokenSync()` | `string\|null` | Synchronous, in-memory cache — `null` if inactive or cold |
 | `auth.session.user()` | `object\|null` | Decoded JWT payload |
 | `auth.session.expiresIn()` | `number` | Milliseconds until expiry |
 | `auth.session.intendedPath()` | `string\|null` | Path saved before redirect |
