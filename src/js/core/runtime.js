@@ -374,6 +374,9 @@ function _createRuntime() {
                     new CustomEvent('runtime:error', { detail: { err, source } })
                 );
             }
+            // Return the number of hooks that were notified, so callers can
+            // decide whether to fall back to their own logging.
+            return _errorHooks.length;
         },
 
         /**

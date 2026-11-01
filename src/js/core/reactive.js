@@ -78,6 +78,8 @@
  *   and stops after 50 iterations rather than hanging the browser.
  */
 
+import { runtime } from './runtime.js';
+
 const _storage = {
     memory: new Map()
 };
@@ -276,8 +278,11 @@ class ReactiveSystem {
         }
     }
 
-    _trackState(id, name, value, initialValue, persistent = null) {
-        this._states.set(id, {name, value, initialValue});
+    _trackState(id, name, value, initialValue, persistent = null, applyValue = null) {
+        // `applyValue` writes through to the closure that `read()` returns, so
+        // DevTools time travel (JUMP_TO_STATE / RESET) can change the live value
+        // instead of only the bookkeeping copy.
+        this._states.set(id, {name, value, initialValue, applyValue});
         if (persistent) {
             this._persistentStates.set(id, persistent);
         }
@@ -370,14 +375,16 @@ class ReactiveSystem {
             const oldValue = value;
             value = newValue;
 
+            // Keep the bookkeeping copy in sync (inspect(), DevTools snapshots).
+            // This mutates the existing entry — it does NOT call _trackState,
+            // which would allocate a new object on every write.
+            const entry = this._states.get(id);
+            if (entry) entry.value = value;
+
             if (persistent) {
                 this._savePersistent(persistent.key, persistent.storage, value, persistent.onQuotaExceeded ?? null);
             }
 
-            // NOTE: _trackState is intentionally NOT called here — it belongs at
-            // creation time only. Calling it on every write caused a redundant
-            // Map.set + object allocation per write, showing as 5× overhead in
-            // batch(100) benchmarks despite correct deduplication in the flush queue.
             this._sendDevToolsUpdate('state:changed', {
                 id,
                 name,
@@ -399,7 +406,7 @@ class ReactiveSystem {
 
         read.__isOjaSignal = true;
 
-        this._trackState(id, name, value, initialValue, persistent);
+        this._trackState(id, name, value, initialValue, persistent, (next) => { value = next; });
         return [read, write];
     }
 
@@ -408,6 +415,10 @@ class ReactiveSystem {
         if (!state) return;
 
         const oldValue = state.value;
+
+        // Write through to the closure so read() and inspect() agree — this is
+        // the DevTools time-travel path (JUMP_TO_STATE / RESET).
+        state.applyValue?.(newValue);
         state.value = newValue;
 
         const persistent = this._persistentStates.get(id);
@@ -502,13 +513,15 @@ class ReactiveSystem {
 
     _flush() {
         if (this._flushDepth >= MAX_FLUSH_DEPTH) {
-            const error = `[oja/reactive] Maximum update depth (${MAX_FLUSH_DEPTH}) exceeded. Likely a circular dependency.`;
-            console.error(error);
+            const error = new Error(`[oja/reactive] Maximum update depth (${MAX_FLUSH_DEPTH}) exceeded. Likely a circular dependency.`);
             this._sendDevToolsUpdate('error:max-depth', {depth: this._flushDepth});
 
+            // Drop the runaway queue, but reset the depth first so the guard
+            // does not fire forever, and report instead of logging silently.
             this._flushDepth = 0;
             this._effectQueue.clear();
             this._scheduled = false;
+            this._reportError(error, 'reactive:max-depth');
             return;
         }
 
@@ -519,14 +532,39 @@ class ReactiveSystem {
 
         this._sendDevToolsUpdate('flush:start', {count: queue.length, depth: this._flushDepth});
 
-        for (const effect of queue) {
-            if (this._dirtyFlags.has(effect)) {
-                effect();
+        try {
+            for (const effect of queue) {
+                if (!this._dirtyFlags.has(effect)) continue;
+                try {
+                    effect();
+                } catch (err) {
+                    // One failing subscriber must not starve the rest of the
+                    // queue, and must not leak the depth counter. The error is
+                    // surfaced through runtime.reportError instead of escaping
+                    // into an unhandled microtask.
+                    this._reportError(err, 'reactive:effect');
+                }
             }
+        } finally {
+            this._sendDevToolsUpdate('flush:end', {depth: this._flushDepth});
+            this._flushDepth--;
         }
+    }
 
-        this._sendDevToolsUpdate('flush:end', {depth: this._flushDepth});
-        this._flushDepth--;
+    /**
+     * Report an error raised inside the reactive system.
+     *
+     * Goes through runtime.reportError() so applications can handle it with a
+     * single hook (logger capture, toast, Sentry…). When no hook is registered
+     * the error is logged, so a broken effect is never silent.
+     */
+    _reportError(err, source) {
+        this._sendDevToolsUpdate('error:effect', { source, error: err?.message });
+
+        let handled = 0;
+        try { handled = runtime.reportError(err, source); } catch { /* never throw from reporting */ }
+
+        if (!handled) console.error(`[oja/reactive] ${source}:`, err);
     }
 
     // Run fn without tracking signal dependencies
