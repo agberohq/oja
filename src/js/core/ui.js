@@ -97,6 +97,79 @@ import { listen, emit, on as _on, once as _once } from './events.js';
 import { effect }                                    from './reactive.js';
 import { currentContainer }                          from './_context.js';
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Tags that must be created in the SVG namespace. `document.createElement('svg')`
+// produces an HTML element whose <path> children never paint — the workaround
+// every consumer app had to write. Keep this list intentionally small and
+// extend it only for tags consumers actually build with make().
+const SVG_TAGS = new Set([
+    'svg', 'path', 'circle', 'line', 'polyline', 'polygon', 'rect', 'g',
+    'defs', 'use', 'text', 'tspan', 'mask', 'clipPath', 'linearGradient',
+    'radialGradient', 'stop', 'filter', 'feGaussianBlur', 'feTurbulence',
+    'feDisplacementMap', 'foreignObject',
+]);
+
+// Top-level props accepted by make(). These are the attributes every consumer
+// reached for first and then had to nest under `attrs` (or write raw HTML).
+// `attrs` is still merged afterwards and wins on conflict.
+const MAKE_PROPS = new Set([
+    'href', 'src', 'alt', 'title', 'type', 'name', 'value', 'placeholder',
+    'disabled', 'checked', 'selected', 'readonly', 'required', 'multiple',
+    'download', 'target', 'rel', 'for', 'role', 'tabindex', 'autocomplete',
+    'min', 'max', 'step', 'rows', 'cols', 'accept', 'capture', 'pattern',
+    'maxlength', 'minlength', 'autofocus', 'novalidate', 'enctype', 'method',
+    'action', 'form', 'list', 'size', 'wrap', 'spellcheck', 'contenteditable',
+    'draggable', 'hidden', 'lang', 'dir',
+]);
+
+const BOOLEAN_PROPS = new Set([
+    'disabled', 'readonly', 'required', 'multiple',
+    'autofocus', 'novalidate', 'hidden', 'draggable', 'spellcheck',
+    'contenteditable',
+]);
+
+function _isSvgTag(tag) {
+    return SVG_TAGS.has(tag);
+}
+
+function _applyMakeProps(el, options, isSvg) {
+    for (const key of MAKE_PROPS) {
+        if (!(key in options)) continue;
+        let value = options[key];
+
+        if (BOOLEAN_PROPS.has(key)) {
+            if (key in el && typeof el[key] === 'boolean') el[key] = !!value;
+            else if (value) el.setAttribute(key, '');
+            else el.removeAttribute(key);
+            continue;
+        }
+
+        if (value === null || value === undefined) {
+            el.removeAttribute(key);
+            continue;
+        }
+
+        value = String(value);
+
+        // Property-first for form controls so `value`/`type` behave exactly
+        // like the native element. SVG has no such properties.
+        if (!isSvg && key === 'value' && 'value' in el) {
+            el.value = value;
+            continue;
+        }
+        if (!isSvg && (key === 'checked' || key === 'selected')) {
+            const on = !!options[key];
+            el[key] = on;
+            if (on) el.setAttribute(key, '');
+            else el.removeAttribute(key);
+            continue;
+        }
+
+        el.setAttribute(key, value);
+    }
+}
+
 export function find(selector, options = {}) {
     const scope   = options.scope ?? currentContainer() ?? document;
     const required = options.required ?? false;
@@ -346,7 +419,10 @@ export function make(tag, optionsOrChild, ...rest) {
         return _renderable(tag);
     }
 
-    const el = document.createElement(tag);
+    const isSvg = _isSvgTag(tag);
+    const el = isSvg
+        ? document.createElementNS(SVG_NS, tag)
+        : document.createElement(tag);
 
     // Determine if second arg is options or a child
     let options = {};
@@ -368,20 +444,26 @@ export function make(tag, optionsOrChild, ...rest) {
 
     // Apply options
 
-    if (options.id) el.id = options.id;
+    if (options.id) el.setAttribute('id', String(options.id));
 
     if (options.class) {
         if (Array.isArray(options.class)) {
-            el.classList.add(...options.class.filter(Boolean));
+            el.setAttribute('class', options.class.filter(Boolean).join(' '));
         } else {
-            // String — assign directly so 'card active' works as-is
-            el.className = options.class;
+            // String — assign directly so 'card active' works as-is.
+            // setAttribute works for both HTML and SVG (SVGElement.className
+            // is an SVGAnimatedString, so string assignment silently fails).
+            el.setAttribute('class', options.class);
         }
     }
 
     if (options.style) {
         Object.assign(el.style, options.style);
     }
+
+    // Top-level props are applied before attrs so attrs remains the escape
+    // hatch; attrs wins on conflict.
+    _applyMakeProps(el, options, isSvg);
 
     if (options.attrs) {
         for (const [k, v] of Object.entries(options.attrs)) {
@@ -391,13 +473,15 @@ export function make(tag, optionsOrChild, ...rest) {
 
     if (options.data) {
         for (const [k, v] of Object.entries(options.data)) {
-            if (v !== null && v !== undefined) el.dataset[k] = String(v);
+            if (v !== null && v !== undefined) {
+                el.setAttribute(`data-${String(k).replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, String(v));
+            }
         }
     }
 
     if (options.on) {
         for (const [event, handler] of Object.entries(options.on)) {
-            if (typeof handler === 'function') el.addEventListener(event, handler);
+            if (typeof handler === 'function') _on(el, event, handler);
         }
     }
 
@@ -422,6 +506,11 @@ export function make(tag, optionsOrChild, ...rest) {
 
     children.forEach(_append);
 
+    // A <select> can only resolve `value` after its options exist.
+    if (!isSvg && options.value !== undefined && el.tagName === 'SELECT') {
+        el.value = String(options.value);
+    }
+
     return _renderable(el);
 }
 
@@ -431,6 +520,10 @@ export function make(tag, optionsOrChild, ...rest) {
 const _TAGS = [
     'div', 'span', 'p', 'a', 'button', 'input', 'textarea', 'select',
     'form', 'label', 'img', 'svg',
+    'path', 'circle', 'line', 'polyline', 'polygon', 'rect', 'g',
+    'defs', 'use', 'text', 'tspan', 'mask', 'clipPath', 'linearGradient',
+    'radialGradient', 'stop', 'filter', 'feGaussianBlur', 'feTurbulence',
+    'feDisplacementMap', 'foreignObject',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'ul', 'ol', 'li',
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
@@ -443,6 +536,58 @@ const _TAGS = [
 _TAGS.forEach(tag => {
     make[tag] = (optionsOrChild, ...rest) => make(tag, optionsOrChild, ...rest);
 });
+
+// make.svg({ paths: ['M…', 'M…'], viewBox, size, stroke, strokeWidth })
+// Convenience for icon construction. Normal make.svg(options, ...children)
+// keeps working because `paths` is optional.
+/**
+ * icon(paths, options) — shorthand for make.svg({ paths }).
+ * Accepts a single path string or an array of path `d` strings.
+ *
+ *   const plus = icon(['M12 5v14', 'M5 12h14'], { size: 16 });
+ */
+export function icon(paths, options = {}) {
+    return make.svg({ ...options, paths: Array.isArray(paths) ? paths : [paths] });
+}
+
+make.svg = (optionsOrChild, ...rest) => {
+    const opts = (optionsOrChild && typeof optionsOrChild === 'object' && !Array.isArray(optionsOrChild))
+        ? optionsOrChild
+        : {};
+    const {
+        paths = null,
+        size = null,
+        viewBox = '0 0 24 24',
+        stroke = 'currentColor',
+        strokeWidth = 2,
+        fill = 'none',
+        ...svgOpts
+    } = opts;
+
+    if (!Array.isArray(paths)) {
+        return make('svg', optionsOrChild, ...rest);
+    }
+
+    const attrs = {
+        viewBox,
+        fill,
+        stroke,
+        'stroke-width': strokeWidth,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'aria-hidden': 'true',
+        ...(size != null ? { width: size, height: size } : {}),
+        ...(svgOpts.attrs || {}),
+    };
+    const svg = make('svg', { ...svgOpts, attrs });
+    for (const d of paths) {
+        if (d) svg.appendChild(make('path', { attrs: { d } }));
+    }
+    for (const child of rest) {
+        if (child != null) svg.appendChild(child instanceof Node ? child : document.createTextNode(String(child)));
+    }
+    return svg;
+};
 
 export function empty(target) {
     const el = typeof target === 'string' ? document.querySelector(target) : target;
