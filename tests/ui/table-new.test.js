@@ -24,6 +24,47 @@ function makeContainer() {
 beforeEach(() => { document.body.innerHTML = ''; });
 
 
+describe('table shell classes and accessibility', () => {
+    it('applies custom classes and an aria-label', () => {
+        const container = makeContainer();
+        table.render(container, ROWS, HEADERS, {
+            classes: { wrap: 'my-wrap', table: 'my-table', footer: 'my-footer', footerLeft: 'my-left' },
+            ariaLabel: 'Hosts table',
+        });
+        expect(container.classList.contains('my-wrap')).toBe(true);
+        const tbl = container.querySelector('table');
+        expect(tbl.classList.contains('my-table')).toBe(true);
+        expect(tbl.getAttribute('aria-label')).toBe('Hosts table');
+        expect(container.querySelector('.oja-table-footer').classList.contains('my-footer')).toBe(true);
+        expect(container.querySelector('.oja-table-footer-left').classList.contains('my-left')).toBe(true);
+    });
+
+    it('applies row, header and cell classes', () => {
+        const container = makeContainer();
+        table.render(container, ROWS, HEADERS, {
+            classes: { headerRow: 'h-row', headerCell: 'h-cell', row: 'b-row', cell: 'b-cell' },
+        });
+        expect(container.querySelector('thead tr').classList.contains('h-row')).toBe(true);
+        expect(container.querySelector('thead th').classList.contains('h-cell')).toBe(true);
+        expect(container.querySelector('tbody tr').classList.contains('b-row')).toBe(true);
+        expect(container.querySelector('tbody td').classList.contains('b-cell')).toBe(true);
+    });
+
+    it('renders each header exactly once', () => {
+        const container = makeContainer();
+        table.render(container, ROWS, HEADERS);
+        const labels = [...container.querySelectorAll('thead th')].map(th => th.textContent.trim());
+        expect(labels).toEqual(['Name', 'Region', 'Status']);
+    });
+
+    it('uses CSS classes for the resize handle and expanded row cell', () => {
+        const container = makeContainer();
+        table.render(container, ROWS, HEADERS, { resizableColumns: true });
+        expect(container.querySelector('.oja-th-resize-handle')).toBeTruthy();
+        expect(container.querySelector('thead th').style.position).toBe('');
+    });
+});
+
 describe('table column visibility controls', () => {
     it('hideColumn() removes a column from the rendered table', () => {
         const container = makeContainer();

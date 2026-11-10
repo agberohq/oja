@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Api } from '../../src/js/core/api.js';
 
-// ---------------------------------------------------------------------------
 // raw: true must not strip a caller-supplied Content-Type.
 //
 // Regression: `post(url, body, { raw: true, headers: { 'Content-Type': '…' } })`
 // used to delete the header, so a plain-text/HCL upload arrived with no
 // Content-Type at all. Servers that pick a decoder from that header then
 // defaulted to JSON and rejected the body (agbero's host-config create).
-// ---------------------------------------------------------------------------
+
 describe('Api raw bodies keep an explicit Content-Type', () => {
     let fetchSpy;
 
