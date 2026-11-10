@@ -88,6 +88,7 @@ function _sortRows(rows, key, dir) {
 // Build a <td> element from a cell descriptor, header, row, and options.
 function _buildTd(cell, header, row, opts) {
     const td = document.createElement('td');
+    if (opts.cellClass) td.classList.add(...String(opts.cellClass).split(/\s+/).filter(Boolean));
 
     if (cell.attrs) {
         for (const [k, v] of Object.entries(cell.attrs)) td.setAttribute(k, v);
@@ -183,7 +184,11 @@ export const table = {
             mobile         = { summaryColumns: 2 },
             fetchData      = null,
             resizableColumns = false,   // drag-to-resize column widths
+            classes        = {},
+            ariaLabel      = '',
         } = opts;
+
+        const _cls = (base, key) => [base, classes[key]].filter(Boolean).join(' ');
 
         // State
         let localRows      = rows ||[];
@@ -204,13 +209,14 @@ export const table = {
         // Shell
 
         container.innerHTML = '';
-        container.className = `oja-table-wrap${compact ? ' oja-table-compact' : ''}`;
+        container.className = _cls(`oja-table-wrap${compact ? ' oja-table-compact' : ''}`, 'wrap');
 
         const scrollDiv = document.createElement('div');
         scrollDiv.className = 'oja-table-scroll';
 
         const tbl    = document.createElement('table');
-        tbl.className = 'oja-table';
+        tbl.className = _cls('oja-table', 'table');
+        if (ariaLabel) tbl.setAttribute('aria-label', ariaLabel);
         const thead  = document.createElement('thead');
         const tbody  = document.createElement('tbody');
         tbl.append(thead, tbody);
@@ -218,7 +224,7 @@ export const table = {
         container.appendChild(scrollDiv);
 
         const footerDiv = document.createElement('div');
-        footerDiv.className = 'oja-table-footer';
+        footerDiv.className = _cls('oja-table-footer', 'footer');
         container.appendChild(footerDiv);
 
         // All columns including optional extras
@@ -237,9 +243,10 @@ export const table = {
         function _buildHeader() {
             thead.innerHTML = '';
             const tr = document.createElement('tr');
+            if (classes.headerRow) tr.classList.add(...String(classes.headerRow).split(/\s+/).filter(Boolean));
             for (const col of _allCols()) {
                 const th = document.createElement('th');
-                th.style.position = 'relative'; // needed for resize handle
+                if (classes.headerCell) th.classList.add(...String(classes.headerCell).split(/\s+/).filter(Boolean));
                 th.innerHTML = col.label;
                 if (col.width) th.style.width = col.width;
                 if (col.minWidth) th.style.minWidth = typeof col.minWidth === 'number' ? col.minWidth + 'px' : col.minWidth;
@@ -263,6 +270,10 @@ export const table = {
                         cb.addEventListener('change', h);
                         _listeners.push({ el: cb, type: 'change', handler: h });
                     }
+                } else if (col._num) {
+                    th.classList.add('oja-th-num');
+                } else if (col._actions) {
+                    th.classList.add('oja-th-actions');
                 } else if (col.sortable) {
                     th.classList.add('oja-th-sortable');
                     th.setAttribute('data-key', col.key);
@@ -275,8 +286,7 @@ export const table = {
                 // Drag-to-resize handle
                 if (resizableColumns && !col._select && !col._actions) {
                     const handle = document.createElement('div');
-                    handle.className = 'oja-th-resize-handle';
-                    handle.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:1;user-select:none;';
+                    handle.className = _cls('oja-th-resize-handle', 'resizeHandle');
                     handle.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -359,6 +369,7 @@ export const table = {
 
         function _buildRow(row, index, globalIndex) {
             const tr = document.createElement('tr');
+            if (classes.row) tr.classList.add(...String(classes.row).split(/\s+/).filter(Boolean));
             if (onRowClick) {
                 tr.classList.add('oja-row-clickable');
                 const h = () => onRowClick(row);
@@ -411,14 +422,14 @@ export const table = {
                     tr.appendChild(td);
                     continue;
                 }
-                tr.appendChild(_buildTd(_cell(row, col.key), col, row, { columnCallbacks, truncateMode }));
+                tr.appendChild(_buildTd(_cell(row, col.key), col, row, { columnCallbacks, truncateMode, cellClass: classes.cell }));
             }
             return tr;
         }
 
         function _buildMobileCard(row, globalIndex) {
             const card = document.createElement('div');
-            card.className = 'oja-card';
+            card.className = _cls('oja-card', 'card');
 
             const visibleHeaders = headers.filter(h => h.mobile !== false);
             const summaryCount   = mobile.summaryColumns ?? 2;
@@ -432,8 +443,7 @@ export const table = {
                     const id = String(row.id ?? globalIndex);
                     const cb = document.createElement('input');
                     cb.type = 'checkbox';
-                    cb.className = 'oja-table-select-row';
-                    cb.style.marginRight = '8px';
+                    cb.className = 'oja-table-select-row oja-card-select';
                     cb.checked = selectedIds.has(id);
                     const h = (e) => {
                         e.stopPropagation();
@@ -604,7 +614,7 @@ export const table = {
             for (const [key, groupRows] of groups) {
                 // Group header
                 const groupTr = document.createElement('tr');
-                groupTr.className = 'oja-group-header';
+                groupTr.className = _cls('oja-group-header', 'groupRow');
                 const groupTd = document.createElement('td');
                 groupTd.colSpan = _allCols().length;
                 const isOpen = expandedGroups.has(key);
@@ -663,10 +673,7 @@ export const table = {
             footerDiv.innerHTML = '';
 
             const leftWrap = document.createElement('div');
-            leftWrap.className = 'oja-table-footer-left';
-            leftWrap.style.display = 'flex';
-            leftWrap.style.gap = '12px';
-            leftWrap.style.alignItems = 'center';
+            leftWrap.className = _cls('oja-table-footer-left', 'footerLeft');
             footerDiv.appendChild(leftWrap);
 
             if (exportable) {
@@ -905,7 +912,7 @@ export const table = {
                         expandRow.className = 'oja-row-expanded';
                         const td = document.createElement('td');
                         td.colSpan = colspan;
-                        td.style.padding = '0';
+                        td.className = 'oja-row-expanded-cell';
 
                         const sourceRow = (localRows[idx] || {});
                         const result = factory(sourceRow, idx);
@@ -924,8 +931,8 @@ export const table = {
                 container.addEventListener('click', _listeners[_listeners.length - 1].handler);
 
                 // Add expand icon to first data column in header
-                const firstTh = container.querySelector('thead th:not([data-select]):not([data-num])');
-                if (firstTh) firstTh.style.paddingLeft = '28px';
+                const firstTh = container.querySelector('thead th:not(.oja-th-select):not(.oja-th-num):not(.oja-th-actions)');
+                if (firstTh) firstTh.classList.add('oja-th-expand');
 
                 return this;
             },
