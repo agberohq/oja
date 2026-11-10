@@ -82,6 +82,16 @@
  *   const html = editor.getContent();
  *   const text = editor.getText();
  *
+ * ─── Control builders (opt-in Oja classes) ───────────────────────────────────
+ *
+ *   form.field({ label: 'Name', control: input, hint: '…' });
+ *   form.row(input, select, button);
+ *   form.inputControl({ label: 'Name', type: 'text', value: 'Ada' });
+ *   form.selectControl({ label: 'Role', options: [...], value: 'admin' });
+ *
+ *   form.input('#search', { source })   // existing autocomplete enhancer
+ *   form.select('#role', { options })   // existing select enhancer
+ *
  * ─── Select, radio, checkbox ─────────────────────────────────────────────────
  *
  *   // Select with options
@@ -153,6 +163,7 @@
  */
 
 import { Out }          from '../core/out.js';
+import { make }         from '../core/ui.js';
 import { autocomplete } from './autocomplete.js';
 
 const _dirtyState = new WeakMap(); // form -> Map<fieldName, { original, current, isDirty }>
@@ -160,7 +171,70 @@ const _dirtyListeners = new WeakMap(); // form -> Set<function>
 const _fieldWatchers = new WeakMap(); // field -> Set<{ type, fn, debounced }>
 const _editorInstances = new Map(); // field -> editor instance — must be Map, not WeakMap, because collect() iterates it
 
+let _fieldSeq = 0;
+
+function _mergeClass(base, extra) {
+    return [base, extra].filter(Boolean).join(' ');
+}
+
 export const form = {
+
+    // control builders
+    // Thin helpers over make(). They create the Oja control classes from
+    // src/css/oja.css; apps that prefer their own classes can ignore them.
+
+    /**
+     * field({ label, control, hint, error, id, required })
+     * Wrap an existing control in label/hint/error markup.
+     */
+    field({ label = '', control = null, hint = '', error = '', id = '', required = false } = {}) {
+        if (!control) {
+            console.warn('[oja/form] field() requires a control element');
+            return null;
+        }
+        const wrap = make.div({ class: 'oja-field' });
+        const controlId = id || control.id || `oja-field-${++_fieldSeq}`;
+        control.id = controlId;
+        if (required) control.setAttribute('required', '');
+
+        if (label) {
+            wrap.appendChild(make.label({
+                class: 'oja-field-label',
+                attrs: { for: controlId },
+                text: label,
+            }));
+        }
+        wrap.appendChild(control);
+        if (hint) wrap.appendChild(make.span({ class: 'oja-field-hint', text: hint }));
+        if (error) wrap.appendChild(make.span({ class: 'oja-field-error', text: error }));
+        return wrap;
+    },
+
+    /** row(...controls) — a .oja-control-row wrapper. Accepts arrays too. */
+    row(...controls) {
+        return make.div({ class: 'oja-control-row' }, ...controls);
+    },
+
+    /** inputControl({ label, ...makeProps }) — an .oja-input, optionally wrapped. */
+    inputControl({ label = '', class: cls = '', ...options } = {}) {
+        const el = make('input', { ...options, class: _mergeClass('oja-input', cls) });
+        return label ? form.field({ label, control: el }) : el;
+    },
+
+    /** selectControl({ label, options, value, ...makeProps }) — .oja-select-input. */
+    selectControl({ label = '', options = [], value = undefined, class: cls = '', ...rest } = {}) {
+        const el = make('select', { ...rest, class: _mergeClass('oja-select-input', cls) });
+        for (const opt of options) {
+            const o = make('option', {
+                attrs: { value: opt.value },
+                text: opt.label ?? String(opt.value ?? ''),
+            });
+            if (value !== undefined && String(opt.value) === String(value)) o.selected = true;
+            el.appendChild(o);
+        }
+        if (value !== undefined) el.value = String(value);
+        return label ? form.field({ label, control: el }) : el;
+    },
 
     /**
      * Wire a form's full submit lifecycle.
@@ -559,6 +633,11 @@ export const form = {
      *   });
      */
     select(target, options = {}) {
+        // Builder overload: form.select({ options, value, label }) creates a
+        // new control. form.select('#id', options) keeps the enhancer API.
+        if (target && typeof target === 'object' && !(target instanceof Element)) {
+            return form.selectControl(target);
+        }
         const el = _resolve(target);
         if (!el || el.tagName !== 'SELECT') return this;
 
@@ -1511,6 +1590,11 @@ export const form = {
      *   form.input('#host-search', { source: search, fuzzy: true, onSelect: (r) => fill(r.doc) });
      */
     input(target, options = {}) {
+        // Builder overload: form.input({ type, value, label }) creates a new
+        // control. form.input('#id', options) keeps the autocomplete API.
+        if (target && typeof target === 'object' && !(target instanceof Element)) {
+            return form.inputControl(target);
+        }
         const el = _resolve(target);
         if (!el) return null;
         return autocomplete.attach(el, options);

@@ -1,15 +1,19 @@
 /**
      * oja/oja.css
      * The only CSS Oja owns.
-     * App styles live in the app — Oja never touches them.
+     * App styles live in the app — Oja never styles a bare element it was not
+     * given a class for. Every component rule is prefixed `.oja-*`.
      *
-     * Four things only:
+     * This file contains:
      *   1. Page transitions (entering / leaving)
      *   2. Component lifecycle (add / remove / update)
      *   3. Form error states
      *   4. Toast notifications and banners
+     *   5. Opt-in controls (.oja-input/.oja-btn/.oja-control-row/…)
+     *   6. Component skins (table, select, panel, modal, confirm, knob)
      *
      * Animation durations here must match CSS_TRANSITION_MS in component.js (250ms).
+     * `make css` is the only writer of build/oja.min.css.
      */
 
 /* Page transitions */
@@ -301,6 +305,20 @@ TABLE
     border-collapse: collapse;
     line-height: 1.4;
 }
+
+.oja-table th { position: relative; }
+.oja-th-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 1;
+    user-select: none;
+}
+.oja-row-expanded-cell { padding: 0 !important; }
+.oja-th-expand { padding-left: 28px !important; }
 
 .oja-table th,
 .oja-table td {
@@ -618,6 +636,12 @@ TABLE
 
 /* Mobile cards */
 
+.oja-card-select { margin-right: 8px; }
+.oja-tree-item:focus-visible {
+    outline: 2px solid var(--accent, #0a84ff);
+    outline-offset: 2px;
+}
+
 .oja-mobile-cards {
     display: none;
     padding: 8px;
@@ -869,6 +893,75 @@ TABLE
 .oja-modal-lg   { max-width: 720px !important; width: 100%; }
 .oja-modal-xl   { max-width: 960px !important; width: 100%; }
 .oja-modal-full { max-width: 98vw  !important; width: 98vw; max-height: 96vh; }
+
+/* confirm dialog — auto-created by modal.confirm() when #confirmModal is absent */
+
+.oja-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9950;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, .55);
+}
+.oja-confirm-overlay.active { display: flex; }
+
+.oja-confirm {
+    width: min(440px, 100%);
+    max-height: 85vh;
+    overflow: auto;
+    padding: 20px;
+    border: 1px solid var(--border, rgba(255, 255, 255, .15));
+    border-radius: var(--radius, 8px);
+    background: var(--bg2, var(--panel-bg, #1e2228));
+    color: var(--text, #e0e0e0);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+}
+.oja-confirm-title {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text, #e0e0e0);
+}
+.oja-confirm-message {
+    margin: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-mute, rgba(255, 255, 255, .6));
+}
+.oja-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+.oja-confirm-actions button {
+    min-height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--border, rgba(255, 255, 255, .15));
+    border-radius: var(--radius, 6px);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.oja-confirm-actions [data-confirm-ok] {
+    border-color: transparent;
+    background: var(--accent, #0a84ff);
+    color: var(--accent-ink, #fff);
+    font-weight: 600;
+}
+.oja-confirm-actions [data-confirm-ok].oja-btn-danger,
+.oja-confirm[data-variant="danger"] .oja-confirm-actions [data-confirm-ok] {
+    background: var(--danger, #f85149);
+    color: #fff;
+}
+.oja-confirm-actions button:focus-visible {
+    outline: 2px solid var(--accent, #0a84ff);
+    outline-offset: 2px;
+}
 
 /* ===============================================================================
    ANIMATE - shake
@@ -1305,6 +1398,12 @@ TABLE
     transition: background 0.1s;
 }
 .oja-dp-nav button:hover { background: var(--hover-bg, rgba(255,255,255,0.08)); }
+.oja-dp-nav button:focus-visible,
+.oja-dp-footer button:focus-visible,
+.oja-dp-day:focus-visible {
+    outline: 2px solid var(--accent, #0a84ff);
+    outline-offset: 1px;
+}
 .oja-dp-heading {
     font-size: 13px; font-weight: 600; color: var(--text, #e0e0e0);
     cursor: pointer; padding: 4px 8px; border-radius: 4px;
@@ -1544,6 +1643,7 @@ TABLE
 /* select */
 .oja-select { position: relative; display: block; }
 .oja-select-trigger {
+    box-sizing: border-box;
     display: flex; align-items: center; justify-content: space-between;
     min-height: var(--input-h, 36px); padding: 0 10px;
     border: 1px solid var(--border, rgba(255,255,255,0.15));
@@ -1556,7 +1656,17 @@ TABLE
 .oja-select-trigger:hover, .oja-select.open .oja-select-trigger {
     border-color: var(--accent, #0a84ff);
 }
+.oja-select-trigger:focus-visible {
+    outline: 2px solid var(--accent, #0a84ff);
+    outline-offset: -1px;
+}
 .oja-select-trigger.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.oja-select[data-size="sm"] .oja-select-trigger {
+    min-height: var(--oja-control-h-sm, 28px);
+    padding: 0 8px;
+    font-size: 12px;
+}
+.oja-select[data-size="sm"] .oja-select-arrow { width: 9px; height: 9px; }
 .oja-select-value { flex: 1; min-width: 0; }
 .oja-select-placeholder { color: var(--text-mute, rgba(255,255,255,0.35)); }
 .oja-select-tag {
@@ -1574,7 +1684,18 @@ TABLE
     transition: opacity 0.1s;
 }
 .oja-select-clear:hover { opacity: 0.9; }
-.oja-select-arrow { opacity: 0.5; font-size: 10px; transition: transform 0.15s; }
+.oja-select-arrow {
+    display: block;
+    width: 10px;
+    height: 10px;
+    flex: none;
+    background: currentColor;
+    -webkit-mask: var(--oja-control-chevron) center / contain no-repeat;
+    mask: var(--oja-control-chevron) center / contain no-repeat;
+    opacity: 0.55;
+    transform-origin: center;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
 .oja-select.open .oja-select-arrow { transform: rotate(180deg); }
 
 .oja-select-dropdown {
@@ -1624,4 +1745,376 @@ TABLE
 .oja-select-loading {
     padding: 16px; text-align: center; color: var(--text-mute, rgba(255,255,255,0.4));
     font-size: 12px;
+}
+
+/* ── controls ────────────────────────────────────────────────────────────────
+   Opt-in, prefixed classes only. Oja never styles a bare input/select/button.
+   Apps that do not use .oja-input/.oja-btn/.oja-control-row are untouched.
+   `make css` builds this file into build/oja.min.css.                     */
+
+:root {
+    --oja-control-h: 34px;
+    --oja-control-h-sm: 28px;
+    --oja-control-pad-x: 10px;
+    --oja-control-radius: var(--oja-radius, 6px);
+    --oja-control-border: var(--border, rgba(255, 255, 255, 0.15));
+    --oja-control-bg: var(--input-bg, var(--bg2, rgba(255, 255, 255, 0.05)));
+    --oja-control-color: var(--text, #e0e0e0);
+    --oja-control-font: 13px;
+    --oja-control-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%239AA3AF' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.oja-control-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.oja-control-row > .oja-btn,
+.oja-control-row > .oja-icon-btn { flex: none; }
+
+.oja-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+.oja-field-label { font-size: 11px; font-weight: 500; color: var(--text-mute, #6b7280); }
+.oja-field-hint  { font-size: 11px; color: var(--text-mute, #6b7280); }
+.oja-field-error { font-size: 11px; color: var(--danger, #f85149); }
+
+.oja-input,
+.oja-select-input,
+.oja-textarea,
+.oja-btn,
+.oja-icon-btn {
+    box-sizing: border-box;
+    font: inherit;
+    font-size: var(--oja-control-font);
+    color: var(--oja-control-color);
+    border: 1px solid var(--oja-control-border);
+    border-radius: var(--oja-control-radius);
+    background: var(--oja-control-bg);
+}
+
+.oja-input,
+.oja-select-input,
+.oja-btn {
+    height: var(--oja-control-h);
+    min-height: 0;
+    padding-block: 0;
+}
+
+.oja-input,
+.oja-select-input {
+    padding-inline: var(--oja-control-pad-x);
+    width: 100%;
+    min-width: 0;
+}
+.oja-field .oja-input,
+.oja-field .oja-select-input,
+.oja-field .oja-textarea { width: 100%; }
+.oja-control-row .oja-input { flex: 1 1 180px; width: auto; }
+.oja-control-row .oja-select-input { flex: 0 1 auto; width: auto; }
+
+.oja-select-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: calc(var(--oja-control-pad-x) + 22px);
+    background-image: var(--oja-control-chevron);
+    background-repeat: no-repeat;
+    background-position: right var(--oja-control-pad-x) center;
+    background-size: 12px 12px;
+    line-height: normal;
+    cursor: pointer;
+}
+[dir="rtl"] .oja-select-input {
+    padding: 0 var(--oja-control-pad-x) 0 calc(var(--oja-control-pad-x) + 22px);
+    background-position: left var(--oja-control-pad-x) center;
+}
+
+.oja-textarea {
+    min-height: 80px;
+    padding: 10px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.oja-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding-inline: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+a.oja-btn { text-decoration: none; }
+
+.oja-btn-primary {
+    background: var(--accent, #0a84ff);
+    border-color: transparent;
+    color: var(--accent-ink, #fff);
+    font-weight: 600;
+}
+.oja-btn-primary:hover { filter: brightness(1.08); }
+.oja-btn-danger {
+    color: var(--danger, #f85149);
+    border-color: rgba(248, 81, 73, 0.35);
+    border-color: color-mix(in srgb, var(--danger, #f85149) 35%, transparent);
+}
+.oja-btn-primary.oja-btn-danger {
+    background: var(--danger, #f85149);
+    border-color: transparent;
+    color: #fff;
+}
+
+.oja-btn-sm,
+.oja-icon-btn,
+.oja-input-sm,
+.oja-select-input-sm { height: var(--oja-control-h-sm); }
+.oja-btn-sm,
+.oja-input-sm,
+.oja-select-input-sm { font-size: 12px; }
+.oja-btn-sm { padding-inline: 10px; }
+.oja-input-sm { padding-inline: 8px; }
+.oja-select-input-sm {
+    padding-left: 8px;
+    padding-right: calc(8px + 20px);
+    background-position: right 8px center;
+}
+[dir="rtl"] .oja-select-input-sm {
+    padding: 0 8px 0 calc(8px + 20px);
+    background-position: left 8px center;
+}
+.oja-icon-btn {
+    width: var(--oja-control-h-sm);
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.oja-input:focus-visible,
+.oja-select-input:focus-visible,
+.oja-textarea:focus-visible,
+.oja-btn:focus-visible,
+.oja-icon-btn:focus-visible {
+    outline: 2px solid var(--accent, #0a84ff);
+    outline-offset: -1px;
+}
+.oja-input:disabled,
+.oja-select-input:disabled,
+.oja-textarea:disabled,
+.oja-btn:disabled,
+.oja-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.oja-input[aria-invalid="true"],
+.oja-select-input[aria-invalid="true"],
+.oja-textarea[aria-invalid="true"] { border-color: var(--danger, #f85149); }
+
+/* knob */
+
+.oja-knob {
+    --oja-knob-size: 64px;
+    --oja-knob-track-color: rgba(255, 255, 255, 0.14);
+    --oja-knob-track-color: color-mix(in srgb, currentColor 14%, transparent);
+    --oja-knob-fill: var(--accent, #0a84ff);
+    --oja-knob-pointer: currentColor;
+    --oja-knob-label-color: var(--text-mute, #6b7280);
+    --oja-knob-value-color: var(--text, #e0e0e0);
+    --oja-knob-ring-width: 3;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    min-width: calc(var(--oja-knob-size) + 18px);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.oja-knob[data-size="sm"] { --oja-knob-size: 46px; }
+.oja-knob[data-size="lg"] { --oja-knob-size: 88px; }
+
+.oja-knob-stage {
+    position: relative;
+    width: var(--oja-knob-size);
+    aspect-ratio: 1;
+}
+.oja-knob-body {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 28%, #2a313b 0%, #141920 65%, #0d1116 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10),
+                inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+                0 8px 18px rgba(0, 0, 0, 0.35);
+    touch-action: none;
+}
+.oja-knob-cap {
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.oja-knob-cap:disabled { cursor: not-allowed; }
+.oja-knob-body svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+.oja-knob-track,
+.oja-knob-arc {
+    fill: none;
+    stroke-width: var(--oja-knob-ring-width);
+    stroke-linecap: round;
+    transform: rotate(135deg);
+    transform-origin: 32px 32px;
+}
+.oja-knob-track { stroke: var(--oja-knob-track-color); stroke-dasharray: 75 100; }
+.oja-knob-arc {
+    stroke: var(--oja-knob-fill);
+    filter: drop-shadow(0 0 3px var(--oja-knob-fill));
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--oja-knob-fill) 35%, transparent));
+}
+.oja-knob-pointer {
+    stroke: var(--oja-knob-pointer);
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.oja-knob-center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 18%;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: calc(var(--oja-knob-size) * 0.26);
+    font-variant-numeric: tabular-nums;
+    color: var(--oja-knob-value-color);
+    pointer-events: none;
+    overflow: hidden;
+}
+.oja-knob-label {
+    font-size: calc(var(--oja-knob-size) * 0.15);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--oja-knob-label-color);
+    white-space: nowrap;
+}
+.oja-knob-value {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: calc(var(--oja-knob-size) * 0.17);
+    color: var(--oja-knob-value-color);
+    font-variant-numeric: tabular-nums;
+}
+.oja-knob[data-variant="readout"] .oja-knob-value { display: none; }
+
+.oja-knob:focus-visible .oja-knob-body,
+.oja-knob-body:focus-visible {
+    outline: 2px solid var(--oja-knob-fill);
+    outline-offset: 4px;
+}
+.oja-knob[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
+
+/* selector: radial radio menu */
+
+.oja-knob[data-variant="selector"] {
+    min-width: calc(var(--oja-knob-size) * 1.8);
+}
+.oja-knob[data-variant="selector"] .oja-knob-stage {
+    margin-block: calc(var(--oja-knob-size) * 0.36);
+}
+.oja-knob[data-variant="selector"] .oja-knob-items {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+.oja-knob-item {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--oja-knob-size) * 0.34);
+    height: calc(var(--oja-knob-size) * 0.34);
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    background: var(--bg2, #1e2228);
+    color: var(--text, #e0e0e0);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    cursor: pointer;
+    transform: translate(-50%, -50%)
+               rotate(var(--oja-knob-angle, 0deg))
+               translateY(calc(var(--oja-knob-size) * -0.82))
+               rotate(calc(-1 * var(--oja-knob-angle, 0deg)));
+    transition: opacity 0.18s ease, transform 0.3s cubic-bezier(.2, .8, .2, 1),
+                visibility 0.18s, border-color 0.15s, color 0.15s;
+}
+.oja-knob[data-open="true"] .oja-knob-item {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(1) { transition-delay: 0ms; }
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(2) { transition-delay: 30ms; }
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(3) { transition-delay: 60ms; }
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(4) { transition-delay: 90ms; }
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(5) { transition-delay: 120ms; }
+.oja-knob[data-open="true"] .oja-knob-item:nth-child(6) { transition-delay: 150ms; }
+
+.oja-knob-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+.oja-knob-item-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.oja-knob-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-size: calc(var(--oja-knob-size) * 0.16);
+    pointer-events: none;
+}
+.oja-knob-item:has(.oja-knob-radio:checked) {
+    border-color: var(--oja-knob-fill);
+    color: var(--oja-knob-fill);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oja-knob-fill) 18%, transparent);
+}
+.oja-knob-item:focus-within {
+    outline: 2px solid var(--oja-knob-fill);
+    outline-offset: 2px;
+}
+.oja-knob[data-variant="selector"] .oja-knob-center {
+    font-size: calc(var(--oja-knob-size) * 0.24);
+    color: var(--oja-knob-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oja-knob-item { transition: none; }
+    .oja-knob-pointer { transition: none; }
 }
