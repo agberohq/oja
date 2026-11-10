@@ -183,6 +183,7 @@ export async function morph(container, newHtml, options = {}) {
 
     const {
         keyAttr       = 'data-oja-key',
+        preserveFocus = true,
         onBeforeMorph = null,
         onNodeAdded   = null,
         onNodeRemoved = null,
@@ -199,7 +200,7 @@ export async function morph(container, newHtml, options = {}) {
     const focusPath = _getFocusPath(document.activeElement);
     const selection = _saveSelection();
 
-    _morphChildren(el, incoming, { keyAttr, onBeforeMorph, onNodeAdded, onNodeRemoved });
+    _morphChildren(el, incoming, { keyAttr, preserveFocus, onBeforeMorph, onNodeAdded, onNodeRemoved });
 
     // Restore user state
     if (focusPath) {
@@ -231,15 +232,36 @@ export function shouldMorph(container, newHtml) {
     return _morphCache.get(el) !== _hash(newHtml);
 }
 
+function _isTextEntry(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName === 'INPUT') {
+        return !['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'hidden']
+            .includes((el.type || 'text').toLowerCase());
+    }
+    return el.isContentEditable === true;
+}
+
+// Attributes that can end a browser editing session (caret/IME/value) when a
+// focused field is rewritten. Leave them to the user while the field has focus.
+const _FOCUS_UNSAFE_ATTRS = new Set(['value', 'checked', 'selected', 'type', 'maxlength', 'minlength']);
+
 function _morphElement(target, source, opts) {
+    const focused = opts.preserveFocus && target === document.activeElement;
+    const focusedText = focused && _isTextEntry(target);
+
     // Text nodes
     if (target.nodeType === Node.TEXT_NODE && source.nodeType === Node.TEXT_NODE) {
         if (target.textContent !== source.textContent) target.textContent = source.textContent;
         return;
     }
 
-    // Incompatible node types or tags — replace wholesale
+    // Incompatible node types or tags — replace wholesale, except when that
+    // would replace the focused field or one of its ancestors. Losing focus and
+    // the live editing session is worse than one stale subtree; the next morph
+    // (or the blur handler) can reconcile it.
     if (target.nodeType !== source.nodeType || target.nodeName !== source.nodeName) {
+        if (opts.preserveFocus && target.contains?.(document.activeElement)) return;
         const replacement = source.cloneNode(true);
         Node.prototype.replaceChild.call(target.parentNode, replacement, target);
         opts.onNodeAdded?.(replacement);
@@ -255,24 +277,32 @@ function _morphElement(target, source, opts) {
         // Sync form element state without clobbering active user input
         if (tag === 'INPUT' || tag === 'TEXTAREA') {
             const srcVal = source.getAttribute('value') ?? '';
-            if (document.activeElement !== target && target.value !== srcVal) target.value = srcVal;
-            if (target.checked !== source.checked) target.checked = source.checked;
+            if (!focusedText && target.value !== srcVal) target.value = srcVal;
+            if (!focusedText && target.checked !== source.checked) target.checked = source.checked;
         }
         if (tag === 'SELECT') {
-            if (document.activeElement !== target && target.value !== source.value) target.value = source.value;
+            if (!focused && target.value !== source.value) target.value = source.value;
         }
 
-        _morphAttributes(target, source);
-        _morphChildren(target, source, opts);
+        _morphAttributes(target, source, { skip: focusedText ? _FOCUS_UNSAFE_ATTRS : null });
+
+        // A contenteditable host is the editing surface itself; rewriting its
+        // children moves the caret and can drop composition text.
+        if (!(focusedText && target.isContentEditable)) {
+            _morphChildren(target, source, opts);
+        }
     }
 }
 
-function _morphAttributes(target, source) {
+function _morphAttributes(target, source, opts = {}) {
+    const skip = opts.skip;
     for (let i = target.attributes.length - 1; i >= 0; i--) {
         const name = target.attributes[i].name;
+        if (skip?.has(name)) continue;
         if (!source.hasAttribute(name)) target.removeAttribute(name);
     }
     for (const { name, value } of source.attributes) {
+        if (skip?.has(name)) continue;
         if (target.getAttribute(name) !== value) target.setAttribute(name, value);
     }
 }
@@ -551,6 +581,33 @@ function _unbind(el, storeKey) {
  *       onItemRemove: (el) => cleanupTooltip(el),
  *   });
  */
+function _listExisting(parent, keyAttr) {
+    const all = Array.from(parent.children);
+    const keyed = new Map();
+    for (const child of all) {
+        const k = child.getAttribute(keyAttr);
+        if (k) keyed.set(k, child);
+    }
+    return { all, keyed };
+}
+
+function _removeUnkeyed(parent, allExisting, keyed, onItemRemove) {
+    const keyedNodes = new Set(keyed.values());
+    const unkeyed = allExisting.filter(node => !keyedNodes.has(node) && node.parentNode === parent);
+    if (unkeyed.length === 0) return;
+    if (typeof __OJA_DEV__ !== 'undefined' && __OJA_DEV__) {
+        console.warn(
+            `[oja/engine] list(): removing ${unkeyed.length} unkeyed child(ren). ` +
+            'The list container is managed by engine.list(); every existing child needs ' +
+            `a ${'data-oja-key'} (or the default keyAttr), or pass it through options.render().`
+        );
+    }
+    for (const node of unkeyed) {
+        onItemRemove?.(node);
+        node.remove();
+    }
+}
+
 export function list(container, items, options = {}) {
     const parent = _resolve(container);
     if (!parent) { console.warn('[oja/engine] list: container not found'); return; }
@@ -577,11 +634,7 @@ export function list(container, items, options = {}) {
         return;
     }
 
-    const existing = new Map();
-    for (const child of parent.children) {
-        const k = child.getAttribute(keyAttr);
-        if (k) existing.set(k, child);
-    }
+    const { all: allExisting, keyed: existing } = _listExisting(parent, keyAttr);
 
     const used  = new Set();
     const order = [];
@@ -608,6 +661,7 @@ export function list(container, items, options = {}) {
             el.remove();
         }
     }
+    _removeUnkeyed(parent, allExisting, existing, onItemRemove);
 
     _reorderChildren(parent, order);
 
@@ -664,11 +718,7 @@ export async function listAsync(container, items, options = {}) {
         return;
     }
 
-    const existing = new Map();
-    for (const child of parent.children) {
-        const k = child.getAttribute(keyAttr);
-        if (k) existing.set(k, child);
-    }
+    const { all: allExisting, keyed: existing } = _listExisting(parent, keyAttr);
 
     // Build slots synchronously — preserves order and reuses existing nodes immediately
     const slots = items.map((item, i) => {
@@ -687,14 +737,21 @@ export async function listAsync(container, items, options = {}) {
             el.remove();
         }
     }
+    _removeUnkeyed(parent, allExisting, existing, onItemRemove);
     _reorderChildren(parent, slots.map(s => s.slot));
 
     // Render all slots concurrently — each updates its slot in place
-    await Promise.all(slots.map(({ item, slot, i, isNew }) =>
-        Promise.resolve(render(item, slot, i)).then(() => {
-            if (isNew && onItemMount) onItemMount(slot, item, i);
-        })
-    ));
+    await Promise.all(slots.map(async ({ item, slot, i, isNew, itemKey }) => {
+        const rendered = await render(item, slot, i);
+        // list() already honours a returned element; listAsync() used to ignore
+        // it and leave the empty slot in the DOM. Keep the two contracts equal.
+        if (rendered instanceof Element && rendered !== slot) {
+            if (!rendered.getAttribute(keyAttr)) rendered.setAttribute(keyAttr, itemKey);
+            slot.replaceWith(rendered);
+            slot = rendered;
+        }
+        if (isNew && onItemMount) onItemMount(slot, item, i);
+    }));
 
     if (isFirstRender) {
         parent.setAttribute('data-oja-list-mounted', '');
