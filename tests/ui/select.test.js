@@ -33,6 +33,69 @@ describe('select.attach()', () => {
         expect(document.getElementById('field').style.display).toBe('none');
     });
 
+    it('supports size, aria label and custom classes', () => {
+        const { handle, wrap } = setup({
+            size: 'sm',
+            ariaLabel: 'Role',
+            classes: { root: 'my-root', trigger: 'my-trigger', arrow: 'my-arrow', option: 'my-option' },
+        });
+        expect(wrap.dataset.size).toBe('sm');
+        expect(wrap.classList.contains('my-root')).toBe(true);
+        const trigger = document.querySelector('.oja-select-trigger');
+        expect(trigger.getAttribute('aria-label')).toBe('Role');
+        expect(trigger.classList.contains('my-trigger')).toBe(true);
+        expect(document.querySelector('.oja-select-arrow').classList.contains('my-arrow')).toBe(true);
+        handle.destroy();
+    });
+
+    it('marks options with role and aria-selected', async () => {
+        const { handle } = setup({ value: 'editor' });
+        await handle.open();
+        const options = document.querySelectorAll('.oja-select-option');
+        expect(options[0].getAttribute('role')).toBe('option');
+        expect(options[0].getAttribute('aria-selected')).toBe('false');
+        expect(options[1].getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('wires aria-controls and aria-activedescendant', async () => {
+        const { handle } = setup();
+        const trigger = document.querySelector('.oja-select-trigger');
+        await handle.open();
+        const list = document.querySelector('.oja-select-list');
+        expect(trigger.getAttribute('aria-controls')).toBe(list.id);
+        const option = document.querySelector('.oja-select-option');
+        expect(option.id).toBeTruthy();
+
+        const keyTarget = document.querySelector('.oja-select-search input');
+        keyTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        const activeId = trigger.getAttribute('aria-activedescendant');
+        expect(activeId).toBeTruthy();
+        expect(document.getElementById(activeId)).toBeTruthy();
+
+        handle.close();
+        expect(trigger.hasAttribute('aria-activedescendant')).toBe(false);
+    });
+
+    it('supports Home and End in the list', async () => {
+        const { handle } = setup();
+        await handle.open();
+        const keyTarget = document.querySelector('.oja-select-search input');
+        keyTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+        const active = document.querySelector('.oja-select-option.active');
+        expect(active).toBeTruthy();
+        expect(active.textContent).toContain('Viewer');
+        keyTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+        expect(document.querySelector('.oja-select-option.active').textContent).toContain('Administrator');
+    });
+
+    it('uses an empty, aria-hidden arrow span (CSS draws the chevron)', () => {
+        setup();
+        const arrow = document.querySelector('.oja-select-arrow');
+        expect(arrow).toBeTruthy();
+        expect(arrow.textContent).toBe('');
+        expect(arrow.getAttribute('aria-hidden')).toBe('true');
+    });
+
     it('shows placeholder text initially', () => {
         setup({ placeholder: 'Pick one' });
         expect(document.querySelector('.oja-select-placeholder').textContent).toBe('Pick one');

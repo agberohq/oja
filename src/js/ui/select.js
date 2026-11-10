@@ -76,6 +76,8 @@ function _esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+let _selectSeq = 0;
+
 function _resolve(target) {
     if (!target) return null;
     if (target instanceof Element) return target;
@@ -92,6 +94,8 @@ export const select = {
     attach(target, options = [], opts = {}) {
         const anchor = _resolve(target);
         if (!anchor) { console.warn('[oja/select] target not found:', target); return null; }
+        const uid = `oja-select-${++_selectSeq}`;
+        const listId = `${uid}-list`;
 
         const {
             placeholder  = 'Select…',
@@ -105,7 +109,12 @@ export const select = {
             onSelect     = null,
             renderOption = null,
             value: initVal = multi ? [] : null,
+            size         = 'md',
+            ariaLabel    = '',
+            classes      = {},
         } = opts;
+
+        const _cls = (base, extra) => [base, extra].filter(Boolean).join(' ');
 
         // State
         let _options    = options;      // flat or grouped
@@ -120,7 +129,8 @@ export const select = {
 
         // DOM
         const wrap = document.createElement('div');
-        wrap.className = `oja-select${disabled ? ' disabled' : ''}`;
+        wrap.className = _cls(`oja-select${disabled ? ' disabled' : ''}`, classes.root);
+        wrap.dataset.size = size;
         anchor.insertAdjacentElement('afterend', wrap);
         if (anchor.tagName === 'SELECT' || anchor.tagName === 'INPUT') {
             anchor.style.display = 'none';
@@ -128,22 +138,26 @@ export const select = {
 
         // Trigger button
         const trigger = document.createElement('div');
-        trigger.className  = 'oja-select-trigger' + (disabled ? ' disabled' : '');
+        trigger.className  = _cls('oja-select-trigger' + (disabled ? ' disabled' : ''), classes.trigger);
+        trigger.setAttribute('aria-label', ariaLabel || placeholder || 'Select');
         trigger.tabIndex   = disabled ? -1 : 0;
         trigger.setAttribute('role', 'combobox');
         trigger.setAttribute('aria-expanded', 'false');
         trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-controls', listId);
 
         const valueEl = document.createElement('div');
-        valueEl.className = 'oja-select-value';
+        valueEl.className = _cls('oja-select-value', classes.value);
 
         const iconsEl = document.createElement('div');
-        iconsEl.className = 'oja-select-icons';
+        iconsEl.className = _cls('oja-select-icons', classes.icons);
 
         let clearBtn = null;
         if (clearable) {
             clearBtn = document.createElement('span');
-            clearBtn.className = 'oja-select-clear';
+            clearBtn.className = _cls('oja-select-clear', classes.clear);
+            clearBtn.setAttribute('role', 'button');
+            clearBtn.setAttribute('aria-label', 'Clear selection');
             clearBtn.textContent = '×';
             clearBtn.title = 'Clear selection';
             clearBtn.addEventListener('click', (e) => {
@@ -157,8 +171,10 @@ export const select = {
         }
 
         const arrow = document.createElement('span');
-        arrow.className = 'oja-select-arrow';
-        arrow.innerHTML = '&#9660;'; // ▼
+        arrow.className = _cls('oja-select-arrow', classes.arrow);
+        arrow.setAttribute('aria-hidden', 'true');
+        // CSS draws the chevron (--oja-control-chevron); a text glyph has
+        // font-dependent size and baseline and was the old alignment bug.
         iconsEl.appendChild(arrow);
 
         trigger.appendChild(valueEl);
@@ -225,7 +241,7 @@ export const select = {
                     valueEl.innerHTML = '';
                     for (const v of _selected) {
                         const tag = document.createElement('span');
-                        tag.className = 'oja-select-tag';
+                        tag.className = _cls('oja-select-tag', classes.tag);
                         tag.innerHTML = `${_esc(_getLabelFor(v))}<span class="oja-select-tag-remove" data-val="${_esc(String(v))}">×</span>`;
                         valueEl.appendChild(tag);
                     }
@@ -247,11 +263,17 @@ export const select = {
             _activeIdx = 0;
 
             if (_loading) {
-                listEl.innerHTML = `<div class="oja-select-loading">Loading…</div>`;
+                const loadingEl = document.createElement('div');
+                loadingEl.className = _cls('oja-select-loading', classes.loading);
+                loadingEl.textContent = 'Loading…';
+                listEl.appendChild(loadingEl);
                 return;
             }
             if (!items.length) {
-                listEl.innerHTML = `<div class="oja-select-empty">No options</div>`;
+                const emptyEl = document.createElement('div');
+                emptyEl.className = _cls('oja-select-empty', classes.empty);
+                emptyEl.textContent = 'No options';
+                listEl.appendChild(emptyEl);
                 return;
             }
 
@@ -260,18 +282,23 @@ export const select = {
                 if (opt._group && opt._group !== lastGroup) {
                     lastGroup = opt._group;
                     const hdr = document.createElement('div');
-                    hdr.className = 'oja-select-group-label';
+                    hdr.className = _cls('oja-select-group-label', classes.group);
                     hdr.textContent = opt._group;
                     listEl.appendChild(hdr);
                 }
 
                 const item = document.createElement('div');
-                item.className = [
+                item.className = _cls([
                     'oja-select-option',
                     _isSelected(opt.value) ? 'selected' : '',
                     opt.disabled ? 'disabled' : '',
-                ].filter(Boolean).join(' ');
+                    classes.option || '',
+                ].filter(Boolean).join(' '));
                 item.dataset.idx = i;
+                item.id = `${uid}-opt-${i}`;
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', String(_isSelected(opt.value)));
+                if (opt.disabled) item.setAttribute('aria-disabled', 'true');
 
                 if (renderOption) {
                     const custom = renderOption(opt);
@@ -285,7 +312,7 @@ export const select = {
                     }
                     item.appendChild(left);
                     const check = document.createElement('span');
-                    check.className = 'oja-select-check';
+                    check.className = _cls('oja-select-check', classes.check);
                     check.textContent = '✓';
                     item.appendChild(check);
                 }
@@ -301,8 +328,9 @@ export const select = {
             if (!listEl) return;
             listEl.querySelectorAll('.oja-select-option').forEach((el, i) => {
                 el.classList.toggle('active', i === idx);
+                if (i === idx) trigger.setAttribute('aria-activedescendant', el.id);
             });
-            listEl.querySelector('.oja-select-option.active')?.scrollIntoView({ block: 'nearest' });
+            listEl.querySelector('.oja-select-option.active')?.scrollIntoView?.({ block: 'nearest' });
         }
 
         // Pick
@@ -374,11 +402,11 @@ export const select = {
             trigger.setAttribute('aria-expanded', 'true');
 
             dropdown = document.createElement('div');
-            dropdown.className = 'oja-select-dropdown';
+            dropdown.className = _cls('oja-select-dropdown', classes.dropdown);
 
             if (searchable) {
                 const sw = document.createElement('div');
-                sw.className = 'oja-select-search';
+                sw.className = _cls('oja-select-search', classes.search);
                 searchInput = document.createElement('input');
                 searchInput.type = 'text';
                 searchInput.placeholder = 'Search…';
@@ -388,7 +416,8 @@ export const select = {
             }
 
             listEl = document.createElement('div');
-            listEl.className = 'oja-select-list';
+            listEl.className = _cls('oja-select-list', classes.list);
+            listEl.id = listId;
             listEl.setAttribute('role', 'listbox');
             dropdown.appendChild(listEl);
             wrap.appendChild(dropdown);
@@ -432,6 +461,7 @@ export const select = {
             _open = false;
             wrap.classList.remove('open');
             trigger.setAttribute('aria-expanded', 'false');
+            trigger.removeAttribute('aria-activedescendant');
             dropdown?.remove();
             dropdown = null;
             searchInput = null;
@@ -447,12 +477,22 @@ export const select = {
         function _onKeydown(e) {
             const items = listEl?.querySelectorAll('.oja-select-option:not(.disabled)') || [];
             const count = items.length;
+            if (count === 0) {
+                if (e.key === 'Escape') handle.close();
+                return;
+            }
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 _setActive((_activeIdx + 1) % count);
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 _setActive((_activeIdx - 1 + count) % count);
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                _setActive(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                _setActive(count - 1);
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 const flat = _flatOptions(_options, _query).filter(o => !o.disabled);
