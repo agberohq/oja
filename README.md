@@ -254,7 +254,7 @@ setTimeout(async () => {
 ### 4. `make()` — build DOM without HTML strings
 
 ```js
-import { make } from '@agberohq/oja';
+import { make, icon } from '@agberohq/oja';
 
 // Build, place, and update in one chain
 make.div({ class: 'host-card', data: { id: host.id } },
@@ -275,6 +275,52 @@ make.li({ data: { id: '42' } }, 'New item').prependTo('#list');
 ```
 
 All placement methods: `.appendTo()` `.prependTo()` `.after()` `.before()` `.replace()`
+
+`make()` also accepts the common top-level props, so `make('a', { href })` works without nesting under `attrs`:
+
+```js
+make('a',     { href: '#/songs/1', text: 'Open' });
+make('input', { type: 'text', value: 'Ada', placeholder: 'Name' });
+make('button',{ type: 'button', disabled: true, text: 'Save' });
+
+// SVG creation uses the SVG namespace; no createElementNS boilerplate:
+const plus = make.svg({ size: 16, paths: ['M12 5v14', 'M5 12h14'] });
+const dot  = make.svg({ size: 12 }, make('circle', { attrs: { cx: 12, cy: 12, r: 3 } }));
+```
+
+---
+
+## Controls, knobs and themes
+
+Oja ships prefixed, opt-in control classes in `oja.min.css`. They never style a bare `input`/`select`/`button`.
+
+```html
+<div class="oja-control-row">
+    <input class="oja-input" value="Ada">
+    <select class="oja-select-input"><option>Admin</option></select>
+    <button class="oja-btn oja-btn-primary">Save</button>
+</div>
+```
+
+On iOS, Oja's 13px controls can trigger focus zoom. Call `preventFocusZoom()` once at boot to add `maximum-scale=1` without disabling pinch zoom:
+
+```js
+import { preventFocusZoom } from '@agberohq/oja';
+preventFocusZoom(); // no-op outside iOS
+```
+
+```js
+import { form, knob, theme } from '@agberohq/oja';
+
+const field = form.field({ label: 'Name', control: form.inputControl({ value: 'Ada' }) });
+const gain  = knob.create({ label: 'Gain', min: -24, max: 12, value: -6, format: v => v + ' dB' });
+const snap  = knob.create({ label: 'Snap', items: [{ value: 'off', label: 'Off', icon: '∅' }, { value: 'beat', label: 'Beat', icon: '♩' }] });
+
+theme.apply('system');
+theme.toggle();
+```
+
+`knob.create()` gives you a dial, a centre-readout dial (`readout: 'center'`) or an icon selector (`items`). The handle exposes `value`, `isOpen`, `setValue()`, `setDisabled()`, `open()`, `close()` and `destroy()`.
 
 ---
 
@@ -312,6 +358,20 @@ ready();
 | `ready()` | Signals setup is complete — resolves the mount promise |
 
 Signals in props are unwrapped automatically — access `props().tasks` and it calls `tasks()` for you.
+
+### Page scope: component, module page, layout
+
+The same lifecycle rules apply everywhere; only the way you reach the helpers differs.
+
+| Context | How helpers arrive | Scope/cleanup notes |
+|---|---|---|
+| Component `<script type="module">` | explicit imports | `find()` is container-scoped; `on()` and `signal.subscribe()`/`Store.onChange()` auto-unregister on unmount; use top-level `onUnmount(fn)` for other resources |
+| Module page (`export default async function(scope)`) | scope argument: `{ find, findAll, on, onUnmount, ready, props, router, inject }` | `on()` and `onUnmount()` are already bound to the page |
+| Layout script | scope argument: `{ container, find, findAll, on, provide, onUnmount, onReady, ready, signal }` | persists across navigations; use `layout.onUnmount()` for shell-level teardown |
+
+`onUnmount(fn)` returns an unregister function. `registerUnmount(container, fn)` remains the low-level escape hatch when you already have the element.
+
+`find()` / `findAll()` are component-scoped. `query()` / `queryAll()` are the unscoped forms when you need to search from `document` or pass an explicit scope. Neither is injected automatically; import what you use. For async callbacks, capture elements at top level or use `scoped()` / `ref()`.
 
 ---
 
@@ -550,6 +610,10 @@ engine.list('#notes', notes(), {
 | Router (hash + history, groups, middleware, named routes) | `Router` | core + full |
 | Layout (persistent shell, slots, `allSlotsReady`) | `layout` | core + full |
 | Component lifecycle (`onMount`, `onUnmount`, `interval`) | `component` | core + full |
+| Top-level teardown (`onUnmount(fn)`, auto-clean subscriptions) | `onUnmount` | core + full |
+| Theme preference (`apply/toggle/current/watch`, system) | `theme` | full |
+| Controls (`.oja-input`, `.oja-select-input`, `.oja-btn`, `.oja-control-row`) | `form.field` / `form.row` | full |
+| Rotary knob (dial, centre readout, icon selector) | `knob` | full |
 | Template syntax (`{{}}`, `data-if`, `data-each`, filters) | built-in | core + full |
 | Auth (levels, session, JWT, tokenSync, middleware, roles) | `auth` | full |
 | Notifications (toast, banner, progress, promise) | `notify` | full |
