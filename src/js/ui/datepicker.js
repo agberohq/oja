@@ -47,6 +47,8 @@
  */
 
 const DAYS_SHORT   = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+let _dpSeq = 0;
+
 const MONTHS_LONG  = ['January','February','March','April','May','June',
                       'July','August','September','October','November','December'];
 
@@ -101,15 +103,24 @@ export const datepicker = {
             placeholder = format,
             onChange    = null,
             value: initValue = null,
+            ariaLabel   = 'Choose date',
+            classes     = {},
         } = opts;
 
+        const _cls = (base, key) => [base, classes[key]].filter(Boolean).join(' ');
+
         input.setAttribute('placeholder', placeholder);
+        const popupId = `oja-dp-${++_dpSeq}`;
         input.setAttribute('readonly', true);
+        input.setAttribute('role', 'combobox');
+        input.setAttribute('aria-haspopup', 'dialog');
+        input.setAttribute('aria-controls', popupId);
+        input.setAttribute('aria-expanded', 'false');
         input.style.cursor = 'pointer';
 
         // Wrap input
         const wrap = document.createElement('div');
-        wrap.className = 'oja-dp-wrap';
+        wrap.className = _cls('oja-dp-wrap', 'wrap');
         input.insertAdjacentElement('beforebegin', wrap);
         wrap.appendChild(input);
 
@@ -135,25 +146,32 @@ export const datepicker = {
 
         function _buildPopup() {
             const pop = document.createElement('div');
-            pop.className = 'oja-dp-popup';
+            pop.className = _cls('oja-dp-popup', 'popup');
+            pop.id = popupId;
+            pop.setAttribute('role', 'dialog');
+            pop.setAttribute('aria-label', ariaLabel);
 
             // Nav
             const nav = document.createElement('div');
-            nav.className = 'oja-dp-nav';
+            nav.className = _cls('oja-dp-nav', 'nav');
 
             const prevBtn = document.createElement('button');
-            prevBtn.type = 'button'; prevBtn.innerHTML = '&#8249;'; prevBtn.title = 'Previous month';
+            prevBtn.type = 'button'; prevBtn.className = _cls('oja-dp-nav-btn', 'navButton');
+            prevBtn.innerHTML = '&#8249;'; prevBtn.title = 'Previous month';
+            prevBtn.setAttribute('aria-label', 'Previous month');
             prevBtn.addEventListener('click', () => {
                 _view.setMonth(_view.getMonth() - 1);
                 _rebuildCalendar(pop);
             });
 
             const heading = document.createElement('span');
-            heading.className = 'oja-dp-heading';
+            heading.className = _cls('oja-dp-heading', 'heading');
             heading.textContent = `${MONTHS_LONG[_view.getMonth()]} ${_view.getFullYear()}`;
 
             const nextBtn = document.createElement('button');
-            nextBtn.type = 'button'; nextBtn.innerHTML = '&#8250;'; nextBtn.title = 'Next month';
+            nextBtn.type = 'button'; nextBtn.className = _cls('oja-dp-nav-btn', 'navButton');
+            nextBtn.innerHTML = '&#8250;'; nextBtn.title = 'Next month';
+            nextBtn.setAttribute('aria-label', 'Next month');
             nextBtn.addEventListener('click', () => {
                 _view.setMonth(_view.getMonth() + 1);
                 _rebuildCalendar(pop);
@@ -166,30 +184,32 @@ export const datepicker = {
 
             // Grid placeholder (filled by _rebuildCalendar)
             const grid = document.createElement('div');
-            grid.className = 'oja-dp-grid';
+            grid.className = _cls('oja-dp-grid', 'grid');
             grid.id = 'oja-dp-grid';
+            grid.setAttribute('role', 'grid');
 
             // Day-of-week headers
             const days = [...DAYS_SHORT.slice(firstDay), ...DAYS_SHORT.slice(0, firstDay)];
             days.forEach(d => {
                 const el = document.createElement('div');
-                el.className = 'oja-dp-dow'; el.textContent = d;
+                el.className = _cls('oja-dp-dow', 'dow'); el.textContent = d;
                 grid.appendChild(el);
             });
+            grid.addEventListener('keydown', _onGridKeydown);
             pop.appendChild(grid);
 
             // Time picker
             if (showTime) {
                 const timePick = document.createElement('div');
-                timePick.className = 'oja-dp-time';
+                timePick.className = _cls('oja-dp-time', 'time');
                 const hInput = document.createElement('input');
                 hInput.type = 'number'; hInput.min = 0; hInput.max = 23;
-                hInput.value = _pad(_timeH); hInput.className = 'oja-dp-h';
+                hInput.value = _pad(_timeH); hInput.className = _cls('oja-dp-h', 'timeInput');
                 const sep = document.createElement('span');
                 sep.className = 'oja-dp-time-sep'; sep.textContent = ':';
                 const mInput = document.createElement('input');
                 mInput.type = 'number'; mInput.min = 0; mInput.max = 59;
-                mInput.value = _pad(_timeM); mInput.className = 'oja-dp-m';
+                mInput.value = _pad(_timeM); mInput.className = _cls('oja-dp-m', 'timeInput');
                 hInput.addEventListener('change', () => { _timeH = parseInt(hInput.value) || 0; hInput.value = _pad(_timeH); });
                 mInput.addEventListener('change', () => { _timeM = parseInt(mInput.value) || 0; mInput.value = _pad(_timeM); });
                 timePick.appendChild(hInput); timePick.appendChild(sep); timePick.appendChild(mInput);
@@ -198,18 +218,21 @@ export const datepicker = {
 
             // Footer
             const footer = document.createElement('div');
-            footer.className = 'oja-dp-footer';
+            footer.className = _cls('oja-dp-footer', 'footer');
             const clearBtn = document.createElement('button');
-            clearBtn.type = 'button'; clearBtn.textContent = 'Clear';
+            clearBtn.type = 'button'; clearBtn.className = _cls('oja-dp-btn', 'button');
+            clearBtn.textContent = 'Clear';
             clearBtn.addEventListener('click', () => { handle.clear(); handle.close(); });
             const todayBtn = document.createElement('button');
-            todayBtn.type = 'button'; todayBtn.textContent = 'Today';
+            todayBtn.type = 'button'; todayBtn.className = _cls('oja-dp-btn', 'button');
+            todayBtn.textContent = 'Today';
             todayBtn.addEventListener('click', () => {
                 const t = new Date(); t.setHours(_timeH, _timeM, 0, 0);
                 _pickDate(t); handle.close();
             });
             const okBtn = document.createElement('button');
-            okBtn.type = 'button'; okBtn.textContent = 'OK'; okBtn.className = 'primary';
+            okBtn.type = 'button'; okBtn.textContent = 'OK';
+            okBtn.className = _cls('oja-dp-btn primary', 'ok');
             okBtn.addEventListener('click', () => {
                 if (_value) {
                     _value.setHours(_timeH, _timeM, 0, 0);
@@ -264,21 +287,92 @@ export const datepicker = {
                 const d = new Date(year, month + 1, i);
                 grid.appendChild(_dayEl(d, true));
             }
+
+            // Roving tabindex: one day is reachable by Tab, arrows move within.
+            const days = grid.querySelectorAll('.oja-dp-day');
+            const selectedEl = grid.querySelector('.oja-dp-day.selected');
+            const focusEl = selectedEl || days[0];
+            if (focusEl) focusEl.tabIndex = 0;
         }
 
         function _dayEl(date, otherMonth) {
             const el    = document.createElement('div');
-            el.className = 'oja-dp-day';
+            el.className = _cls('oja-dp-day', 'day');
             el.textContent = date.getDate();
 
             const today = new Date();
             if (date.toDateString() === today.toDateString()) el.classList.add('today');
             if (otherMonth) el.classList.add('other-month');
-            if (_isDisabled(date)) el.classList.add('disabled');
-            if (_value && date.toDateString() === _value.toDateString()) el.classList.add('selected');
+            const disabled = _isDisabled(date);
+            if (disabled) el.classList.add('disabled');
+            const selected = !!( _value && date.toDateString() === _value.toDateString());
+            if (selected) el.classList.add('selected');
 
-            el.addEventListener('click', () => { _pickDate(date); });
+            el.setAttribute('role', 'gridcell');
+            el.setAttribute('aria-selected', String(selected));
+            el.setAttribute('aria-label', date.toDateString());
+            el.dataset.date = _format(date, 'YYYY-MM-DD');
+            el.tabIndex = selected ? 0 : -1;
+            if (disabled) el.setAttribute('aria-disabled', 'true');
+
+            el.addEventListener('click', () => {
+                el.focus({ preventScroll: true });
+                _pickDate(date);
+            });
             return el;
+        }
+
+        function _dateFromDay(el) {
+            const [y, m, d] = String(el?.dataset?.date || '').split('-').map(Number);
+            return (y && m && d) ? new Date(y, m - 1, d) : null;
+        }
+
+        function _focusDay(date) {
+            if (!_popup) return;
+            let el = _popup.querySelector(`.oja-dp-day[data-date="${_format(date, 'YYYY-MM-DD')}"]`);
+            if (!el) {
+                _view = new Date(date.getFullYear(), date.getMonth(), 1);
+                _rebuildCalendar(_popup);
+                el = _popup.querySelector(`.oja-dp-day[data-date="${_format(date, 'YYYY-MM-DD')}"]`);
+            }
+            if (!el) return;
+            _popup.querySelectorAll('.oja-dp-day').forEach(d => { d.tabIndex = -1; });
+            el.tabIndex = 0;
+            el.focus({ preventScroll: true });
+        }
+
+        function _onGridKeydown(e) {
+            const day = e.target?.closest?.('.oja-dp-day');
+            if (!day) return;
+            const date = _dateFromDay(day);
+            if (!date) return;
+            let next = null;
+
+            if (e.key === 'ArrowLeft')       next = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
+            else if (e.key === 'ArrowRight') next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+            else if (e.key === 'ArrowUp')    next = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7);
+            else if (e.key === 'ArrowDown')  next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7);
+            else if (e.key === 'PageUp')     next = new Date(date.getFullYear(), date.getMonth() - 1, date.getDate());
+            else if (e.key === 'PageDown')   next = new Date(date.getFullYear(), date.getMonth() + 1, date.getDate());
+            else if (e.key === 'Home')       next = new Date(date.getFullYear(), date.getMonth(), 1);
+            else if (e.key === 'End')        next = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                _pickDate(date);
+                return;
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handle.close();
+                input.focus();
+                return;
+            } else {
+                return;
+            }
+
+            e.preventDefault();
+            _view = new Date(next.getFullYear(), next.getMonth(), 1);
+            _rebuildCalendar(_popup);
+            _focusDay(next);
         }
 
         function _pickDate(date) {
@@ -300,13 +394,19 @@ export const datepicker = {
             open() {
                 if (_open) return;
                 _open = true;
+                input.setAttribute('aria-expanded', 'true');
                 _popup = _buildPopup();
                 wrap.appendChild(_popup);
-                setTimeout(() => document.addEventListener('mousedown', _outside, { capture: true }), 0);
+                setTimeout(() => {
+                    document.addEventListener('mousedown', _outside, { capture: true });
+                    const anchor = _value ? new Date(_value) : new Date();
+                    _focusDay(anchor);
+                }, 0);
             },
             close() {
                 if (!_open) return;
                 _open = false;
+                input.setAttribute('aria-expanded', 'false');
                 _popup?.remove(); _popup = null;
                 document.removeEventListener('mousedown', _outside, { capture: true });
             },
@@ -332,8 +432,10 @@ export const datepicker = {
 
         input.addEventListener('click', () => _open ? handle.close() : handle.open());
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle.open(); }
-            else if (e.key === 'Escape') handle.close();
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                handle.open();
+            } else if (e.key === 'Escape') handle.close();
         });
 
         _syncInput();

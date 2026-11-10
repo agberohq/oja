@@ -28,6 +28,24 @@ describe('datepicker.attach()', () => {
         expect(input.getAttribute('placeholder')).toBe('Pick date');
     });
 
+    it('applies custom classes and accessibility labels', () => {
+        const { handle } = setup({
+            ariaLabel: 'Pick a delivery date',
+            classes: { popup: 'my-pop', day: 'my-day', footer: 'my-footer', button: 'my-btn' },
+        });
+        handle.open();
+        const pop = document.querySelector('.oja-dp-popup');
+        expect(pop.classList.contains('my-pop')).toBe(true);
+        expect(pop.getAttribute('role')).toBe('dialog');
+        expect(pop.getAttribute('aria-label')).toBe('Pick a delivery date');
+        expect(document.querySelector('.oja-dp-nav button').getAttribute('aria-label')).toBe('Previous month');
+        expect(document.querySelectorAll('.oja-dp-day.my-day').length).toBeGreaterThan(0);
+        expect(document.querySelector('.oja-dp-footer').classList.contains('my-footer')).toBe(true);
+        expect(document.querySelector('.oja-dp-footer button').classList.contains('my-btn')).toBe(true);
+        expect(document.querySelector('.oja-dp-day').getAttribute('role')).toBe('gridcell');
+        handle.close();
+    });
+
     it('respects initial value', () => {
         const { handle } = setup({ value: new Date(2025, 0, 15) }); // Jan 15 2025
         const v = handle.getValue();
@@ -86,10 +104,15 @@ describe('datepicker — format', () => {
 });
 
 describe('datepicker — open / close', () => {
-    it('open() appends popup to wrap', () => {
-        const { handle } = setup();
+    it('open() appends popup to wrap and sets aria-expanded', () => {
+        const { handle, input } = setup();
+        expect(input.getAttribute('aria-haspopup')).toBe('dialog');
+        expect(input.getAttribute('aria-expanded')).toBe('false');
         handle.open();
         expect(document.querySelector('.oja-dp-popup')).not.toBeNull();
+        expect(input.getAttribute('aria-expanded')).toBe('true');
+        handle.close();
+        expect(input.getAttribute('aria-expanded')).toBe('false');
     });
 
     it('close() removes popup', () => {
@@ -212,5 +235,46 @@ describe('datepicker — destroy()', () => {
         const input = document.getElementById('dp');
         expect(input).not.toBeNull();
         expect(input.getAttribute('readonly')).toBeNull();
+    });
+});
+
+describe('datepicker — keyboard grid', () => {
+    const tick = () => new Promise(r => setTimeout(r, 0));
+
+    it('opens with ArrowDown and focuses a day', async () => {
+        const { handle, input } = setup({ value: new Date(2026, 3, 11) });
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        await tick();
+        expect(document.querySelector('.oja-dp-popup')).not.toBeNull();
+        expect(document.activeElement.dataset.date).toBe('2026-04-11');
+    });
+
+    it('moves with arrows and selects with Enter', async () => {
+        const { handle } = setup({ value: new Date(2026, 3, 11) });
+        handle.open();
+        await tick();
+        const day = document.activeElement;
+        day.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+        expect(document.activeElement.dataset.date).toBe('2026-04-12');
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        expect(handle.getFormatted()).toBe('2026-04-12');
+    });
+
+    it('crosses a month boundary with ArrowLeft', async () => {
+        const { handle } = setup({ value: new Date(2026, 3, 1) });
+        handle.open();
+        await tick();
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+        expect(document.activeElement.dataset.date).toBe('2026-03-31');
+        expect(handle.getFormatted()).toBe('2026-04-01');
+    });
+
+    it('closes with Escape and returns focus to the input', async () => {
+        const { handle, input } = setup({ value: new Date(2026, 3, 11) });
+        handle.open();
+        await tick();
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(document.querySelector('.oja-dp-popup')).toBeNull();
+        expect(document.activeElement).toBe(input);
     });
 });
