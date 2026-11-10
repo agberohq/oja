@@ -57,7 +57,8 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "bench": "vitest bench --config vitest.bench.config.js",
-        "bench:run": "vitest bench --run --config vitest.bench.config.js"
+        "bench:run": "vitest bench --run --config vitest.bench.config.js",
+        "vendor": "node scripts/vendor-oja.js"
     },
     "devDependencies": {
         "@vitest/coverage-v8": "latest",
