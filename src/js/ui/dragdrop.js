@@ -78,6 +78,8 @@
  */
 
 
+import { on } from '../core/events.js';
+
 const _dragState = {
     active: false,
     source: null,
@@ -95,6 +97,254 @@ let _touchListenersAdded = false;
 const _dropZones = new WeakMap();
 
 const _reorderLists = new Map(); // listElement -> { opts, observer }
+
+/**
+ * Tree/list drag-and-drop with before/after/inside targets.
+ *
+ * This is the shape real layer/folder trees need and `reorder()` does not
+ * express: drop above or below a sibling, or inside a folder row. The app
+ * decides what to do with the result; Oja only resolves the target and
+ * position, so there is no hidden data model.
+ *
+ *   const t = dragdrop.tree('#layer-list', {
+ *       itemSelector:   '.layer-item',
+ *       folderSelector: '.layer-folder',
+ *       getData:        el => el.dataset.id,
+ *       onDrop({ drag, target, position }) {
+ *           moveNode(drag, target, position); // before | after | inside
+ *       },
+ *   });
+ *   t.destroy();
+ *
+ * @param {string|Element} root
+ * @param {Object} options
+ *   itemSelector   : string   (default: '[data-oja-key], .oja-tree-item, [data-oja-tree-item]')
+ *   folderSelector : string   (default: '[data-oja-folder], [data-oja-drop="inside"], .oja-tree-folder')
+ *   handle         : string   optional drag handle selector
+ *   mime           : string   custom dataTransfer type
+ *   accept         : string|fn — MIME type, or (data, targetEl, event) => boolean
+ *   getData        : fn(el) => any
+ *   onDrop         : fn({ drag, target, position, dragEl, targetEl, event })
+ *   threshold      : number   0..0.5 edge zone for before/after (default .28)
+ * @returns {{destroy: Function}}
+ */
+export function tree(root, options = {}) {
+    const container = typeof root === 'string' ? document.querySelector(root) : root;
+    if (!container) {
+        console.warn('[oja/dragdrop] tree: root not found:', root);
+        return { destroy() {} };
+    }
+
+    const {
+        itemSelector   = '[data-oja-key], .oja-tree-item, [data-oja-tree-item]',
+        folderSelector = '[data-oja-folder], [data-oja-drop="inside"], .oja-tree-folder',
+        handle         = null,
+        mime           = 'application/oja-tree+json',
+        accept         = null,
+        getData        = (el) => el?.dataset?.id ?? el?.getAttribute?.('data-oja-key') ?? null,
+        onDrop: onDropFn = null,
+        threshold      = 0.28,
+        keyboard       = true,
+        dragClass      = 'oja-tree-dragging',
+        overClass      = 'oja-tree-over',
+        beforeClass    = 'oja-tree-drop-before',
+        afterClass     = 'oja-tree-drop-after',
+        insideClass    = 'oja-tree-drop-inside',
+    } = options;
+
+    let state = null;        // { item, data }
+    let pending = null;      // { item, position }
+    const unsubs = [];
+    const marked = new Set();
+    const itemDraggable = new Map();
+
+    const items = () => Array.from(container.querySelectorAll(itemSelector));
+    const closestItem = (node) => node?.closest?.(itemSelector) || null;
+    const dataOf = (el) => {
+        try { return getData(el); } catch { return null; }
+    };
+
+    function markDraggable(el) {
+        if (!el || marked.has(el)) return;
+        marked.add(el);
+        el.classList.add('oja-tree-item');
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+        if (handle) {
+            const h = el.querySelector(handle);
+            if (h) {
+                itemDraggable.set(h, h.getAttribute('draggable'));
+                h.setAttribute('draggable', 'true');
+                h.style.cursor = 'grab';
+            }
+        } else {
+            itemDraggable.set(el, el.getAttribute('draggable'));
+            el.setAttribute('draggable', 'true');
+            el.style.cursor = 'grab';
+        }
+    }
+
+    function clearMarks() {
+        container.querySelectorAll(`.${beforeClass}, .${afterClass}, .${insideClass}, .${overClass}`)
+            .forEach(el => el.classList.remove(beforeClass, afterClass, insideClass, overClass));
+    }
+
+    function accepts(data, targetEl, event) {
+        if (!accept) return true;
+        if (typeof accept === 'string') return !!event?.dataTransfer?.types?.includes(accept);
+        try { return !!accept(data, targetEl, event); } catch { return false; }
+    }
+
+    function resolve(e, targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const y = e.clientY;
+        const edge = Math.max(1, rect.height * threshold);
+        const inside = targetEl.matches?.(folderSelector) && y >= rect.top + edge && y <= rect.bottom - edge;
+        if (inside) return 'inside';
+        return y < rect.top + rect.height / 2 ? 'before' : 'after';
+    }
+
+    function onDragStart(e) {
+        const item = closestItem(e.target);
+        if (!item) return;
+        if (handle && !e.target.closest?.(handle)) return;
+        const data = dataOf(item);
+        if (data == null) return;
+
+        state = { item, data };
+        item.classList.add(dragClass);
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData(mime, JSON.stringify({ data })); } catch {}
+            try { e.dataTransfer.setData('text/plain', String(data)); } catch {}
+        }
+    }
+
+    function onDragOver(e) {
+        if (!state) return;
+        const targetEl = closestItem(e.target);
+        if (!targetEl || targetEl === state.item) return;
+        if (!accepts(state.data, targetEl, e)) return;
+
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        clearMarks();
+        const position = resolve(e, targetEl);
+        pending = { item: targetEl, position };
+        targetEl.classList.add(overClass);
+        targetEl.classList.add(position === 'before' ? beforeClass
+                            : position === 'after'  ? afterClass
+                            : insideClass);
+    }
+
+    function onDrop(e) {
+        if (!state) return;
+        const targetEl = closestItem(e.target);
+        if (!targetEl || targetEl === state.item) return;
+        if (!accepts(state.data, targetEl, e)) return;
+
+        e.preventDefault();
+        const position = pending?.item === targetEl ? pending.position : resolve(e, targetEl);
+        const detail = {
+            drag: state.data,
+            dragEl: state.item,
+            target: dataOf(targetEl),
+            targetEl,
+            position,
+            event: e,
+        };
+        clearMarks();
+        onDropFn?.(detail);
+        state = null;
+        pending = null;
+    }
+
+    function onDragEnd() {
+        if (state) {
+            state.item.classList.remove(dragClass);
+            state = null;
+        }
+        pending = null;
+        clearMarks();
+    }
+
+    function onKeydown(e) {
+        if (!keyboard || !e.altKey || !onDropFn) return;
+        const item = closestItem(e.target);
+        if (!item) return;
+
+        const direction = e.key;
+        let targetEl = null;
+        let position = null;
+
+        if (direction === 'ArrowUp' || direction === 'ArrowDown') {
+            const siblings = Array.from(item.parentElement?.children || [])
+                .filter(el => el.matches?.(itemSelector));
+            const i = siblings.indexOf(item);
+            targetEl = direction === 'ArrowUp' ? siblings[i - 1] : siblings[i + 1];
+            if (targetEl) position = direction === 'ArrowUp' ? 'before' : 'after';
+        } else if (direction === 'ArrowRight') {
+            const parent = item.parentElement?.closest?.(itemSelector);
+            if (parent && parent !== item) { targetEl = parent; position = 'inside'; }
+        } else if (direction === 'ArrowLeft') {
+            const parent = item.parentElement?.closest?.(itemSelector);
+            if (parent && parent !== item) { targetEl = parent; position = 'before'; }
+        }
+
+        if (!targetEl || !position) return;
+        if (!accepts(dataOf(item), targetEl, e)) return;
+        e.preventDefault();
+        onDropFn({
+            drag: dataOf(item),
+            dragEl: item,
+            target: dataOf(targetEl),
+            targetEl,
+            position,
+            keyboard: true,
+            event: e,
+        });
+    }
+
+    // Delegated listeners — on() auto-registers cleanup when the tree is
+    // created inside a component scope, and returns the unsub for destroy().
+    unsubs.push(on(container, itemSelector, 'dragstart', onDragStart));
+    unsubs.push(on(container, itemSelector, 'dragover', onDragOver));
+    unsubs.push(on(container, itemSelector, 'drop', onDrop));
+    unsubs.push(on(container, itemSelector, 'dragend', onDragEnd));
+    unsubs.push(on(container, itemSelector, 'keydown', onKeydown));
+
+    items().forEach(markDraggable);
+
+    const observer = typeof MutationObserver !== 'undefined'
+        ? new MutationObserver((records) => {
+            for (const r of records) {
+                for (const node of r.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    if (node.matches?.(itemSelector)) markDraggable(node);
+                    node.querySelectorAll?.(itemSelector).forEach(markDraggable);
+                }
+            }
+        })
+        : null;
+    observer?.observe(container, { childList: true, subtree: true });
+
+    return {
+        destroy() {
+            observer?.disconnect();
+            unsubs.forEach(u => { try { u(); } catch {} });
+            clearMarks();
+            for (const [el, prev] of itemDraggable) {
+                if (prev == null) el.removeAttribute('draggable');
+                else el.setAttribute('draggable', prev);
+                el.style.cursor = '';
+            }
+            container.querySelectorAll('.oja-tree-item').forEach(el => el.classList.remove('oja-tree-item'));
+            itemDraggable.clear();
+            marked.clear();
+            state = null;
+            pending = null;
+        },
+    };
+}
 
 /**
  * Make a list reorderable via drag and drop.
@@ -1055,6 +1305,7 @@ export function selectionBox(target, options = {}) {
 
 export const dragdrop = {
     reorder,
+    tree,
     dropZone,
     draggable,
     dropTarget,
