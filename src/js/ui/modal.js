@@ -196,6 +196,51 @@ function _announce(message) {
 // A second call before the first resolves dismisses the previous one gracefully.
 const _pendingConfirms = new Map();
 
+const _CONFIRM_CLASSES = {
+    overlay: 'oja-confirm-overlay',
+    modal:   'oja-confirm',
+    title:   'oja-confirm-title',
+    message: 'oja-confirm-message',
+    actions: 'oja-confirm-actions',
+    ok:      'oja-btn oja-btn-primary',
+    cancel:  'oja-btn',
+};
+
+/**
+ * Return the confirm modal, creating a minimal one if the app did not ship
+ * #confirmModal. This mirrors modal.prompt(), which has always auto-created
+ * its dialog, and removes the "every confirm resolves false without markup"
+ * trap for new apps.
+ */
+function _ensureConfirmModal(id, options = {}) {
+    let el = document.getElementById(id);
+    if (el) return { el, injected: false, classes: { ..._CONFIRM_CLASSES, ...(options.classes || {}) } };
+
+    const classes = { ..._CONFIRM_CLASSES, ...(options.classes || {}) };
+    const title = options.title || 'Please confirm';
+    const okLabel = options.okLabel || 'Confirm';
+    const cancelLabel = options.cancelLabel || 'Cancel';
+
+    el = document.createElement('div');
+    el.id = id;
+    el.className = classes.overlay;
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', `${id}-title`);
+    if (options.className) el.classList.add(options.className);
+    el.innerHTML = `
+        <div class="${_esc(classes.modal)}"${options.danger ? ' data-variant="danger"' : ''}>
+            <h2 class="${_esc(classes.title)}" id="${_esc(id)}-title" data-modal-field="title">${_esc(title)}</h2>
+            <p class="${_esc(classes.message)}" data-modal-field="message"></p>
+            <div class="${_esc(classes.actions)}">
+                <button type="button" class="${_esc(classes.cancel)}" data-confirm-cancel>${_esc(cancelLabel)}</button>
+                <button type="button" class="${_esc(classes.ok)}" data-confirm-ok>${_esc(okLabel)}</button>
+            </div>
+        </div>`;
+    document.body.appendChild(el);
+    return { el, injected: true, classes };
+}
+
 // Used by modal.open() to render a body Out and return its completion promise.
 class _ModalOutTarget {
     constructor(el) { this._el = el; }
@@ -431,18 +476,41 @@ export const modal = {
         return new Promise(resolve => {
             _pendingConfirms.set(id, resolve);
 
+            const { el, injected } = _ensureConfirmModal(id, options);
+            let settled = false;
+            let ok = null;
+            let cancel = null;
+            let unsub = null;
+
+            const cleanup = () => {
+                ok?.removeEventListener('click', onOk);
+                cancel?.removeEventListener('click', onCancel);
+                unsub?.();
+                unsub = null;
+                if (injected) {
+                    // Do not remove a dialog that a new confirm() already reused
+                    // before this microtask/task ran.
+                    setTimeout(() => {
+                        if (!_pendingConfirms.has(id)) el.remove();
+                    }, 0);
+                }
+            };
+
             const done = (result) => {
-                if (!_pendingConfirms.has(id)) return;
+                if (settled || !_pendingConfirms.has(id)) return;
+                settled = true;
                 _pendingConfirms.delete(id);
+                cleanup();
                 resolve(result);
                 modal.closeById(id);
             };
 
-            modal.open(id, { message, ...options });
+            function onOk()     { done(true); }
+            function onCancel() { done(false); }
 
-            const el = document.getElementById(id);
-            if (!el) { done(false); return; }
-
+            // Set the message before opening; modal.open also fills
+            // [data-modal-field] values, but doing it first makes the
+            // auto-created path work even if the open hook throws.
             const msgEl = el.querySelector('[data-modal-field="message"]');
             if (msgEl) {
                 msgEl.textContent = message;
@@ -450,18 +518,28 @@ export const modal = {
                 el.setAttribute('aria-describedby', 'confirm-message');
             }
 
-            const ok     = el.querySelector('[data-confirm-ok]');
-            const cancel = el.querySelector('[data-confirm-cancel]');
+            const titleEl = el.querySelector('[data-modal-field="title"]');
+            if (titleEl && options.title) titleEl.textContent = options.title;
 
-            if (ok)     ok.setAttribute('aria-label',     options.okLabel     || 'Confirm');
-            if (cancel) cancel.setAttribute('aria-label', options.cancelLabel || 'Cancel');
+            if (options.danger) el.setAttribute('data-variant', 'danger');
 
-            ok?.addEventListener('click',     () => done(true),  { once: true });
-            cancel?.addEventListener('click', () => done(false), { once: true });
+            ok     = el.querySelector('[data-confirm-ok]');
+            cancel = el.querySelector('[data-confirm-cancel]');
 
-            const unsub = listen('modal:close', ({ id: closedId }) => {
-                if (closedId === id) { unsub(); done(false); }
+            if (ok) {
+                ok.setAttribute('aria-label', options.okLabel || ok.textContent.trim() || 'Confirm');
+                ok.classList.toggle('oja-btn-danger', !!options.danger && ok.classList.contains('oja-btn'));
+            }
+            if (cancel) cancel.setAttribute('aria-label', options.cancelLabel || cancel.textContent.trim() || 'Cancel');
+
+            ok?.addEventListener('click', onOk);
+            cancel?.addEventListener('click', onCancel);
+
+            unsub = listen('modal:close', ({ id: closedId }) => {
+                if (closedId === id) done(false);
             });
+
+            modal.open(id, { message, ...options });
         });
     },
 
