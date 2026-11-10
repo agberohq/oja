@@ -49,6 +49,7 @@
  *   store.offChange('page', handler);
  */
 
+import { registerCleanup } from './_context.js';
 import { encrypt } from '../utils/encrypt.js';
 
 class _SessionAdapter {
@@ -338,11 +339,11 @@ export class Store {
     onChange(key, handler) {
         if (key === '*') {
             this._wildcardListeners.add(handler);
-            return () => this._wildcardListeners.delete(handler);
+            return registerCleanup(() => this._wildcardListeners.delete(handler));
         }
         if (!this._changes.has(key)) this._changes.set(key, new Set());
         this._changes.get(key).add(handler);
-        return () => this.offChange(key, handler);
+        return registerCleanup(() => this.offChange(key, handler));
     }
 
     offChange(key, handler) {

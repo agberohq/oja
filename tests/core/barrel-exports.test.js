@@ -54,6 +54,10 @@ describe('oja.js barrel — new exports present', async () => {
 
     // Component lifecycle additions
     it('exports registerUnmount',                 () => expect(typeof oja.registerUnmount).toBe('function'));
+    it('exports onUnmount',                       () => expect(typeof oja.onUnmount).toBe('function'));
+    it('exports icon',                            () => expect(typeof oja.icon).toBe('function'));
+    it('Oja.onUnmount is a function',             () => expect(typeof oja.Oja?.onUnmount).toBe('function'));
+    it('Oja.icon is a function',                  () => expect(typeof oja.Oja?.icon).toBe('function'));
 
     // Events additions
     it('exports scopedListen',                    () => expect(typeof oja.scopedListen).toBe('function'));
@@ -75,6 +79,13 @@ describe('oja.js barrel — new exports present', async () => {
 
 describe('oja.full.js barrel — collapse/accordion/wizard present', async () => {
     const full = await import('../../src/oja.full.js');
+
+    it('exports theme', () => expect(typeof full.theme).toBe('object'));
+    it('exports knob', () => expect(typeof full.knob).toBe('object'));
+    it('knob.create is a function', () => expect(typeof full.knob?.create).toBe('function'));
+    it('exports createKnob', () => expect(typeof full.createKnob).toBe('function'));
+    it('dragdrop.tree is a function', () => expect(typeof full.dragdrop?.tree).toBe('function'));
+    it('exports preventFocusZoom', () => expect(typeof full.preventFocusZoom).toBe('function'));
 
     it('exports collapse', () => expect(typeof full.collapse).toBe('object'));
     it('exports accordion', () => expect(typeof full.accordion).toBe('object'));

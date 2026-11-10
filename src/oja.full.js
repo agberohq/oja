@@ -29,7 +29,7 @@
  *   js/ui/  (UI patterns)
  *     modal, notify, clipboard, form, validate, autocomplete,
  *     table, tabs, canvas, dragdrop, popover, virtualList, mask,
- *     clickmenu, collapse, accordion, countdown, wizard
+ *     clickmenu, collapse, accordion, countdown, wizard, knob, theme
  *
  *   js/ext/ (opt-in features)
  *     auth, pagination, chart, History, history, channel, config,
@@ -44,6 +44,8 @@
 
 export * from './oja.js';
 
+export { theme }                                          from './js/ui/theme.js';
+export { knob, createKnob }                               from './js/ui/knob.js';
 export { modal }                                          from './js/ui/modal.js';
 export { notify }                                         from './js/ui/notify.js';
 export { clipboard }                                      from './js/ui/clipboard.js';
@@ -105,7 +107,6 @@ export { events, register, strictMode, isRegistered, getRegistered,
     from './js/utils/register.js';
 
 // Similarity, Vector search, RAG
-// similarity.js — pure stateless math + Similarity class for corpus search
 export {
     cosine, euclidean, manhattan, dot, normalize,
     tokenize, jaccard, jaccardNgram,
@@ -117,23 +118,20 @@ export { Vector }                                         from './js/ext/vector.
 export { RAG }                                            from './js/ext/rag.js';
 
 // Diff
-// diff.js — Myers text diff and JSON structural diff (no DOM)
 export {
     diff, diffLines, diffWords, diffSequence,
     diffJson,
     renderDiff, unifiedDiff,
 }                                                         from './js/utils/diff.js';
 
+// Viewport
+export { preventFocusZoom }                                from './js/utils/viewport.js';
+
 // UI additions
-// panel.js — floating draggable non-blocking window panels
 export { panel }                                          from './js/ui/panel.js';
-// hotkeys.js — command palette (Ctrl+K fuzzy action launcher)
 export { hotkeys }                                        from './js/ui/hotkeys.js';
-// select.js — searchable select / combobox with multi-select and groups
 export { select }                                         from './js/ui/select.js';
-// datepicker.js — date and time picker widget
 export { datepicker }                                     from './js/ui/datepicker.js';
 
 // Ext additions
-// queue.js — offline-first request queue with auto-replay on reconnect
 export { Queue }                                          from './js/ext/queue.js';

@@ -74,6 +74,29 @@ export function _getProps(el) {
     return _propsMap.get(el) ?? null;
 }
 
+// Component cleanup bridge
+// Modules that create subscriptions outside events.js (reactive signals, Store
+// onChange) register their unsubscribe here. component.js installs the hook,
+// so the modules stay dependency-free and there is no import cycle.
+let _cleanupHook = null;
+
+/** @internal — component.js installs the active-scope bridge. */
+export function _setCleanupHook(fn) {
+    _cleanupHook = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * Register a cleanup function with the active component scope.
+ * No-op when there is no active component (top-level app code, layout, tests).
+ * Returns the original function so callers can still unsubscribe manually.
+ */
+export function registerCleanup(fn) {
+    if (typeof fn === 'function' && _cleanupHook) {
+        try { _cleanupHook(fn); } catch { /* cleanup registration must never break a subscription */ }
+    }
+    return fn;
+}
+
 // ready() bridge
 const _readyFns = new WeakMap();
 

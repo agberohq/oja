@@ -78,6 +78,7 @@
  *   and stops after 50 iterations rather than hanging the browser.
  */
 
+import { registerCleanup } from './_context.js';
 import { runtime } from './runtime.js';
 
 const _storage = {
@@ -735,7 +736,7 @@ export function watch(signal, fn, options = {}) {
         fn(prev, undefined);
     }
 
-    return effect(() => {
+    const dispose = effect(() => {
         const next = signal();
         if (next !== prev || (next !== null && typeof next === 'object')) {
             const old = prev;
@@ -743,6 +744,9 @@ export function watch(signal, fn, options = {}) {
             fn(next, old);
         }
     });
+    // watch() is the subscription primitive behind context.subscribe(); it must
+    // follow the same component-scope lifetime as signal.subscribe().
+    return registerCleanup(dispose);
 }
 
 // Run fn() without tracking any signal reads as dependencies.
@@ -907,7 +911,9 @@ export function signal(name, initialValue = undefined) {
                     console.warn(`[oja/channel] subscriber error on "${name}":`, e);
                 }
             }
-            return () => _listeners.delete(fn);
+            // Auto-clean this subscription with the active component scope,
+            // the same way on() does. Manual off() still works.
+            return registerCleanup(() => _listeners.delete(fn));
         },
 
         /**

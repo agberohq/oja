@@ -63,7 +63,7 @@ export { animate }                                        from './js/core/animat
 export { Router, createRouter, router }                   from './js/core/router.js';
 export { component,
     container, props, ready, ref, scoped,
-    registerUnmount,
+    registerUnmount, onUnmount,
 }                                                         from './js/core/component.js';
 export { currentContainer }                               from './js/core/_context.js';
 export { layout, allSlotsReady }                          from './js/core/layout.js';
@@ -72,7 +72,7 @@ export {
     ui,
     find, findAll, findAllIn,
     query, queryAll,
-    make,
+    make, icon,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
     matches, closest,
@@ -120,7 +120,7 @@ import { on, once, off, emit, listen, listenOnce, scopedListen, waitFor,
     onResize, onMutation,
     onlyOnce, onClickOutside, onHover, onLongPress }      from './js/core/events.js';
 import { ui, find, findAll, findAllIn, query, queryAll,
-    make,
+    make, icon,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
     matches, closest }                                    from './js/core/ui.js';
@@ -132,7 +132,7 @@ import { JsonCodec, jsonCodec }                          from './js/core/codecs/
 import { MsgPackCodec }                                  from './js/core/codecs/msgpack.js';
 import { Router, createRouter, router }                  from './js/core/router.js';
 import { component, container, props, ready, ref, scoped,
-    registerUnmount }                                    from './js/core/component.js';
+    registerUnmount, onUnmount }                         from './js/core/component.js';
 import { layout, allSlotsReady }                         from './js/core/layout.js';
 import { segment }                                       from './js/core/segment.js';
 import { animate }                                       from './js/core/animate.js';
@@ -154,7 +154,7 @@ export const DOM = {
     ui,
     find, findAll, findAllIn,
     query, queryAll,
-    make,
+    make, icon,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
     matches, closest,
@@ -171,12 +171,12 @@ export const Oja = {
     // Routing
     Router, createRouter, router,
     component, layout, allSlotsReady,
-    container, props, ready, ref, scoped, registerUnmount,
+    container, props, ready, ref, scoped, registerUnmount, onUnmount,
     // DOM
     DOM, ui,
     find, findAll, findAllIn,
     query, queryAll,
-    make,
+    make, icon,
     createEl, empty, removeEl,
     afterEl, beforeEl, toggleEl,
     matches, closest,

@@ -77,7 +77,7 @@
  */
 
 import { render, each, fill }          from './template.js';
-import { pushContainer, popContainer, currentContainer, _setReadyFn, _getReadyFn, _getProps } from './_context.js';
+import { pushContainer, popContainer, currentContainer, _setReadyFn, _getReadyFn, _getProps, _setCleanupHook } from './_context.js';
 import { execScripts }                 from './_exec.js';
 import { emit, _setComponentScopeHook } from './events.js';
 import { _setComponentChannelHook }      from './reactive.js';
@@ -307,6 +307,39 @@ export function registerUnmount(el, fn) {
     if (scope) scope.unmount.push(fn);
 }
 
+/**
+ * onUnmount(fn) — register teardown on the *current* component scope.
+ *
+ * This is the public counterpart to registerUnmount(el, fn). Call it at the top
+ * level of a component script (or inside a scope-aware module page) and the
+ * callback runs when the page/component is torn down. No wrapper needed:
+ *
+ *   import { onUnmount } from '@agberohq/oja';
+ *   const stop = onUnmount(() => audio.pause());
+ *   // stop() cancels the registration if the resource is released earlier.
+ *
+ * Returns an unregister function. Outside a component context it warns and
+ * returns a no-op instead of silently leaking or throwing.
+ */
+export function onUnmount(fn) {
+    if (typeof fn !== 'function') return () => {};
+    const el = currentContainer();
+    if (!el) {
+        console.warn(
+            '[oja/component] onUnmount() called outside a component context.\n' +
+            'Call it at the top level of a component script, or use ' +
+            'registerUnmount(container, fn) when you already have the element.'
+        );
+        return () => {};
+    }
+    const scope = _getScope(el);
+    scope.unmount.push(fn);
+    return () => {
+        const i = scope.unmount.indexOf(fn);
+        if (i !== -1) scope.unmount.splice(i, 1);
+    };
+}
+
 function _getScope(el) {
     if (!el) return null;
     if (!_scopes.has(el)) {
@@ -319,6 +352,13 @@ function _getScope(el) {
 // with the currently active component. Using a hook avoids a circular import
 // (events.js would otherwise need to import component.js).
 _setComponentScopeHook((unsub) => {
+    const scope = _getScope(currentContainer());
+    if (scope) scope.ons.push(unsub);
+});
+
+// Same bridge for subscriptions created outside events.js (signal.subscribe,
+// Store.onChange). They register an unsub through _context.registerCleanup().
+_setCleanupHook((unsub) => {
     const scope = _getScope(currentContainer());
     if (scope) scope.ons.push(unsub);
 });
