@@ -107,7 +107,7 @@ export { MsgPackCodec }                                   from './js/core/codecs
 
 export { plugin }                                         from './js/core/plugin.js';
 
-export const VERSION = '0.4.1';
+export const VERSION = '0.5.0';
 
 import { timeout, interval, sleep, defer, withDefer }    from './js/core/system.js';
 import { state, effect, derived, batch, context,
